@@ -1,24 +1,49 @@
-# Compiled class file
-*.class
+# NetBeans project files
+nbproject/private/
+nbbuild/
+dist/
+nb-private/
+build/
+.nbattrs
 
-# Log file
+# Maven project files
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Gradle project files
+.gradle/
+build/
+
+# IDE-specific files (common)
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+
+# Log files
 *.log
 
-# BlueJ files
-*.ctxt
+# Eclipse project files (in case you ever open it in Eclipse)
+.project
+.classpath
+.settings/
 
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
-
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
+# OS generated files
+.DS_Store
+.Trashes
+ehthumbs.db
+Thumbs.db
+*/Thumbs.db
+.localized
+*.bak
