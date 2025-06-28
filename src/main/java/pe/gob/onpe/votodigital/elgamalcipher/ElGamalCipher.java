@@ -24,11 +24,11 @@ public class ElGamalCipher {
         this.gToX = publicKey.getgToX();
     }
 
-    public ElGamalCipheredText cifrar(PGroupElement codedMessage, RandomSource randomSource) {
+    public ElGamalCipheredText encrypt(PGroupElement codedMessage, RandomSource randomSource) {
         // Paso 1: Obtener el anillo asociado al grupo
         PRing pRing = group.getPRing();
         // Paso 2: Generar elemento aleatorio r en el anillo con 128 bits de seguridad
-        PRingElement r = pRing.randomElement(randomSource, 128); // ✔️ CORREGIDO
+        PRingElement r = pRing.randomElement(randomSource, 128);
         // Paso 3: Calcular el primer componente del cifrado: g^r
         PGroupElement g = group.getg();
         PGroupElement c1 = g.exp(r);

@@ -33,8 +33,8 @@ public class Main {
         System.out.println("java.library.path = " + System.getProperty("java.library.path"));
 
         System.out.println("Paso 1: == Leyendo la llave pública ElGamal ==");
-        //String mainPath = "/home/rmartinezch/verificatum/eleccion02/01/";
-        String mainPath = "/home/rmartinezch/verificatum-vmn-3.1.0-full/verificatum-vmn-3.1.0/demo/mixnet/mydemodir/Party01/";
+        String mainPath = "/home/rmartinezch/verificatum/eleccion03/01/";
+        //String mainPath = "/home/rmartinezch/verificatum-vmn-3.1.0-full/verificatum-vmn-3.1.0/demo/mixnet/mydemodir/Party01/";
         String publicKeyName = "publicKey";
         ElGamalPublicKey publicKey = new ElGamalPublicKey(mainPath + publicKeyName);
         if (!publicKey.isLoaded()) {
@@ -70,13 +70,11 @@ public class Main {
             "0000000000000000000000000041",
             "0000000000000000000000000017"};
 
-        PGroupElement coded;
         PGroupElement[] codificados = new PGroupElement[messages.length];
         // codificando mensajes
         int i = 0;
         for (String message : messages) {
-            coded = coder.encoder(message);
-            codificados[i] = coded;
+            codificados[i] = coder.encoder(message);
             i++;
         }
         // verificando que los mensajes codificados han sido correctamente creados
@@ -90,28 +88,24 @@ public class Main {
         System.out.println("Paso 3: == Cifrando el mensaje codificado con ElGamal ==");
         // cifrando los mensajes codificados
         ElGamalCipher cipher = new ElGamalCipher(publicKey);
-        ElGamalCipheredText cipheredText;
+        ElGamalCipheredText[] cipheredTexts = new ElGamalCipheredText[codificados.length];
+        i = 0;
         for (PGroupElement codificado : codificados) {
-            cipheredText = cipher.cifrar(codificado, Tools.getRandomSource());
-            System.out.println(cipheredText.toString());
+            cipheredTexts[i] = cipher.encrypt(codificado, Tools.getRandomSource());
+            System.out.println(cipheredTexts[i].toString());
+            i++;
         }
         
-        /*
         // serializar
         String outputPath = mainPath + "new_ciphertexts";
         //exportarCiphertexts(ciphertexts, outputPath);
         //exportarCiphertextsParaVerificatum(ciphertexts, group, outputPath);
+        /*
         exportarCiphertextsVMNCompatible(ciphertexts, outputPath);
         //verificarCiphertextsVMNCompatibles(outputPath);
         verificarCiphertexts(new File(outputPath));
         //verificarEstructuraByteTree(outputPath);
          */
-    }
-
-    public static void imprimirCiphertext(List<ElGamalCipheredText> c) {
-        for (ElGamalCipheredText elGamalCiphertext : c) {
-            System.out.println(elGamalCiphertext.toString());
-        }
     }
 
     public static void verificarEstructuraByteTree(String pathArchivo) {
