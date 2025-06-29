@@ -5,7 +5,6 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.arithm.PGroupElement;
-import com.verificatum.eio.ByteTreeContainer;
 
 /**
  *
@@ -13,16 +12,20 @@ import com.verificatum.eio.ByteTreeContainer;
  */
 public class ElGamalCipheredText {
 
-    public final PGroupElement c1;
-    public final PGroupElement c2;
+    private final PGroupElement c1;
+    private final PGroupElement c2;
 
     public ElGamalCipheredText(PGroupElement c1, PGroupElement c2) {
         this.c1 = c1;
         this.c2 = c2;
     }
 
-    public ByteTreeContainer toByteTree() {
-        return new ByteTreeContainer(c1.toByteTree(), c2.toByteTree());
+    public PGroupElement getC1() {
+        return c1;
+    }
+
+    public PGroupElement getC2() {
+        return c2;
     }
 
     @Override

@@ -8,8 +8,13 @@ import com.verificatum.arithm.PGroupElement;
 import com.verificatum.crypto.PRGHeuristic;
 import com.verificatum.crypto.RandomSource;
 import com.verificatum.eio.ByteTreeBasic;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -53,5 +58,31 @@ public class Tools {
         prg.setSeed(semilla);
 
         return prg;
+    }
+
+    public static void nativeFormatWriter(byte[] serialized, String fullOutputPath) {
+        StringBuilder hexLine = new StringBuilder();
+        for (byte b : serialized) {
+            hexLine.append(String.format("%02x", b));
+        }
+
+        // Escribir en un archivo en una única línea
+        try (PrintWriter out = new PrintWriter(new FileWriter(fullOutputPath))) {
+            out.println(hexLine.toString());
+            System.out.println("Voto cifrado escrito como línea única en: " + fullOutputPath);
+        } catch (IOException ex) {
+            Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+    }
+
+    public static void hexFormatReader(byte[] serialized) {
+        for (int j = 0; j < serialized.length; j++) {
+            System.out.print(String.format("%02x", serialized[j]));
+            if ((j + 1) % 16 == 0) {
+                System.out.println();
+            }
+        }
+
     }
 }
