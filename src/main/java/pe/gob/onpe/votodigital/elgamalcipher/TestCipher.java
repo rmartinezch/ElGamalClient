@@ -27,7 +27,13 @@ public class TestCipher {
         // Paso 1: Codificar el mensaje
         PGroup group = publicKey.getGroup();
         ElGamalCoder coder = new ElGamalCoder(group);
-        PGroupElement codedMessage = coder.encoder("0000000000000000000000000002");
+        PGroupElement codedMessage = coder.encoder("0000000000000000000000000000");
+        
+        if(coder.verifyCodedMessage(codedMessage)) {
+            System.out.println("Mensaje codificado verificado.");
+        } else {
+            System.out.println("Mensaje codificado no verificado.");
+        }
 
         // Paso 2: Cifrar el mensaje codificado
         RandomSource randomSource = new RandomDevice();
@@ -52,7 +58,7 @@ public class TestCipher {
         // Serializar
         byte[] serialized = new byte[(int) root.totalByteSize()];
         root.toByteArray(serialized, 0);
-        
+
         // Escribir en formato nativo
         String outputPath = "/home/rmartinezch/verificatum/eleccion03/01/ciphertexts_ext2";
         Tools.nativeFormatWriter(serialized, outputPath);
