@@ -1,7 +1,3 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.arithm.PGroup;
@@ -9,7 +5,6 @@ import com.verificatum.arithm.PGroupElement;
 import com.verificatum.crypto.RandomDevice;
 import com.verificatum.crypto.RandomSource;
 import com.verificatum.eio.ByteTree;
-import com.verificatum.eio.ByteTreeReader;
 
 public class TestCipher {
 
@@ -28,8 +23,8 @@ public class TestCipher {
         PGroup group = publicKey.getGroup();
         ElGamalCoder coder = new ElGamalCoder(group);
         PGroupElement codedMessage = coder.encoder("0000000000000000000000000000");
-        
-        if(coder.verifyCodedMessage(codedMessage)) {
+
+        if (coder.verifyCodedMessage(codedMessage)) {
             System.out.println("Mensaje codificado verificado.");
         } else {
             System.out.println("Mensaje codificado no verificado.");
@@ -39,7 +34,7 @@ public class TestCipher {
         RandomSource randomSource = new RandomDevice();
         ElGamalCipher cipher = new ElGamalCipher(publicKey);
         ElGamalCipheredText ciphertext = cipher.encrypt(codedMessage, randomSource);
-
+        /*
         // Obtener coordenadas de C1 y C2
         ByteTreeReader readerC1 = ciphertext.getC1().toByteTree().getByteTreeReader();
         ByteTreeReader readerC2 = ciphertext.getC2().toByteTree().getByteTreeReader();
@@ -54,6 +49,12 @@ public class TestCipher {
         ByteTree treeC1 = new ByteTree(c1x, c1y);
         ByteTree treeC2 = new ByteTree(c2x, c2y);
         ByteTree root = new ByteTree(treeC1, treeC2);
+         */
+        ByteTree root = new ByteTree(
+                (ByteTree) ciphertext.getC1().toByteTree(),
+                (ByteTree) ciphertext.getC2().toByteTree()
+        );
+        System.out.println("votoCifrado: " + root.toHexString());
 
         // Serializar
         byte[] serialized = new byte[(int) root.totalByteSize()];

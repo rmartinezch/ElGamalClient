@@ -1,10 +1,7 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.arithm.PGroupElement;
+import com.verificatum.crypto.RandomDevice;
 
 /**
  *
@@ -52,7 +49,7 @@ public class Main {
             //            "0000000000000000000000000008",
             //            "0000000000000000000000000023",
             //            "0000000000000000000000000041",
-            "0000000000000000000000000017"};
+            "0000000000000000000000000000"};
 
         PGroupElement[] codificados = new PGroupElement[messages.length];
         // codificando mensajes
@@ -73,9 +70,11 @@ public class Main {
         // cifrando los mensajes codificados
         ElGamalCipher cipher = new ElGamalCipher(publicKey);
         ElGamalCipheredText[] cipheredTexts = new ElGamalCipheredText[codificados.length];
+        
+//        RandomSource randomSource = new RandomDevice();
         i = 0;
         for (PGroupElement codificado : codificados) {
-            cipheredTexts[i] = cipher.encrypt(codificado, Tools.getRandomSource());
+            cipheredTexts[i] = cipher.encrypt(codificado, new RandomDevice());
             System.out.println("ByteArray c1: " + cipheredTexts[i].getC1().toByteArray().length);
             System.out.println("ByteArray c2: " + cipheredTexts[i].getC2().toByteArray().length);
             System.out.println(cipheredTexts[i].toString());

@@ -1,7 +1,3 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.arithm.PGroup;
@@ -36,6 +32,8 @@ public class ElGamalCipher {
         PGroupElement y = gToX;
         PGroupElement yr = y.exp(r);
         PGroupElement c2 = codedMessage.mul(yr);
+        System.out.println("c1: " + c1.toByteTree().toHexString());
+        System.out.println("c2: " + c2.toByteTree().toHexString());
         // Paso 5: Retornar el par cifrado
         return new ElGamalCipheredText(c1, c2);
     }
