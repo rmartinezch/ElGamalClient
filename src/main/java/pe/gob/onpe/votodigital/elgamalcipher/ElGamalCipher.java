@@ -32,8 +32,6 @@ public class ElGamalCipher {
         PGroupElement y = gToX;
         PGroupElement yr = y.exp(r);
         PGroupElement c2 = codedMessage.mul(yr);
-        System.out.println("c1: " + c1.toByteTree().toHexString());
-        System.out.println("c2: " + c2.toByteTree().toHexString());
         // Paso 5: Retornar el par cifrado
         return new ElGamalCipheredText(c1, c2);
     }

@@ -11,7 +11,8 @@ public class TestCipher {
     public static void main(String[] args) throws Exception {
 
         // Ruta a la llave publica
-        String pathToPublicKey = "/home/rmartinezch/verificatum/eleccion03/01/publicKey";
+        String mainPath = "/home/rmartinezch/verificatum/eleccion03/01/";
+        String pathToPublicKey = mainPath + "publicKey";
         ElGamalPublicKey publicKey = new ElGamalPublicKey(pathToPublicKey);
 
         if (!publicKey.isLoaded()) {
@@ -61,12 +62,11 @@ public class TestCipher {
         root.toByteArray(serialized, 0);
 
         // Escribir en formato nativo
-        String outputPath = "/home/rmartinezch/verificatum/eleccion03/01/ciphertexts_ext2";
+        String outputPath = mainPath + "ciphertexts_ext2";
         Tools.nativeFormatWriter(serialized, outputPath);
 
         System.out.println("== Formato nativo completo en hex ==");
         Tools.hexFormatReader(serialized);
-
     }
 
 }

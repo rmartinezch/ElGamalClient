@@ -2,6 +2,7 @@ package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.arithm.PGroupElement;
 import com.verificatum.crypto.RandomDevice;
+import com.verificatum.crypto.RandomSource;
 
 /**
  *
@@ -10,11 +11,11 @@ import com.verificatum.crypto.RandomDevice;
 public class Main {
 
     public static void main(String[] args) {
-        System.out.println("LD_LIBRARY_PATH = " + System.getenv("LD_LIBRARY_PATH"));
-        System.out.println("java.library.path = " + System.getProperty("java.library.path"));
+        System.out.println("LD_LIBRARY_PATH:\n" + System.getenv("LD_LIBRARY_PATH"));
+        System.out.println("java.library.path:\n" + System.getProperty("java.library.path"));
 
         System.out.println("Paso 1: == Leyendo la llave pública ElGamal ==");
-        String mainPath = "/home/rmartinezch/verificatum/eleccion03/01/";
+        String mainPath = "/home/rmartinezch/verificatum/eleccion04/01/";
         //String mainPath = "/home/rmartinezch/verificatum-vmn-3.1.0-full/verificatum-vmn-3.1.0/demo/mixnet/mydemodir/Party01/";
         String publicKeyName = "publicKey";
         ElGamalPublicKey publicKey = new ElGamalPublicKey(mainPath + publicKeyName);
@@ -70,18 +71,19 @@ public class Main {
         // cifrando los mensajes codificados
         ElGamalCipher cipher = new ElGamalCipher(publicKey);
         ElGamalCipheredText[] cipheredTexts = new ElGamalCipheredText[codificados.length];
-        
-//        RandomSource randomSource = new RandomDevice();
+
+        RandomSource randomSource = new RandomDevice();
         i = 0;
         for (PGroupElement codificado : codificados) {
-            cipheredTexts[i] = cipher.encrypt(codificado, new RandomDevice());
-            System.out.println("ByteArray c1: " + cipheredTexts[i].getC1().toByteArray().length);
-            System.out.println("ByteArray c2: " + cipheredTexts[i].getC2().toByteArray().length);
+            cipheredTexts[i] = cipher.encrypt(codificado, randomSource);
             System.out.println(cipheredTexts[i].toString());
+            System.out.println(cipheredTexts[i].toHexString());
             i++;
         }
 
         // serializar
+        String outputPath = mainPath + "ciphertexts_ext2";
+        Tools.serialize(cipheredTexts[0].toByteTree(), outputPath);
     }
 
 }

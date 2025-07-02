@@ -1,10 +1,7 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.arithm.PGroupElement;
+import com.verificatum.eio.ByteTree;
 
 /**
  *
@@ -28,8 +25,20 @@ public class ElGamalCipheredText {
         return c2;
     }
 
+    public ByteTree toByteTree() {
+        ByteTree root = new ByteTree(
+                (ByteTree) c1.toByteTree(),
+                (ByteTree) c2.toByteTree()
+        );
+        return root;
+    }
+    
+    public String toHexString(){
+        return this.toByteTree().toHexString();
+    }
+
     @Override
     public String toString() {
-        return "Ciphertext:\nC1 = " + c1 + "\nC2 = " + c2;
+        return "CipheredText:\nc1 = " + c1 + "\nc2 = " + c2;
     }
 }

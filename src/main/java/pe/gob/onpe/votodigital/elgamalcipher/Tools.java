@@ -1,12 +1,9 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.arithm.PGroupElement;
 import com.verificatum.crypto.PRGHeuristic;
 import com.verificatum.crypto.RandomSource;
+import com.verificatum.eio.ByteTree;
 import com.verificatum.eio.ByteTreeBasic;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -83,6 +80,15 @@ public class Tools {
                 System.out.println();
             }
         }
+        System.out.println();
+    }
+    
+    public static void serialize(ByteTree cipheredText, String outputPath) {
+                // Serializar
+        byte[] serialized = new byte[(int) cipheredText.totalByteSize()];
+        cipheredText.toByteArray(serialized, 0);
 
+        // Escribir en formato nativo
+        nativeFormatWriter(serialized, outputPath);
     }
 }
