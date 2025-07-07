@@ -3,7 +3,12 @@ package pe.gob.onpe.votodigital.elgamalcipher;
 import com.verificatum.arithm.PGroupElement;
 import com.verificatum.crypto.RandomDevice;
 import com.verificatum.crypto.RandomSource;
+import com.verificatum.eio.ByteTree;
+import com.verificatum.eio.ByteTreeBasic;
+import com.verificatum.eio.EIOException;
 import java.io.File;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -16,7 +21,7 @@ public class Main {
         System.out.println("java.library.path:\n" + System.getProperty("java.library.path"));
 
         System.out.println("Paso 1: == Leyendo la llave pública ElGamal ==");
-        String mainPath = "/home/rmartinezch/verificatum/eleccion04/01/";
+        String mainPath = "/home/rmartinezch/verificatum/eleccion05/01/";
         //String mainPath = "/home/rmartinezch/verificatum-vmn-3.1.0-full/verificatum-vmn-3.1.0/demo/mixnet/mydemodir/Party01/";
         String publicKeyName = "publicKey";
         ElGamalPublicKey publicKey = new ElGamalPublicKey(mainPath + publicKeyName);
@@ -68,25 +73,40 @@ public class Main {
             }
         }
 
-        System.out.println("Paso 3: == Cifrando el mensaje codificado con ElGamal ==");
-        // cifrando los mensajes codificados
-        ElGamalCipher cipher = new ElGamalCipher(publicKey);
-        ElGamalCipheredText[] cipheredTexts = new ElGamalCipheredText[codificados.length];
-
         // Integración con un Generador de números aleatorios verdadero de hardware con interfaz USB, solo para JAVA
         boolean trueRNG = true;
         String device;
         File rngDevice;
         RandomSource randomSource;
         if (trueRNG) {
-            device = "/dev/TrueRNG0";            // Dispositivo de linux donde está indexado el generador de hardware USB
+            device = "/dev/TrueRNG0";                   // Dispositivo de linux donde está indexado el generador de hardware USB
             rngDevice = new File(device);
-            randomSource = new RandomDevice(rngDevice);
+            randomSource = new RandomDevice(rngDevice); // Representación del dispositivo en el formato de Verificatum
         } else {
-            randomSource = new RandomDevice();  // por defecto /dev/urandom
+            randomSource = new RandomDevice();          // por defecto /dev/urandom
         }
         System.out.println("randomSource.toByteTree().toHexString(): " + randomSource.toByteTree().toHexString());
-        System.out.println("randomSource.toByteTree().toHexString().lenght(): " + randomSource.toByteTree().toHexString().length());
+
+        // Desde aquí randomSource.toByteTree().toHexString() sabemos que randomSource tiene una hoja ByteTree
+        // Obtener representación ByteTreeBasic
+        ByteTreeBasic btb = randomSource.toByteTree();
+        // Realizar cast explícito a ByteTree
+        if (!(btb instanceof ByteTree)) {
+            throw new IllegalStateException("El objeto no es un ByteTree.");
+        }
+        ByteTree bt = (ByteTree) btb;
+        try {
+            String deviceFromByteTree = ByteTree.byteTreeToString(bt);
+            System.out.println("deviceFromByteTree: " + deviceFromByteTree);
+        } catch (EIOException ex) {
+            Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+        System.out.println("Paso 3: == Cifrando el mensaje codificado con ElGamal ==");
+        // cifrando los mensajes codificados
+        ElGamalCipher cipher = new ElGamalCipher(publicKey);
+        ElGamalCipheredText[] cipheredTexts = new ElGamalCipheredText[codificados.length];
+
         i = 0;
         for (PGroupElement codificado : codificados) {
             cipheredTexts[i] = cipher.encrypt(codificado, randomSource);
