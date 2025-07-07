@@ -3,6 +3,7 @@ package pe.gob.onpe.votodigital.elgamalcipher;
 import com.verificatum.arithm.PGroupElement;
 import com.verificatum.crypto.RandomDevice;
 import com.verificatum.crypto.RandomSource;
+import java.io.File;
 
 /**
  *
@@ -72,7 +73,20 @@ public class Main {
         ElGamalCipher cipher = new ElGamalCipher(publicKey);
         ElGamalCipheredText[] cipheredTexts = new ElGamalCipheredText[codificados.length];
 
-        RandomSource randomSource = new RandomDevice();
+        // Integración con un Generador de números aleatorios verdadero de hardware con interfaz USB, solo para JAVA
+        boolean trueRNG = true;
+        String device;
+        File rngDevice;
+        RandomSource randomSource;
+        if (trueRNG) {
+            device = "/dev/TrueRNG0";            // Dispositivo de linux donde está indexado el generador de hardware USB
+            rngDevice = new File(device);
+            randomSource = new RandomDevice(rngDevice);
+        } else {
+            randomSource = new RandomDevice();  // por defecto /dev/urandom
+        }
+        System.out.println("randomSource.toByteTree().toHexString(): " + randomSource.toByteTree().toHexString());
+        System.out.println("randomSource.toByteTree().toHexString().lenght(): " + randomSource.toByteTree().toHexString().length());
         i = 0;
         for (PGroupElement codificado : codificados) {
             cipheredTexts[i] = cipher.encrypt(codificado, randomSource);
