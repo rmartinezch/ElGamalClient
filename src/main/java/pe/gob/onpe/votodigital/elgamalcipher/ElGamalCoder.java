@@ -1,7 +1,7 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.arithm.ArithmFormatException;
-import com.verificatum.arithm.PGroup;
+import com.verificatum.arithm.ECqPGroup;
 import com.verificatum.arithm.PGroupElement;
 import java.nio.charset.StandardCharsets;
 import java.util.logging.Level;
@@ -13,10 +13,10 @@ import java.util.logging.Logger;
  */
 public class ElGamalCoder {
 
-    PGroup group;
+    private ECqPGroup eCqPGroup;
 
-    public ElGamalCoder(PGroup group) {
-        this.group = group;
+    public ElGamalCoder(ECqPGroup eCqPGroup) {
+        this.eCqPGroup = eCqPGroup;
     }
 
     public PGroupElement encoder(String uncodedMessage) {
@@ -26,14 +26,14 @@ public class ElGamalCoder {
         System.out.println("uncodedMessageInBytes.length: " + uncodedMessageInBytes.length);
 
         // Paso 2: Validar que no exceda la capacidad de codificación
-        int maxAllowedLength = group.getEncodeLength();
-        System.out.println("Máxima longitud que permite " + group.toString() + ": " + maxAllowedLength);
+        int maxAllowedLength = eCqPGroup.getEncodeLength();
+        System.out.println("Máxima longitud que permite " + eCqPGroup.toString() + ": " + maxAllowedLength);
         if (uncodedMessageInBytes.length > maxAllowedLength) {
             throw new IllegalArgumentException("Mensaje demasiado largo para ser codificado en el grupo.");
         }
 
         // Paso 3: Codificar usando el método encode disponible
-        PGroupElement codedMessage = group.encode(uncodedMessageInBytes, 0, uncodedMessageInBytes.length);
+        PGroupElement codedMessage = eCqPGroup.encode(uncodedMessageInBytes, 0, uncodedMessageInBytes.length);
         System.out.println("codedMessage.toString(): " + codedMessage.toString());
         System.out.println("codedMessage.toString().length(): " + codedMessage.toString().length());
         System.out.println("codedMessage.toByteTree().toHexString(): " + codedMessage.toByteTree().toHexString());
@@ -45,7 +45,7 @@ public class ElGamalCoder {
     public boolean verifyCodedMessage(PGroupElement codedMessage) {
         boolean b = false;
         try {
-            PGroupElement decoded = group.toElement(codedMessage.toByteTree().getByteTreeReader());
+            PGroupElement decoded = eCqPGroup.toElement(codedMessage.toByteTree().getByteTreeReader());
             System.out.println("decoded.decode(): " + new String(decoded.decode(), StandardCharsets.UTF_8));
             System.out.println("decoded.toString(): " + decoded.toString());
             b = decoded.equals(codedMessage);

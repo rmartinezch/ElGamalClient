@@ -1,6 +1,7 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.arithm.ArithmFormatException;
+import com.verificatum.arithm.ECqPGroup;
 import com.verificatum.arithm.PGroup;
 import com.verificatum.arithm.PGroupElement;
 import com.verificatum.eio.ByteTreeReader;
@@ -17,17 +18,22 @@ import java.util.logging.Logger;
  */
 public class ElGamalPublicKey {
 
-    PGroup group;
-    PGroupElement gToX;
-    String fullPath;
-    boolean loaded;
+    private ECqPGroup eCqPGroup;
+    private PGroupElement g;
+    private PGroupElement y;
+    private final String fullPath;
+    private boolean loaded;
 
-    public PGroup getGroup() {
-        return group;
+    public ECqPGroup getECqGroup() {
+        return eCqPGroup;
     }
 
-    public PGroupElement getgToX() {
-        return gToX;
+    public PGroupElement getG() {
+        return g;
+    }
+
+    public PGroupElement getY() {
+        return y;
     }
 
     public boolean isLoaded() {
@@ -48,19 +54,26 @@ public class ElGamalPublicKey {
             File file = new File(fullPath);
             loaded = file.exists();
             if (!loaded) {
-                System.out.println("El archivo no existe en la ruta especificada.");
+                System.out.println("El archivo en la ruta especificada no ha podido ser cargado: " + fullPath);
                 return;
             }
             // Leer archivo como árbol de bytes
             ByteTreeReaderF rootReader = new ByteTreeReaderF(file);
             // Leer primer hijo: grupo (PGroup)
             ByteTreeReader groupReader = rootReader.getNextChild();
-            group = Marshalizer.unmarshalAux_PGroup(groupReader, null, 1);
-            // Leer segundo hijo: g^x
-            // Segundo hijo: ByteTree conteniendo la llave pública
-            ByteTreeReader wrapper = rootReader.getNextChild();
-            ByteTreeReader leaf = wrapper.getNextChild(); // accede a la hoja interna
-            gToX = group.toElement(leaf);
+            PGroup group = Marshalizer.unmarshalAux_PGroup(groupReader, null, 1);
+            // Verificación de tipo de grupo
+            if (!(group instanceof ECqPGroup)) {
+                throw new RuntimeException("Se esperaba ECqPGroup, pero se encontró: " + group.getClass().getName());
+            }
+            eCqPGroup = (ECqPGroup) group;
+
+            // Leer {g, y}
+            ByteTreeReader gensReader = rootReader.getNextChild();
+
+            g = eCqPGroup.toElement(gensReader.getNextChild());
+            y = eCqPGroup.toElement(gensReader.getNextChild());
+
             System.out.println("Lectura de llave pública ElGamal completada.");
         } catch (EIOException | ArithmFormatException ex) {
             Logger.getLogger(ElGamalPublicKey.class.getName()).log(Level.SEVERE, null, ex);
@@ -70,7 +83,7 @@ public class ElGamalPublicKey {
     @Override
     public String toString() {
         if (loaded) {
-            return "Llave pública:\nGrupo: " + group.toString() + "\nElemento g^x: " + gToX.toString();
+            return "Llave pública:\nGrupo: " + eCqPGroup.toString() + "\nElemento g: " + g.toString() + "\nElemento y: " + y.toString();
         } else {
             return "La llave pública ElGamal no pudo ser cargada.";
         }

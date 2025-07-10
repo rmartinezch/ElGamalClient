@@ -1,6 +1,6 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
-import com.verificatum.arithm.PGroup;
+import com.verificatum.arithm.ECqPGroup;
 import com.verificatum.arithm.PGroupElement;
 import com.verificatum.crypto.RandomDevice;
 import com.verificatum.crypto.RandomSource;
@@ -21,7 +21,7 @@ public class TestCipher {
         }
 
         // Paso 1: Codificar el mensaje
-        PGroup group = publicKey.getGroup();
+        ECqPGroup group = publicKey.getECqGroup();
         ElGamalCoder coder = new ElGamalCoder(group);
         PGroupElement codedMessage = coder.encoder("0000000000000000000000000000");
 

@@ -7,7 +7,6 @@ import com.verificatum.arithm.PGroupElement;
 import com.verificatum.arithm.PRing;
 import com.verificatum.arithm.PRingElement;
 import com.verificatum.crypto.RandomDevice;
-import com.verificatum.crypto.RandomSource;
 import com.verificatum.eio.ByteTreeReader;
 import com.verificatum.eio.ByteTreeReaderF;
 import com.verificatum.eio.EIOException;
@@ -28,14 +27,14 @@ public class PublicKeyReader {
             File file = new File(path);
 
             // === Fuente de aleatoriedad dummy ===
-            RandomSource dummyRandom = new RandomDevice();
+//            RandomSource dummyRandom = new RandomDevice();
 
             // === Abrimos el ByteTree binario ===
             ByteTreeReaderF rootReader = new ByteTreeReaderF(file);
 
             // Paso 1: Leer el grupo
             ByteTreeReader groupReader = rootReader.getNextChild();
-            PGroup group = Marshalizer.unmarshalAux_PGroup(groupReader, dummyRandom, 64);
+            PGroup group = Marshalizer.unmarshalAux_PGroup(groupReader, null, 1);
 
             // Verificación de tipo de grupo
             if (!(group instanceof ECqPGroup)) {

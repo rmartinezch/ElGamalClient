@@ -32,7 +32,7 @@ public class Main {
 
         System.out.println("Paso 2: == Codificando el mensaje plano ==");
         // codificación
-        ElGamalCoder coder = new ElGamalCoder(publicKey.getGroup());
+        ElGamalCoder coder = new ElGamalCoder(publicKey.getECqGroup());
 
         /*
         String mensaje;
@@ -56,7 +56,7 @@ public class Main {
             //            "0000000000000000000000000008",
             //            "0000000000000000000000000023",
             //            "0000000000000000000000000041",
-            "0000000000000000000000000000"};
+            "0000000000000000000000000001"};
 
         PGroupElement[] codificados = new PGroupElement[messages.length];
         // codificando mensajes
