@@ -20,7 +20,7 @@ public class Main {
         System.out.println("LD_LIBRARY_PATH:\n" + System.getenv("LD_LIBRARY_PATH"));
         System.out.println("java.library.path:\n" + System.getProperty("java.library.path"));
 
-        System.out.println("Paso 1: == Leyendo la llave pública ElGamal ==");
+        System.out.println("Leyendo la llave pública ElGamal.");
         String mainPath = "/home/rmartinezch/verificatum/eleccion05/01/";
         //String mainPath = "/home/rmartinezch/verificatum-vmn-3.1.0-full/verificatum-vmn-3.1.0/demo/mixnet/mydemodir/Party01/";
         String publicKeyName = "publicKey";
@@ -30,32 +30,20 @@ public class Main {
         }
         System.out.println(publicKey.toString());
 
-        System.out.println("Paso 2: == Codificando el mensaje plano ==");
+        System.out.println("Codificando los votos planos.");
         // codificación
         ElGamalCoder coder = new ElGamalCoder(publicKey.getECqGroup());
 
-        /*
-        String mensaje;
-        PGroupElement codificado;
-        mensaje = "0000000000000000000000000027";
-        codificado = coder.encoder(mensaje);
-        System.out.println("Mensaje codificado Hex:\n" + Tools.HexEncoder(codificado));
-        if (coder.verifyCodedMessage(codificado)) {
-            System.out.println("iguales");
-        } else {
-            System.out.println("diferentes");
-        }
-
-        mensaje = "0000000000000000000000000072";
-        codificado = coder.encoder(mensaje);
-        System.out.println("Mensaje codificado Hex:\n" + Tools.HexEncoder(codificado));
-        //*/
         String[] messages = {
-            //            "0000000000000000000000000027",
-            //            "0000000000000000000000000072",
-            //            "0000000000000000000000000008",
-            //            "0000000000000000000000000023",
-            //            "0000000000000000000000000041",
+            "0000000000000000000000000027",
+            "0000000000000000000000000027",
+            "0000000000000000000000000072",
+            "0000000000000000000000000008",
+            "0000000000000000000000000008",
+            "0000000000000000000000000023",
+            "0000000000000000000000000023",
+            "0000000000000000000000000041",
+            "0000000000000000000000000031",
             "0000000000000000000000000001"};
 
         PGroupElement[] codificados = new PGroupElement[messages.length];
@@ -117,7 +105,7 @@ public class Main {
 
         // serializar
         String outputPath = mainPath + "ciphertexts_ext2";
-        Tools.serialize(cipheredTexts[0].toByteTree(), outputPath);
+        Tools.serialize(cipheredTexts, outputPath);
     }
 
 }

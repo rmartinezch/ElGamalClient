@@ -13,7 +13,7 @@ import java.util.logging.Logger;
  */
 public class ElGamalCoder {
 
-    private ECqPGroup eCqPGroup;
+    private final ECqPGroup eCqPGroup;
 
     public ElGamalCoder(ECqPGroup eCqPGroup) {
         this.eCqPGroup = eCqPGroup;
