@@ -34,6 +34,7 @@ public class Main {
         // codificación
         ElGamalCoder coder = new ElGamalCoder(publicKey.getECqGroup());
 
+        /*
         String[] messages = {
             "0000000000000000000000000027",
             "0000000000000000000000000027",
@@ -45,6 +46,8 @@ public class Main {
             "0000000000000000000000000041",
             "0000000000000000000000000031",
             "0000000000000000000000000001"};
+        */
+        String[] messages = Tools.readFile(mainPath + "votos_mezclados.txt");
 
         PGroupElement[] codificados = new PGroupElement[messages.length];
         // codificando mensajes

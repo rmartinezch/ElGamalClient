@@ -3,10 +3,15 @@ package pe.gob.onpe.votodigital.elgamalcipher;
 import com.verificatum.arithm.PGroupElement;
 import com.verificatum.eio.ByteTree;
 import com.verificatum.eio.ByteTreeBasic;
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -84,6 +89,23 @@ public class Tools {
 
         // Escribir en formato nativo
         nativeFormatWriter(serialized, outputPath);
+    }
+    
+     public static String[] readFile(String ruta) {
+        List<String> lineas = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(ruta))) {
+            String linea;
+            while ((linea = br.readLine()) != null) {
+                if (!linea.trim().isEmpty()) {
+                    lineas.add(linea.trim());
+                }
+            }
+        } catch (FileNotFoundException ex) {
+            Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (IOException ex) {
+            Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return lineas.toArray(String[]::new);
     }
 
 }
