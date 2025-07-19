@@ -47,7 +47,7 @@ public class Main {
             "0000000000000000000000000031",
             "0000000000000000000000000001"};
         */
-        String[] messages = Tools.readFile(mainPath + "votos_mezclados.txt");
+        String[] messages = Tools.readFile(mainPath + "shuffled_votes.txt");
 
         PGroupElement[] codificados = new PGroupElement[messages.length];
         // codificando mensajes
