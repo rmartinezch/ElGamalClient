@@ -21,7 +21,7 @@ public class ElGamalVectorPublicKey {
     private PPGroup ppGroup;                     // G = ECqPGroup^κ
     private PGroup[] baseGroups;                 // G_i (todos ECqPGroup)
     private PPGroupElement g;                    // Vector de generadores
-    private PPGroupElement y;                    // Vector de claves públicas
+    private PPGroupElement y;                    // Vector de llaves públicas
     private final String fullPath;
     private boolean loaded;
 
@@ -116,7 +116,7 @@ public class ElGamalVectorPublicKey {
             sb.append("Componente ").append(i + 1).append(":\n");
             sb.append("  Grupo base: ").append(baseGroups[i].toString()).append("\n");
             sb.append("  Generador g_").append(i + 1).append(": ").append(getGFactors()[i].toString()).append("\n");
-            sb.append("  Clave pública y_").append(i + 1).append(": ").append(getYFactors()[i].toString()).append("\n");
+            sb.append("  Llave pública y_").append(i + 1).append(": ").append(getYFactors()[i].toString()).append("\n");
         }
         return sb.toString();
     }
