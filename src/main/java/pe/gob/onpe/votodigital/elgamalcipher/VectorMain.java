@@ -1,6 +1,8 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.arithm.PPGroupElement;
+import com.verificatum.crypto.RandomDevice;
+import com.verificatum.crypto.RandomSource;
 import java.util.Arrays;
 
 /**
@@ -27,13 +29,28 @@ public class VectorMain {
             {"01", "04", "14"},
             {"01", "05", "16"},
             {"01", "06", "18"},
-            {"01", "07", "20"},
-        };
+            {"02", "06", "18"},
+            {"03", "07", "20"},};
 
         PPGroupElement[] encodedVotes = new PPGroupElement[votes.length];
         for (int i = 0; i < encodedVotes.length; i++) {
             System.out.println("Vector Voto [" + i + "]: " + Arrays.toString(votes[i]));
             encodedVotes[i] = vectorEncoder.encodeVector(votes[i]);
         }
+
+        // Cifrar el mensaje
+        ElGamalVectorCipher cipher = new ElGamalVectorCipher(publicKey);
+        RandomSource randomSource = new RandomDevice();
+        ElGamalCipheredText[] cipheredVectorTexts = new ElGamalCipheredText[encodedVotes.length];
+        for (int i = 0; i < cipheredVectorTexts.length; i++) {
+            cipheredVectorTexts[i] = cipher.encrypt(encodedVotes[i], randomSource);
+            System.out.println(cipheredVectorTexts[i].toString());
+            System.out.println(cipheredVectorTexts[i].toHexString());
+        }
+
+        // serializar
+        String outputPath = mainPath + "ciphertexts_ext3";
+        Tools.serialize(cipheredVectorTexts, outputPath);
+
     }
 }

@@ -2,6 +2,9 @@ package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.arithm.PGroupElement;
 import com.verificatum.eio.ByteTree;
+import com.verificatum.eio.EIOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -26,14 +29,21 @@ public class ElGamalCipheredText {
     }
 
     public ByteTree toByteTree() {
-        ByteTree root = new ByteTree(
-                (ByteTree) c1.toByteTree(),
-                (ByteTree) c2.toByteTree()
-        );
+        ByteTree root = null;
+        try {
+            root = new ByteTree(
+                    //                (ByteTree) c1.toByteTree(),
+                    //                (ByteTree) c2.toByteTree()
+                    c1.toByteTree().getByteTreeReader().readByteTree(),
+                    c2.toByteTree().getByteTreeReader().readByteTree()
+            );
+        } catch (EIOException ex) {
+            Logger.getLogger(ElGamalCipheredText.class.getName()).log(Level.SEVERE, null, ex);
+        }
         return root;
     }
-    
-    public String toHexString(){
+
+    public String toHexString() {
         return this.toByteTree().toHexString();
     }
 

@@ -28,10 +28,8 @@ public class ElGamalCipher {
         // Generar elemento aleatorio r en el anillo con 256 bits de seguridad
         PRingElement r = pRing.randomElement(randomSource, 256);
         // Calcular el primer componente del cifrado: g^r
-        // Cálculo de c1 = k * g
         PGroupElement c1 = g.exp(r);
         // Calcular el segundo componente del cifrado: m * (y^r)
-        // Cálculo de c2 = M + k * y
         PGroupElement yr = y.exp(r);
         PGroupElement c2 = codedMessage.mul(yr);
         // Retornar el par cifrado
