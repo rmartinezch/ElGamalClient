@@ -93,7 +93,7 @@ public class Main {
             Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
         }
 
-        System.out.println("Paso 3: == Cifrando el mensaje codificado con ElGamal ==");
+        System.out.println("Cifrando los mensajes codificados con ElGamal.");
         // cifrando los mensajes codificados
         ElGamalCipher cipher = new ElGamalCipher(publicKey);
         ElGamalCipheredText[] cipheredTexts = new ElGamalCipheredText[codificados.length];
@@ -110,5 +110,4 @@ public class Main {
         String outputPath = mainPath + "ciphertexts_ext2";
         Tools.serialize(cipheredTexts, outputPath);
     }
-
 }

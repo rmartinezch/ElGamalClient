@@ -90,8 +90,8 @@ public class Tools {
         // Escribir en formato nativo
         nativeFormatWriter(serialized, outputPath);
     }
-    
-     public static String[] readFile(String ruta) {
+
+    public static String[] readFile(String ruta) {
         List<String> lineas = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(ruta))) {
             String linea;
@@ -108,4 +108,32 @@ public class Tools {
         return lineas.toArray(String[]::new);
     }
 
+    public static String[][] readVectors(String ruta) {
+        List<String> lineas = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(ruta))) {
+            String linea;
+            while ((linea = br.readLine()) != null) {
+                if (!linea.trim().isEmpty()) {
+                    lineas.add(linea.trim());
+                }
+            }
+        } catch (FileNotFoundException ex) {
+            Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (IOException ex) {
+            Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+        int fieldLen = 2;                                                       // longitud del campo del mensaje
+        int lengthOfMessage = lineas.get(0).length();                           // longitud del mensaje
+        int numberOfFields = lengthOfMessage / fieldLen;                        // número de campos dentro del mensaje
+        String[][] array = new String[lineas.size()][numberOfFields];
+        for (int i = 0; i < lineas.size(); i++) {
+            for (int j = 0; j < numberOfFields; j++) {
+                int inicio = j * fieldLen;
+                int fin = inicio + fieldLen;
+                array[i][j] = lineas.get(i).substring(inicio, fin);
+            }
+        }
+        return array;
+    }
 }

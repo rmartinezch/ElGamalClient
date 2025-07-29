@@ -13,7 +13,7 @@ public class VectorMain {
 
     public static void main(String[] args) {
         System.out.println("Leyendo la llave pública ElGamal.");
-        String mainPath = "/home/rmartinezch/verificatum/eleccion06/01/";
+        String mainPath = "/home/rmartinezch/verificatum/eleccion07/01/";
         String publicKeyName = "publicKey";
         ElGamalVectorPublicKey publicKey = new ElGamalVectorPublicKey(mainPath + publicKeyName);
         if (!publicKey.isLoaded()) {
@@ -23,6 +23,7 @@ public class VectorMain {
 
         ElGamalVectorEncoder vectorEncoder = new ElGamalVectorEncoder(publicKey.getPPGroup());
 
+        /*
         String[][] votes = new String[][]{
             {"01", "02", "10"},
             {"01", "03", "12"},
@@ -30,7 +31,11 @@ public class VectorMain {
             {"01", "05", "16"},
             {"01", "06", "18"},
             {"02", "06", "18"},
-            {"03", "07", "20"},};
+            {"03", "07", "20"},
+        };
+        */
+        // Lectura de vectores desde el archivo de votos en texto plano
+        String[][] votes = Tools.readVectors(mainPath + "shuffled_votes.txt");
 
         PPGroupElement[] encodedVotes = new PPGroupElement[votes.length];
         for (int i = 0; i < encodedVotes.length; i++) {
