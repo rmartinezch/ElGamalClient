@@ -32,10 +32,8 @@ public class ElGamalPublicKey {
     // Si es vectorial:
     private PPGroup ppGroup;
     private PGroup[] baseGroups;
-    private PPGroupElement gVec;
-    private PPGroupElement yVec;
 
-    // Tipo detectado
+    // Es llave vectorial o no (simple)
     private boolean vectorial = false;
 
     public ElGamalPublicKey(String fullPathToKey) {
@@ -63,6 +61,7 @@ public class ElGamalPublicKey {
                 vectorial = false;
                 ecqGroup = (ECqPGroup) group;
                 length = 1;
+                
                 ByteTreeReader elemsReader = rootReader.getNextChild();
                 g = ecqGroup.toElement(elemsReader.getNextChild());
                 y = ecqGroup.toElement(elemsReader.getNextChild());
@@ -76,17 +75,13 @@ public class ElGamalPublicKey {
                 baseGroups = ppGroup.getFactors();
 
                 ByteTreeReader elemsReader = rootReader.getNextChild();
-                PGroupElement gRaw = ppGroup.toElement(elemsReader.getNextChild());
-                PGroupElement yRaw = ppGroup.toElement(elemsReader.getNextChild());
-
-                gVec = (PPGroupElement) gRaw;
-                yVec = (PPGroupElement) yRaw;
+                g = ppGroup.toElement(elemsReader.getNextChild());
+                y = ppGroup.toElement(elemsReader.getNextChild());
                 System.out.println("Llave pública vectorial ElGamal cargada, keywidth = " + baseGroups.length);
 
             } else {
                 throw new RuntimeException("Formato de grupo desconocido: " + group.getClass().getName());
             }
-
         } catch (EIOException | ArithmFormatException ex) {
             Logger.getLogger(ElGamalPublicKey.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -105,19 +100,11 @@ public class ElGamalPublicKey {
     }
 
     public PGroupElement getG() {
-        if (isVectorial()) {
-            return gVec;    // automatic cast from PPGroupElement to PGroupElement
-        } else {
-            return g;
-        }
+        return g;
     }
 
     public PGroupElement getY() {
-        if (isVectorial()) {
-            return yVec;    // automatic cast from PPGroupElement to PGroupElement
-        } else {
-            return y;
-        }
+        return y;
     }
 
     // Acceso simple
@@ -134,21 +121,13 @@ public class ElGamalPublicKey {
         return baseGroups;
     }
 
-    public PPGroupElement getGVec() {
-        return gVec;
-    }
-
-    public PPGroupElement getYVec() {
-        return yVec;
-    }
-
     // Acceso a las múltiples llaves contenidas en la llave vectorial total
     public PGroupElement[] getGFactors() {
-        return gVec != null ? gVec.getFactors() : null;
+        return g != null ? ((PPGroupElement)g).getFactors() : null;
     }
 
     public PGroupElement[] getYFactors() {
-        return yVec != null ? yVec.getFactors() : null;
+        return y != null ? ((PPGroupElement)y).getFactors() : null;
     }
 
     @Override

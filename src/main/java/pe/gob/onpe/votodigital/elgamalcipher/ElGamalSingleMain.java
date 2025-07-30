@@ -14,7 +14,7 @@ import java.util.logging.Logger;
  *
  * @author rmartinezch
  */
-public class Main {
+public class ElGamalSingleMain {
 
     public static void main(String[] args) {
         System.out.println("LD_LIBRARY_PATH:\n" + System.getenv("LD_LIBRARY_PATH"));
@@ -90,7 +90,7 @@ public class Main {
             String deviceFromByteTree = ByteTree.byteTreeToString(bt);
             System.out.println("deviceFromByteTree: " + deviceFromByteTree);
         } catch (EIOException ex) {
-            Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(ElGamalSingleMain.class.getName()).log(Level.SEVERE, null, ex);
         }
 
         System.out.println("Cifrando los mensajes codificados con ElGamal.");

@@ -10,7 +10,7 @@ import java.util.Arrays;
  *
  * @author rmartinezch
  */
-public class VectorMain {
+public class ElGamalMain {
 
     public static void main(String[] args) {
         String mainPath = "/home/rmartinezch/verificatum/eleccion07/01/";
