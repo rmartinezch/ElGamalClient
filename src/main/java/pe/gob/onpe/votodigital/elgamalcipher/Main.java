@@ -24,7 +24,7 @@ public class Main {
         String mainPath = "/home/rmartinezch/verificatum/eleccion05/01/";
         //String mainPath = "/home/rmartinezch/verificatum-vmn-3.1.0-full/verificatum-vmn-3.1.0/demo/mixnet/mydemodir/Party01/";
         String publicKeyName = "publicKey";
-        ElGamalPublicKey publicKey = new ElGamalPublicKey(mainPath + publicKeyName);
+        ElGamalSinglePublicKey publicKey = new ElGamalSinglePublicKey(mainPath + publicKeyName);
         if (!publicKey.isLoaded()) {
             return;
         }
@@ -32,7 +32,7 @@ public class Main {
 
         System.out.println("Codificando los votos planos.");
         // codificación
-        ElGamalCoder coder = new ElGamalCoder(publicKey.getECqGroup());
+        ElGamalSingleEncoder coder = new ElGamalSingleEncoder(publicKey.getECqGroup());
 
         /*
         String[] messages = {
@@ -47,7 +47,7 @@ public class Main {
             "0000000000000000000000000031",
             "0000000000000000000000000001"};
         */
-        String[] messages = Tools.readFile(mainPath + "shuffled_votes.txt");
+        String[] messages = Tools.readSingleVotesFromFile(mainPath + "shuffled_votes.txt");
 
         PGroupElement[] codificados = new PGroupElement[messages.length];
         // codificando mensajes
@@ -95,7 +95,7 @@ public class Main {
 
         System.out.println("Cifrando los mensajes codificados con ElGamal.");
         // cifrando los mensajes codificados
-        ElGamalCipher cipher = new ElGamalCipher(publicKey);
+        ElGamalSingleCipher cipher = new ElGamalSingleCipher(publicKey);
         ElGamalCipheredText[] cipheredTexts = new ElGamalCipheredText[codificados.length];
 
         i = 0;

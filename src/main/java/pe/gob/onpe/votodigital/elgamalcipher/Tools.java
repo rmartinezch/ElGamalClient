@@ -91,7 +91,7 @@ public class Tools {
         nativeFormatWriter(serialized, outputPath);
     }
 
-    public static String[] readFile(String ruta) {
+    public static String[] readSingleVotesFromFile(String ruta) {
         List<String> lineas = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(ruta))) {
             String linea;
@@ -108,7 +108,7 @@ public class Tools {
         return lineas.toArray(String[]::new);
     }
 
-    public static String[][] readVectorsFromFile(String path, int numberOfKeys) {
+    public static String[][] readVectorVotesFromFile(String path, int numberOfKeys) {
         List<String> lines = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(path))) {
             String line;

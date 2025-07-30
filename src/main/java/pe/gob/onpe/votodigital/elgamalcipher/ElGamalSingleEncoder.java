@@ -11,11 +11,11 @@ import java.util.logging.Logger;
  *
  * @author rmartinezch
  */
-public class ElGamalCoder {
+public class ElGamalSingleEncoder {
 
     private final ECqPGroup eCqPGroup;
 
-    public ElGamalCoder(ECqPGroup eCqPGroup) {
+    public ElGamalSingleEncoder(ECqPGroup eCqPGroup) {
         this.eCqPGroup = eCqPGroup;
     }
 
@@ -50,7 +50,7 @@ public class ElGamalCoder {
             System.out.println("decoded.toString(): " + decoded.toString());
             b = decoded.equals(codedMessage);
         } catch (ArithmFormatException ex) {
-            Logger.getLogger(ElGamalCoder.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(ElGamalSingleEncoder.class.getName()).log(Level.SEVERE, null, ex);
         }
         return b;
     }

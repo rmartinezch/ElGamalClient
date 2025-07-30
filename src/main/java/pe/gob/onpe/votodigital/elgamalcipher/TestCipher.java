@@ -13,7 +13,7 @@ public class TestCipher {
         // Ruta a la llave publica
         String mainPath = "/home/rmartinezch/verificatum/eleccion03/01/";
         String pathToPublicKey = mainPath + "publicKey";
-        ElGamalPublicKey publicKey = new ElGamalPublicKey(pathToPublicKey);
+        ElGamalSinglePublicKey publicKey = new ElGamalSinglePublicKey(pathToPublicKey);
 
         if (!publicKey.isLoaded()) {
             System.err.println("No se pudo cargar la llave publica.");
@@ -22,7 +22,7 @@ public class TestCipher {
 
         // Paso 1: Codificar el mensaje
         ECqPGroup group = publicKey.getECqGroup();
-        ElGamalCoder coder = new ElGamalCoder(group);
+        ElGamalSingleEncoder coder = new ElGamalSingleEncoder(group);
         PGroupElement codedMessage = coder.encoder("0000000000000000000000000000");
 
         if (coder.verifyCodedMessage(codedMessage)) {
@@ -33,7 +33,7 @@ public class TestCipher {
 
         // Paso 2: Cifrar el mensaje codificado
         RandomSource randomSource = new RandomDevice();
-        ElGamalCipher cipher = new ElGamalCipher(publicKey);
+        ElGamalSingleCipher cipher = new ElGamalSingleCipher(publicKey);
         ElGamalCipheredText ciphertext = cipher.encrypt(codedMessage, randomSource);
         /*
         // Obtener coordenadas de C1 y C2

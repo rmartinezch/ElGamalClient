@@ -1,5 +1,6 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
+import com.verificatum.arithm.PGroupElement;
 import com.verificatum.arithm.PPGroupElement;
 import com.verificatum.crypto.RandomDevice;
 import com.verificatum.crypto.RandomSource;
@@ -14,13 +15,19 @@ public class VectorMain {
     public static void main(String[] args) {
         String mainPath = "/home/rmartinezch/verificatum/eleccion07/01/";
         String publicKeyName = "publicKey";
-        ElGamalVectorPublicKey publicKey = new ElGamalVectorPublicKey(mainPath + publicKeyName);
+        ElGamalPublicKey publicKey = new ElGamalPublicKey(mainPath + publicKeyName);
         if (!publicKey.isLoaded()) {
             return;
         }
         System.out.println(publicKey.toString());
 
-        ElGamalVectorEncoder vectorEncoder = new ElGamalVectorEncoder(publicKey.getPPGroup());
+        // Inicialización del encoder
+        ElGamalEncoder encoder;
+        if (publicKey.isVectorial()) {
+            encoder = new ElGamalEncoder(publicKey.getPPGroup());
+        } else {
+            encoder = new ElGamalEncoder(publicKey.getECqGroup());
+        }
 
         /*
         String[][] votes = new String[][]{
@@ -33,27 +40,50 @@ public class VectorMain {
             {"03", "07", "20"},
         };
 //        */
-        // Lectura de vectores desde el archivo de votos en texto plano, considerando el número de llaves
-        String[][] votes = Tools.readVectorsFromFile(mainPath + "shuffled_votes.txt", publicKey.getPPGroup().getWidth());
+        
+        // Lectura de votos simples o vectoriales desde el archivo de votos en texto plano, considerando el número de llaves
+        String[][] vectorVotes = Tools.readVectorVotesFromFile(mainPath + "shuffled_votes.txt", publicKey.getLength());
+        String[] singleVotes = Tools.readSingleVotesFromFile(mainPath + "shuffled_votes.txt");
 
-        PPGroupElement[] encodedVotes = new PPGroupElement[votes.length];
-        for (int i = 0; i < encodedVotes.length; i++) {
-            System.out.println("Vector Voto [" + i + "]: " + Arrays.toString(votes[i]));
-            encodedVotes[i] = vectorEncoder.encodeVector(votes[i]);
+        // Contenedores de votos codificados, vectoriales y simples
+        PPGroupElement[] encodedVectorVotes = new PPGroupElement[vectorVotes.length];
+        PGroupElement[] encodedSingleVotes = new PGroupElement[singleVotes.length];
+        if (publicKey.isVectorial()) {
+            for (int i = 0; i < encodedVectorVotes.length; i++) {
+                System.out.println("Vector Voto [" + i + "]: " + Arrays.toString(vectorVotes[i]));
+                encodedVectorVotes[i] = encoder.encodeVector(vectorVotes[i]);
+            }
+        } else {
+            for (int i = 0; i < encodedSingleVotes.length; i++) {
+                System.out.println("Single Voto [" + i + "]: " + (singleVotes[i]));
+                encodedSingleVotes[i] = encoder.encodeSingle(singleVotes[i]);
+            }
         }
 
-        // Cifrar el mensaje
-        ElGamalVectorCipher cipher = new ElGamalVectorCipher(publicKey);
+        // Cifrar el voto
+        ElGamalCipher cipher;
+        ElGamalCipheredText[] cipheredVotes = new ElGamalCipheredText[singleVotes.length];
         RandomSource randomSource = new RandomDevice();
-        ElGamalCipheredText[] cipheredVectorTexts = new ElGamalCipheredText[encodedVotes.length];
-        for (int i = 0; i < cipheredVectorTexts.length; i++) {
-            cipheredVectorTexts[i] = cipher.encrypt(encodedVotes[i], randomSource);
-//            System.out.println(cipheredVectorTexts[i].toString());
-            System.out.println(cipheredVectorTexts[i].toHexString());
+        if (!publicKey.isVectorial()) {
+            cipher = new ElGamalCipher(publicKey.getECqGroup(), publicKey.getG(), publicKey.getY());
+            for (int i = 0; i < cipheredVotes.length; i++) {
+                cipheredVotes[i] = cipher.encryptSingle(encodedSingleVotes[i], randomSource);
+            }
+        } else {
+            cipher = new ElGamalCipher(publicKey.getPPGroup(), publicKey.getG(), publicKey.getY());
+            for (int i = 0; i < cipheredVotes.length; i++) {
+                cipheredVotes[i] = cipher.encryptVector(encodedVectorVotes[i], randomSource);
+            }
+        }
+
+        // lectura de votos cifrados
+        for (ElGamalCipheredText cipheredVote : cipheredVotes) {
+            System.out.println(cipheredVote.toString());
+            System.out.println(cipheredVote.toHexString());
         }
 
         // serializar
-        String outputPath = mainPath + "ciphertexts_ext3";
-        Tools.serialize(cipheredVectorTexts, outputPath);
+        String outputPath = mainPath + "ciphertexts_ext";
+        Tools.serialize(cipheredVotes, outputPath);
     }
 }

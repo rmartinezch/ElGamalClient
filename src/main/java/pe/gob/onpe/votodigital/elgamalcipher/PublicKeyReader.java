@@ -50,7 +50,7 @@ public class PublicKeyReader {
             PGroupElement y = ecGroup.toElement(gensReader.getNextChild());  // correcto
 
             System.out.println(">> Generador g: " + g.toString());
-            System.out.println(">> Clave pública y: " + y.toString());
+            System.out.println(">> Llave pública y: " + y.toString());
 
             // === Paso 3: Codificar mensaje a punto M ===
             String mensaje = "0000000000000000000000000001";
