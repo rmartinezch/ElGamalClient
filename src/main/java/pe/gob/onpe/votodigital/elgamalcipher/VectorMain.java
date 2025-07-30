@@ -12,7 +12,6 @@ import java.util.Arrays;
 public class VectorMain {
 
     public static void main(String[] args) {
-        System.out.println("Leyendo la llave pública ElGamal.");
         String mainPath = "/home/rmartinezch/verificatum/eleccion07/01/";
         String publicKeyName = "publicKey";
         ElGamalVectorPublicKey publicKey = new ElGamalVectorPublicKey(mainPath + publicKeyName);
@@ -33,9 +32,9 @@ public class VectorMain {
             {"02", "06", "18"},
             {"03", "07", "20"},
         };
-        */
-        // Lectura de vectores desde el archivo de votos en texto plano
-        String[][] votes = Tools.readVectors(mainPath + "shuffled_votes.txt");
+//        */
+        // Lectura de vectores desde el archivo de votos en texto plano, considerando el número de llaves
+        String[][] votes = Tools.readVectorsFromFile(mainPath + "shuffled_votes.txt", publicKey.getPPGroup().getWidth());
 
         PPGroupElement[] encodedVotes = new PPGroupElement[votes.length];
         for (int i = 0; i < encodedVotes.length; i++) {
@@ -49,13 +48,12 @@ public class VectorMain {
         ElGamalCipheredText[] cipheredVectorTexts = new ElGamalCipheredText[encodedVotes.length];
         for (int i = 0; i < cipheredVectorTexts.length; i++) {
             cipheredVectorTexts[i] = cipher.encrypt(encodedVotes[i], randomSource);
-            System.out.println(cipheredVectorTexts[i].toString());
+//            System.out.println(cipheredVectorTexts[i].toString());
             System.out.println(cipheredVectorTexts[i].toHexString());
         }
 
         // serializar
         String outputPath = mainPath + "ciphertexts_ext3";
         Tools.serialize(cipheredVectorTexts, outputPath);
-
     }
 }

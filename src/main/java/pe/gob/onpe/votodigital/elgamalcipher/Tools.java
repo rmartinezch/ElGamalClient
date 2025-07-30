@@ -108,13 +108,13 @@ public class Tools {
         return lineas.toArray(String[]::new);
     }
 
-    public static String[][] readVectors(String ruta) {
-        List<String> lineas = new ArrayList<>();
-        try (BufferedReader br = new BufferedReader(new FileReader(ruta))) {
-            String linea;
-            while ((linea = br.readLine()) != null) {
-                if (!linea.trim().isEmpty()) {
-                    lineas.add(linea.trim());
+    public static String[][] readVectorsFromFile(String path, int numberOfKeys) {
+        List<String> lines = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(path))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (!line.trim().isEmpty()) {
+                    lines.add(line.trim());
                 }
             }
         } catch (FileNotFoundException ex) {
@@ -123,15 +123,23 @@ public class Tools {
             Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
         }
 
-        int fieldLen = 2;                                                       // longitud del campo del mensaje
-        int lengthOfMessage = lineas.get(0).length();                           // longitud del mensaje
-        int numberOfFields = lengthOfMessage / fieldLen;                        // número de campos dentro del mensaje
-        String[][] array = new String[lineas.size()][numberOfFields];
-        for (int i = 0; i < lineas.size(); i++) {
+        int lengthOfMessage = lines.get(0).length();                            // longitud de cada mensaje
+        boolean isMultiple = (lengthOfMessage % numberOfKeys == 0);
+        if (!isMultiple) {
+            System.out.println("El mensaje no es divisible por " + numberOfKeys + " llaves");
+            return null;
+        } else {
+            System.out.println("El mensaje es divisible por " + numberOfKeys + " llaves");
+        }
+        
+        int numberOfFields = numberOfKeys;                                      // número de campos dentro del mensaje
+        int lengthOfField = lengthOfMessage / numberOfFields;                   // longitud del campo del mensaje
+        String[][] array = new String[lines.size()][numberOfFields];
+        for (int i = 0; i < lines.size(); i++) {
             for (int j = 0; j < numberOfFields; j++) {
-                int inicio = j * fieldLen;
-                int fin = inicio + fieldLen;
-                array[i][j] = lineas.get(i).substring(inicio, fin);
+                int inicio = j * lengthOfField;
+                int fin = inicio + lengthOfField;
+                array[i][j] = lines.get(i).substring(inicio, fin);
             }
         }
         return array;
