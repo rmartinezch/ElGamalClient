@@ -22,7 +22,7 @@ public class ElGamalPublicKey {
 
     private boolean loaded;
     private final String fullPath;
-    private int length;
+    private int numberOfKeys;
 
     // Si es simple:
     private ECqPGroup ecqGroup;
@@ -60,7 +60,7 @@ public class ElGamalPublicKey {
                 // llave simple
                 vectorial = false;
                 ecqGroup = (ECqPGroup) group;
-                length = 1;
+                numberOfKeys = 1;
                 
                 ByteTreeReader elemsReader = rootReader.getNextChild();
                 g = ecqGroup.toElement(elemsReader.getNextChild());
@@ -71,13 +71,13 @@ public class ElGamalPublicKey {
                 // llave vectorial
                 vectorial = true;
                 ppGroup = (PPGroup) group;
-                length = ppGroup.getWidth();
                 baseGroups = ppGroup.getFactors();
+                numberOfKeys = baseGroups.length;
 
                 ByteTreeReader elemsReader = rootReader.getNextChild();
                 g = ppGroup.toElement(elemsReader.getNextChild());
                 y = ppGroup.toElement(elemsReader.getNextChild());
-                System.out.println("Llave pública vectorial ElGamal cargada, keywidth = " + baseGroups.length);
+                System.out.println("Llave pública vectorial ElGamal cargada, keywidth: " + numberOfKeys);
 
             } else {
                 throw new RuntimeException("Formato de grupo desconocido: " + group.getClass().getName());
@@ -95,8 +95,8 @@ public class ElGamalPublicKey {
         return vectorial;
     }
 
-    public int getLength() {
-        return length;
+    public int getNumberOfKeys() {
+        return numberOfKeys;
     }
 
     public PGroupElement getG() {

@@ -56,14 +56,14 @@ public class Tools {
         }
     }
 
-    public static void serialize(ElGamalCipheredText[] cipheredTexts, String outputPath) {
+    public static void serialize(ElGamalCipheredVote[] cipheredTexts, String outputPath) {
         if (cipheredTexts.length == 0) {
             System.out.println("Sin elementos a escribir.");
             return;
         }
 
         try (PrintWriter out = new PrintWriter(new FileWriter(outputPath))) {
-            for (ElGamalCipheredText cipheredText : cipheredTexts) {
+            for (ElGamalCipheredVote cipheredText : cipheredTexts) {
                 // extract every ByteTree object
                 ByteTree byteTree = cipheredText.toByteTree();
                 byte[] serialized = new byte[(int) byteTree.totalByteSize()];

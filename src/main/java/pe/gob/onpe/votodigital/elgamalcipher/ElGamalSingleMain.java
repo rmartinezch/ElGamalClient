@@ -46,7 +46,7 @@ public class ElGamalSingleMain {
             "0000000000000000000000000041",
             "0000000000000000000000000031",
             "0000000000000000000000000001"};
-        */
+//        */
         String[] messages = Tools.readSingleVotesFromFile(mainPath + "shuffled_votes.txt");
 
         PGroupElement[] codificados = new PGroupElement[messages.length];
@@ -96,7 +96,7 @@ public class ElGamalSingleMain {
         System.out.println("Cifrando los mensajes codificados con ElGamal.");
         // cifrando los mensajes codificados
         ElGamalSingleCipher cipher = new ElGamalSingleCipher(publicKey);
-        ElGamalCipheredText[] cipheredTexts = new ElGamalCipheredText[codificados.length];
+        ElGamalCipheredVote[] cipheredTexts = new ElGamalCipheredVote[codificados.length];
 
         i = 0;
         for (PGroupElement codificado : codificados) {

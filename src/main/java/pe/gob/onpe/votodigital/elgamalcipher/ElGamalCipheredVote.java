@@ -10,12 +10,12 @@ import java.util.logging.Logger;
  *
  * @author rmartinezch
  */
-public class ElGamalCipheredText {
+public class ElGamalCipheredVote {
 
     private final PGroupElement c1;
     private final PGroupElement c2;
 
-    public ElGamalCipheredText(PGroupElement c1, PGroupElement c2) {
+    public ElGamalCipheredVote(PGroupElement c1, PGroupElement c2) {
         this.c1 = c1;
         this.c2 = c2;
     }
@@ -38,7 +38,7 @@ public class ElGamalCipheredText {
                     c2.toByteTree().getByteTreeReader().readByteTree()
             );
         } catch (EIOException ex) {
-            Logger.getLogger(ElGamalCipheredText.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(ElGamalCipheredVote.class.getName()).log(Level.SEVERE, null, ex);
         }
         return root;
     }

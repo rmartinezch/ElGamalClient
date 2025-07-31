@@ -79,7 +79,7 @@ public class PublicKeyReader {
 
             // serializar
             String outputPath = "/home/rmartinezch/verificatum/eleccion05/01/ciphertexts_ext3";
-            Tools.serialize(new ElGamalCipheredText(C1, C2).toByteTree(), outputPath);
+            Tools.serialize(new ElGamalCipheredVote(C1, C2).toByteTree(), outputPath);
 
         } catch (ArithmFormatException | EIOException | RuntimeException e) {
         }

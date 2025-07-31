@@ -34,7 +34,7 @@ public class TestCipher {
         // Paso 2: Cifrar el mensaje codificado
         RandomSource randomSource = new RandomDevice();
         ElGamalSingleCipher cipher = new ElGamalSingleCipher(publicKey);
-        ElGamalCipheredText ciphertext = cipher.encrypt(codedMessage, randomSource);
+        ElGamalCipheredVote ciphertext = cipher.encrypt(codedMessage, randomSource);
         /*
         // Obtener coordenadas de C1 y C2
         ByteTreeReader readerC1 = ciphertext.getC1().toByteTree().getByteTreeReader();

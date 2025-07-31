@@ -22,7 +22,7 @@ public class ElGamalSingleCipher {
         this.y = publicKey.getY();
     }
 
-    public ElGamalCipheredText encrypt(PGroupElement codedMessage, RandomSource randomSource) {
+    public ElGamalCipheredVote encrypt(PGroupElement codedMessage, RandomSource randomSource) {
         // Obtener el anillo asociado al grupo
         PRing pRing = eCqPGroup.getPRing();
         // Generar elemento aleatorio r en el anillo con 256 bits de seguridad
@@ -33,6 +33,6 @@ public class ElGamalSingleCipher {
         PGroupElement yr = y.exp(r);
         PGroupElement c2 = codedMessage.mul(yr);
         // Retornar el par cifrado
-        return new ElGamalCipheredText(c1, c2);
+        return new ElGamalCipheredVote(c1, c2);
     }
 }

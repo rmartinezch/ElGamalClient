@@ -22,7 +22,7 @@ public class ElGamalVectorCipher {
         this.yVec = publicKey.getY();
     }
     
-    public ElGamalCipheredText encrypt(PGroupElement messageVec, RandomSource randomSource) {
+    public ElGamalCipheredVote encrypt(PGroupElement messageVec, RandomSource randomSource) {
         if (!(messageVec instanceof PPGroupElement)) {
             throw new IllegalArgumentException("El mensaje debe ser un elemento de un grupo producto (PPGroupElement).");
         }
@@ -38,6 +38,6 @@ public class ElGamalVectorCipher {
         PGroupElement yr = yVec.exp(r);
         PGroupElement c2 = messageVec.mul(yr);
 
-        return new ElGamalCipheredText(c1, c2);
+        return new ElGamalCipheredVote(c1, c2);
     }
 }
