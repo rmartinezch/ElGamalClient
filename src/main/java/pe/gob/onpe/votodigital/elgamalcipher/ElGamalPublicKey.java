@@ -56,31 +56,33 @@ public class ElGamalPublicKey {
             ByteTreeReader groupReader = rootReader.getNextChild();
             PGroup group = Marshalizer.unmarshalAux_PGroup(groupReader, null, 1);
 
-            if (group instanceof ECqPGroup) {
-                // llave simple
-                vectorial = false;
-                ecqGroup = (ECqPGroup) group;
-                numberOfKeys = 1;
-                
-                ByteTreeReader elemsReader = rootReader.getNextChild();
-                g = ecqGroup.toElement(elemsReader.getNextChild());
-                y = ecqGroup.toElement(elemsReader.getNextChild());
-                System.out.println("Llave pública simple ElGamal cargada.");
-
-            } else if (group instanceof PPGroup) {
-                // llave vectorial
-                vectorial = true;
-                ppGroup = (PPGroup) group;
-                baseGroups = ppGroup.getFactors();
-                numberOfKeys = baseGroups.length;
-
-                ByteTreeReader elemsReader = rootReader.getNextChild();
-                g = ppGroup.toElement(elemsReader.getNextChild());
-                y = ppGroup.toElement(elemsReader.getNextChild());
-                System.out.println("Llave pública vectorial ElGamal cargada, keywidth: " + numberOfKeys);
-
-            } else {
-                throw new RuntimeException("Formato de grupo desconocido: " + group.getClass().getName());
+            switch (group) {
+                case ECqPGroup eCqPGroup -> {
+                    // llave simple
+                    vectorial = false;
+                    ecqGroup = eCqPGroup;
+                    numberOfKeys = 1;
+                    
+                    ByteTreeReader elemsReader = rootReader.getNextChild();
+                    g = ecqGroup.toElement(elemsReader.getNextChild());
+                    y = ecqGroup.toElement(elemsReader.getNextChild());
+                    System.out.println("Llave pública simple ElGamal cargada.");
+                    
+                }
+                case PPGroup pPGroup -> {
+                    // llave vectorial
+                    vectorial = true;
+                    ppGroup = pPGroup;
+                    baseGroups = ppGroup.getFactors();
+                    numberOfKeys = baseGroups.length;
+                    
+                    ByteTreeReader elemsReader = rootReader.getNextChild();
+                    g = ppGroup.toElement(elemsReader.getNextChild());
+                    y = ppGroup.toElement(elemsReader.getNextChild());
+                    System.out.println("Llave pública vectorial ElGamal cargada, keywidth: " + numberOfKeys);
+                    
+                }
+                default -> throw new RuntimeException("Formato de grupo desconocido: " + group.getClass().getName());
             }
         } catch (EIOException | ArithmFormatException ex) {
             Logger.getLogger(ElGamalPublicKey.class.getName()).log(Level.SEVERE, null, ex);

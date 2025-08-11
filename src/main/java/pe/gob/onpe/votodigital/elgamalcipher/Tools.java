@@ -93,6 +93,11 @@ public class Tools {
     }
 
     public static String[] readSingleVotesFromFile(String ruta) {
+        File file = new File(ruta);
+        if (!file.exists()) {
+            System.out.println("El archivo no existe: " + ruta);
+            return null;
+        }
         List<String> lineas = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(ruta))) {
             String linea;

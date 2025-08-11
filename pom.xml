@@ -9,6 +9,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
+        <local.user.home>${user.home}</local.user.home>
+        <verificatum.base.path>${local.user.home}/verificatum-vmn-3.1.0-full</verificatum.base.path>
     </properties>
     <dependencies>
         <dependency>
@@ -36,7 +38,7 @@
                 <configuration>
                     <mainClass>pe.gob.onpe.votodigital.elgamalcipher.PublicKeyRead</mainClass>
                     <environmentVariables>
-                        <LD_LIBRARY_PATH>/home/rmartinezch/verificatum-vmn-3.1.0-full/verificatum-vecj-2.2.0/native/.libs:/home/rmartinezch/verificatum-vmn-3.1.0-full/verificatum-vmgj-1.3.0/native/.libs</LD_LIBRARY_PATH>
+                        <LD_LIBRARY_PATH>${verificatum.base.path}/verificatum-vecj-2.2.0/native/.libs:${verificatum.base.path}/verificatum-vmgj-1.3.0/native/.libs</LD_LIBRARY_PATH>
                     </environmentVariables>
                 </configuration>
             </plugin>

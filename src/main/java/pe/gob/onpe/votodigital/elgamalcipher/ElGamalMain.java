@@ -12,7 +12,7 @@ import java.util.Arrays;
 public class ElGamalMain {
 
     public static void main(String[] args) {
-        String mainPath = "/home/rmartinezch/Verificatum/eleccion09/01/";
+        String mainPath = System.getProperty("user.home") + "/Verificatum/eleccion09/01/";
         String publicKeyName = "publicKey";
         ElGamalPublicKey publicKey = new ElGamalPublicKey(mainPath + publicKeyName);
         if (!publicKey.isLoaded()) {
