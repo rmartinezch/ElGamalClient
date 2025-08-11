@@ -4,6 +4,7 @@ import com.verificatum.arithm.PGroupElement;
 import com.verificatum.eio.ByteTree;
 import com.verificatum.eio.ByteTreeBasic;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -109,6 +110,11 @@ public class Tools {
     }
 
     public static String[][] readVectorVotesFromFile(String path, int numberOfKeys) {
+        File file = new File(path);
+        if (!file.exists()) {
+            System.out.println("El archivo no existe: " + path);
+            return null;
+        }
         List<String> lines = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(path))) {
             String line;
@@ -131,7 +137,7 @@ public class Tools {
         } else {
             System.out.println("El mensaje es divisible por " + numberOfKeys + " llaves");
         }
-        
+
         int numberOfFields = numberOfKeys;                                      // número de campos dentro del mensaje
         int lengthOfField = lengthOfMessage / numberOfFields;                   // longitud del campo del mensaje
         String[][] array = new String[lines.size()][numberOfFields];

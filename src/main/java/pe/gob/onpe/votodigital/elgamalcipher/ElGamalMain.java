@@ -12,7 +12,7 @@ import java.util.Arrays;
 public class ElGamalMain {
 
     public static void main(String[] args) {
-        String mainPath = "/home/rmartinezch/verificatum/eleccion07/01/";
+        String mainPath = "/home/rmartinezch/Verificatum/eleccion09/01/";
         String publicKeyName = "publicKey";
         ElGamalPublicKey publicKey = new ElGamalPublicKey(mainPath + publicKeyName);
         if (!publicKey.isLoaded()) {
@@ -44,6 +44,8 @@ public class ElGamalMain {
         
         // Lectura de votos simples o vectoriales desde el archivo de votos en texto plano, considerando el número de llaves
         String[][] vectorVotes = Tools.readVectorVotesFromFile(mainPath + "shuffled_votes.txt", publicKey.getNumberOfKeys());
+        
+        if (vectorVotes == null) return;
 
         // Contenedores de votos codificados, vectoriales y simples
         PGroupElement[] encodedVectorVotes = new PGroupElement[vectorVotes.length];
