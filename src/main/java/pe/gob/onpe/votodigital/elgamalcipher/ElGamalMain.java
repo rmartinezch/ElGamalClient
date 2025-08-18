@@ -17,7 +17,7 @@ public class ElGamalMain {
         if (args.length != 3) {
             System.out.println("""
                                El n\u00famero de argumentos es 3, as\u00ed:
-                               java -jar ElGamalClient public_Key_file_name plain_votes_file_name ciphered_votes_file_name""");
+                               java -Djava.library.path=$HOME/verificatum-vmn-3.1.0-full/verificatum-vecj-2.2.0/native/.libs:$HOME/verificatum-vmn-3.1.0-full/verificatum-vmgj-1.3.0/native/.libs -jar ElGamalClient public_Key_file_name plain_votes_file_name ciphered_votes_file_name""");
             return;
         }
 
