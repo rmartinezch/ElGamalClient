@@ -60,13 +60,22 @@
                         <LD_LIBRARY_PATH>${verificatum.base.path}/verificatum-vecj-2.2.0/native/.libs:${verificatum.base.path}/verificatum-vmgj-1.3.0/native/.libs</LD_LIBRARY_PATH>
                     </environmentVariables>
                     <executable>${java.home}/bin/java</executable>
+                    <!--
                     <systemPropertyVariables>
                         <java.library.path>${project.basedir}/native</java.library.path>
                     </systemPropertyVariables>
+                    -->
                 </configuration>
             </plugin>
+            <!--
+            java -Djava.library.path=/home/rmartinezch/Projects/ElGamalClient/native -jar target/ElGamalCipher-1.0-SNAPSHOT-jar-with-dependencies.jar
+            -->
+            
+            <!--
+            java -Djava.library.path=$HOME/verificatum-vmn-3.1.0-full/verificatum-vecj-2.2.0/native/.libs:$HOME/verificatum-vmn-3.1.0-full/verificatum-vmgj-1.3.0/native/.libs -jar ElGamalCipher-1.0-SNAPSHOT-jar-with-dependencies.jar publicKey shuffled_votes.txt ciphertexts_ext
+            -->
 
-            <!-- Plugin para crear fat JAR -->
+            <!-- Fat JAR -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>

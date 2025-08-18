@@ -3,6 +3,8 @@ package pe.gob.onpe.votodigital.elgamalcipher;
 import com.verificatum.arithm.PGroupElement;
 import com.verificatum.crypto.RandomDevice;
 import com.verificatum.crypto.RandomSource;
+import java.io.File;
+import java.nio.file.Paths;
 import java.util.Arrays;
 
 /**
@@ -12,15 +14,35 @@ import java.util.Arrays;
 public class ElGamalMain {
 
     public static void main(String[] args) {
-        String mainPath = System.getProperty("user.home") + "/Verificatum/eleccion09/01/";
-        String publicKeyName = "publicKey";
-        ElGamalPublicKey publicKey = new ElGamalPublicKey(mainPath + publicKeyName);
+        if (args.length != 3) {
+            System.out.println("""
+                               El n\u00famero de argumentos es 3, as\u00ed:
+                               java -jar ElGamalClient public_Key_file_name plain_votes_file_name ciphered_votes_file_name""");
+            return;
+        }
+
+        String mainPath = Paths.get("").toAbsolutePath().toString() + File.separator;
+        System.out.println("Directorio actual: " + mainPath);
+
+        // Input files exists?
+        File[] files = new File[args.length];
+        for (int i = 0; i < args.length; i++) {
+            files[i] = new File(mainPath + args[i]);
+            System.out.println("Parámetro " + (i + 1) + ": " + files[i].getAbsolutePath());
+            if (!files[i].exists() && (i != args.length - 1)) {
+                System.out.println("No existe el archivo: " + files[i].getAbsolutePath());
+                return;
+            }
+        }
+
+        // Read ElGamal public key
+        ElGamalPublicKey publicKey = new ElGamalPublicKey(files[0].getAbsolutePath());
         if (!publicKey.isLoaded()) {
             return;
         }
         System.out.println(publicKey.toString());
 
-        // Inicialización del encoder
+        // Encoder initialization
         ElGamalEncoder encoder = new ElGamalEncoder(publicKey);
 
         /*
@@ -42,19 +64,34 @@ public class ElGamalMain {
         };
 //        */
         
-        // Lectura de votos simples o vectoriales desde el archivo de votos en texto plano, considerando el número de llaves
-        String[][] vectorVotes = Tools.readVectorVotesFromFile(mainPath + "shuffled_votes.txt", publicKey.getNumberOfKeys());
-        
-        if (vectorVotes == null) return;
+        // Reading of vectorial or simples votes from plain votes file, and it considers the number of inner keys
+        String[][] vectorVotes = Tools.readVectorVotesFromFile(files[1].getAbsolutePath(), publicKey.getNumberOfKeys());
+        if (vectorVotes == null) {
+            System.out.println("Los votos en texto plano no han podido ser leidos.");
+            return;
+        }
 
-        // Contenedores de votos codificados, vectoriales y simples
+        // Read plain votes in RAM
+        /*
+        for (int i = 0; i < vectorVotes.length; i++) {
+            System.out.println("Vector Voto [" + (i + 1) + "]: " + Arrays.toString(vectorVotes[i]));
+        }
+//        */
+
+        // Containers of (vectorial or simple) coded votes
         PGroupElement[] encodedVectorVotes = new PGroupElement[vectorVotes.length];
         for (int i = 0; i < encodedVectorVotes.length; i++) {
-            System.out.println("Vector Voto [" + i + "]: " + Arrays.toString(vectorVotes[i]));
             encodedVectorVotes[i] = encoder.encodeVote(vectorVotes[i]);
         }
 
-        // Cifrar el voto
+        // Read coded votes
+        /*
+        for (int i = 0; i < encodedVectorVotes.length; i++) {
+            System.out.println("Voto codificado [" + (i+1) + "]: " + encodedVectorVotes[i].toByteTree().toHexString());
+        }
+//        */
+
+        // Encrypt votes
         ElGamalCipheredVote[] cipheredVotes = new ElGamalCipheredVote[vectorVotes.length];
         RandomSource randomSource = new RandomDevice();
         ElGamalCipher cipher = new ElGamalCipher(publicKey);
@@ -62,14 +99,15 @@ public class ElGamalMain {
             cipheredVotes[i] = cipher.encryptVote(encodedVectorVotes[i], randomSource);
         }
 
-        // lectura de votos cifrados
+        // Read ciphered votes
+/*
         for (ElGamalCipheredVote cipheredVote : cipheredVotes) {
 //            System.out.println(cipheredVote.toString());
             System.out.println(cipheredVote.toHexString());
         }
+//         */
 
-        // serializar
-        String outputPath = mainPath + "ciphertexts_ext";
-        Tools.serialize(cipheredVotes, outputPath);
+        // Serialize ciphered votes
+        Tools.serialize(cipheredVotes, files[2].getAbsolutePath());
     }
 }

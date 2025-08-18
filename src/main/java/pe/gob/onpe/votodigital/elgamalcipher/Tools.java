@@ -77,7 +77,7 @@ public class Tools {
                 // write the line
                 out.println(hexLine.toString());
             }
-            System.out.println("Se escribieron " + cipheredTexts.length + " votos cifrados.");
+            System.out.println("Se escribieron " + cipheredTexts.length + " votos cifrados, en " + outputPath);
         } catch (IOException ex) {
             Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -137,10 +137,10 @@ public class Tools {
         int lengthOfMessage = lines.get(0).length();                            // longitud de cada mensaje
         boolean isMultiple = (lengthOfMessage % numberOfKeys == 0);
         if (!isMultiple) {
-            System.out.println("El mensaje no es divisible por " + numberOfKeys + " llaves");
+            System.out.println("El mensaje no es divisible por " + numberOfKeys + " llave(s)");
             return null;
         } else {
-            System.out.println("El mensaje es divisible por " + numberOfKeys + " llaves");
+            System.out.println("El mensaje es divisible por " + numberOfKeys + " llave(s)");
         }
 
         int numberOfFields = numberOfKeys;                                      // número de campos dentro del mensaje
