@@ -3,9 +3,14 @@ package pe.gob.onpe.votodigital.elgamalcipher;
 import com.verificatum.arithm.PGroupElement;
 import com.verificatum.crypto.RandomDevice;
 import com.verificatum.crypto.RandomSource;
+import com.verificatum.eio.ByteTree;
+import com.verificatum.eio.ByteTreeBasic;
+import com.verificatum.eio.EIOException;
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -14,10 +19,10 @@ import java.util.Arrays;
 public class ElGamalMain {
 
     public static void main(String[] args) {
-        if (args.length != 3) {
+        if (args.length != 4) {
             System.out.println("""
-                               El n\u00famero de argumentos es 3, as\u00ed:
-                               java -Djava.library.path=$HOME/verificatum-vmn-3.1.0-full/verificatum-vecj-2.2.0/native/.libs:$HOME/verificatum-vmn-3.1.0-full/verificatum-vmgj-1.3.0/native/.libs -jar ElGamalClient public_Key_file_name plain_votes_file_name ciphered_votes_file_name""");
+                               El n\u00famero de argumentos es 4, as\u00ed:
+                               java -jar ElGamalCipher-1.0-SNAPSHOT-jar-with-dependencies.jar public_Key_file_name plain_votes_file_name ciphered_votes_file_name -(hw/sw)""");
             return;
         }
 
@@ -26,11 +31,22 @@ public class ElGamalMain {
 
         // Input files exists?
         File[] files = new File[args.length];
-        for (int i = 0; i < args.length; i++) {
+        for (int i = 0; i < args.length - 1; i++) {
             files[i] = new File(mainPath + args[i]);
             System.out.println("Parámetro " + (i + 1) + ": " + files[i].getAbsolutePath());
-            if (!files[i].exists() && (i != args.length - 1)) {
+            if (!files[i].exists() && (i != args.length - 2)) {
                 System.out.println("No existe el archivo: " + files[i].getAbsolutePath());
+                return;
+            }
+        }
+
+        // Seleccionar el Generador de números aleatorios hw/sw
+        boolean trueRNG;
+        switch (args[3]) {
+            case "-hw" -> trueRNG = true;
+            case "-sw" -> trueRNG = false;
+            default -> {
+                System.out.println("Cuarto parámetro inválido: " + args[args.length - 1]);
                 return;
             }
         }
@@ -77,7 +93,7 @@ public class ElGamalMain {
             System.out.println("Vector Voto [" + (i + 1) + "]: " + Arrays.toString(vectorVotes[i]));
         }
 //        */
-
+        
         // Containers of (vectorial or simple) coded votes
         PGroupElement[] encodedVectorVotes = new PGroupElement[vectorVotes.length];
         for (int i = 0; i < encodedVectorVotes.length; i++) {
@@ -90,10 +106,39 @@ public class ElGamalMain {
             System.out.println("Voto codificado [" + (i+1) + "]: " + encodedVectorVotes[i].toByteTree().toHexString());
         }
 //        */
+        
+        // Integración con un Generador de números aleatorios verdadero de hardware con interfaz USB, solo para JAVA
+//        boolean trueRNG = true;
+        String device;
+        File rngDevice;
+        RandomSource randomSource;
+        if (trueRNG) {
+            device = "/dev/TrueRNG0";                   // Dispositivo de linux donde está indexado el generador de hardware USB
+            rngDevice = new File(device);
+            randomSource = new RandomDevice(rngDevice); // Representación del dispositivo en el formato de Verificatum
+        } else {
+            randomSource = new RandomDevice();          // por defecto /dev/urandom
+        }
+        System.out.println("randomSource.toByteTree().toHexString(): " + randomSource.toByteTree().toHexString());
+
+        // Desde aquí randomSource.toByteTree().toHexString() sabemos que randomSource tiene una hoja ByteTree
+        // Obtener representación ByteTreeBasic
+        ByteTreeBasic btb = randomSource.toByteTree();
+        // Realizar cast explícito a ByteTree
+        if (!(btb instanceof ByteTree)) {
+            throw new IllegalStateException("El objeto no es un ByteTree.");
+        }
+        ByteTree bt = (ByteTree) btb;
+        try {
+            String deviceFromByteTree = ByteTree.byteTreeToString(bt);
+            System.out.println("deviceFromByteTree: " + deviceFromByteTree);
+        } catch (EIOException ex) {
+            Logger.getLogger(ElGamalSingleMain.class.getName()).log(Level.SEVERE, null, ex);
+        }
 
         // Encrypt votes
         ElGamalCipheredVote[] cipheredVotes = new ElGamalCipheredVote[vectorVotes.length];
-        RandomSource randomSource = new RandomDevice();
+//        RandomSource randomSource = new RandomDevice();
         ElGamalCipher cipher = new ElGamalCipher(publicKey);
         for (int i = 0; i < cipheredVotes.length; i++) {
             cipheredVotes[i] = cipher.encryptVote(encodedVectorVotes[i], randomSource);
