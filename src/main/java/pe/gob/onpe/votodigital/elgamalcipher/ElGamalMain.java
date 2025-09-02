@@ -115,6 +115,10 @@ public class ElGamalMain {
         if (trueRNG) {
             device = "/dev/TrueRNG0";                   // Dispositivo de linux donde está indexado el generador de hardware USB
             rngDevice = new File(device);
+            if (!rngDevice.exists()) {
+                System.out.println("El dispositivo no responde: " + rngDevice.getAbsolutePath());
+                return;
+            }
             randomSource = new RandomDevice(rngDevice); // Representación del dispositivo en el formato de Verificatum
         } else {
             randomSource = new RandomDevice();          // por defecto /dev/urandom
