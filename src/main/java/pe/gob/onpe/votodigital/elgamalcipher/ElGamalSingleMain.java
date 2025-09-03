@@ -60,7 +60,7 @@ public class ElGamalSingleMain {
         }
         // verificando que los mensajes codificados han sido correctamente creados
         for (PGroupElement codificado : codificados) {
-            System.out.println(Tools.HexEncoder(codificado));
+            System.out.println(codificado.toByteTree().toHexString());
             if (coder.verifyCodedMessage(codificado)) {
                 System.out.println("Esta codificación es decodificable.");
             }

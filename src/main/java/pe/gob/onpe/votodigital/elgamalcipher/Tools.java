@@ -1,8 +1,6 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
-import com.verificatum.arithm.PGroupElement;
 import com.verificatum.eio.ByteTree;
-import com.verificatum.eio.ByteTreeBasic;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -11,7 +9,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -21,17 +18,29 @@ import java.util.logging.Logger;
  * @author rmartinezch
  */
 public class Tools {
-
+    
+    private static final Logger logger = LogConfig.getLogger(
+            null,                   // Ruta del log
+            Level.INFO,             // Nivel mínimo
+            true,                   // Mostrar fecha/hora
+            true,                   // Mostrar nombre de la clase
+            true,                   // Mostrar nivel de log
+            true,                   // Mostrar número de línea
+            1024 * 1024,            // Tamaño máximo: 1MB
+            3,                      // Archivos de respaldo
+            true                    // También mostrar en consola
+    );
+    /*
     public static String base64Encoder(PGroupElement codificado) {
         ByteTreeBasic btb = codificado.toByteTree();
         String base64 = Base64.getEncoder().encodeToString(btb.toByteArray());
         return base64;
-    }
-
+    }*/
+/*
     public static String HexEncoder(PGroupElement codificado) {
         return codificado.toByteTree().toHexString();
-    }
-
+    }*/
+/*
     public static void hexFormatReader(byte[] serialized) {
         for (int j = 0; j < serialized.length; j++) {
             System.out.print(String.format("%02x", serialized[j]));
@@ -40,8 +49,8 @@ public class Tools {
             }
         }
         System.out.println();
-    }
-
+    }*/
+/*
     public static void nativeFormatWriter(byte[] serialized, String fullOutputPath) {
         StringBuilder hexLine = new StringBuilder();
         for (byte b : serialized) {
@@ -55,11 +64,11 @@ public class Tools {
         } catch (IOException ex) {
             Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
         }
-    }
+    }*/
 
     public static void serialize(ElGamalCipheredVote[] cipheredTexts, String outputPath) {
         if (cipheredTexts.length == 0) {
-            System.out.println("Sin elementos a escribir.");
+            logger.warning("Sin elementos a escribir.");
             return;
         }
 
@@ -77,12 +86,12 @@ public class Tools {
                 // write the line
                 out.println(hexLine.toString());
             }
-            System.out.println("Se escribieron " + cipheredTexts.length + " votos cifrados, en " + outputPath);
+            logger.info("Se escribieron " + cipheredTexts.length + " votos cifrados en " + outputPath);
         } catch (IOException ex) {
-            Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
+            logger.severe(ex.toString());
         }
     }
-
+/*
     public static void serialize(ByteTree cipheredText, String outputPath) {
         // Serializar
         byte[] serialized = new byte[(int) cipheredText.totalByteSize()];
@@ -90,12 +99,12 @@ public class Tools {
 
         // Escribir en formato nativo
         nativeFormatWriter(serialized, outputPath);
-    }
+    }*/
 
     public static String[] readSingleVotesFromFile(String ruta) {
         File file = new File(ruta);
         if (!file.exists()) {
-            System.out.println("El archivo no existe: " + ruta);
+            logger.severe("El archivo no existe: " + ruta);
             return null;
         }
         List<String> lineas = new ArrayList<>();
@@ -107,9 +116,9 @@ public class Tools {
                 }
             }
         } catch (FileNotFoundException ex) {
-            Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
+            logger.severe(ex.toString());
         } catch (IOException ex) {
-            Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
+            logger.severe(ex.toString());
         }
         return lineas.toArray(String[]::new);
     }
@@ -117,7 +126,7 @@ public class Tools {
     public static String[][] readVectorVotesFromFile(String path, int numberOfKeys) {
         File file = new File(path);
         if (!file.exists()) {
-            System.out.println("El archivo no existe: " + path);
+            logger.severe("El archivo no existe: " + path);
             return null;
         }
         List<String> lines = new ArrayList<>();
@@ -137,10 +146,10 @@ public class Tools {
         int lengthOfMessage = lines.get(0).length();                            // longitud de cada mensaje
         boolean isMultiple = (lengthOfMessage % numberOfKeys == 0);
         if (!isMultiple) {
-            System.out.println("El mensaje no es divisible por " + numberOfKeys + " llave(s)");
+            logger.severe("El mensaje no es divisible por " + numberOfKeys + " llave(s)");
             return null;
         } else {
-            System.out.println("El mensaje es divisible por " + numberOfKeys + " llave(s)");
+            logger.info("El mensaje es divisible por " + numberOfKeys + " llave(s)");
         }
 
         int numberOfFields = numberOfKeys;                                      // número de campos dentro del mensaje

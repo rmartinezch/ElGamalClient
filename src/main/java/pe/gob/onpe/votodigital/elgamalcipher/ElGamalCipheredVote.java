@@ -7,13 +7,25 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- *
+ * This class represents a ciphered vote
  * @author rmartinezch
  */
 public class ElGamalCipheredVote {
 
     private final PGroupElement c1;
     private final PGroupElement c2;
+    
+    private static final Logger logger = LogConfig.getLogger(
+            null,
+            Level.INFO,
+            true,
+            true,
+            true,
+            true,
+            1024 * 1024,
+            3,
+            true
+    );
 
     public ElGamalCipheredVote(PGroupElement c1, PGroupElement c2) {
         this.c1 = c1;
@@ -38,7 +50,7 @@ public class ElGamalCipheredVote {
                     c2.toByteTree().getByteTreeReader().readByteTree()
             );
         } catch (EIOException ex) {
-            Logger.getLogger(ElGamalCipheredVote.class.getName()).log(Level.SEVERE, null, ex);
+            logger.severe("No se puede instanciar el ByteTree desde los componentes facilitados (c1, c2):\n" + ex.toString());
         }
         return root;
     }

@@ -15,7 +15,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- *
+ * This class load the ElGamal public key
  * @author rmartinezch
  */
 public class ElGamalPublicKey {
@@ -24,41 +24,56 @@ public class ElGamalPublicKey {
     private final String fullPath;
     private int numberOfKeys;
 
-    // Si es simple:
+    // If it is simple
     private ECqPGroup ecqGroup;
     private PGroupElement g;
     private PGroupElement y;
 
-    // Si es vectorial:
+    // If it is vectorial
     private PPGroup ppGroup;
     private PGroup[] baseGroups;
 
-    // Es llave vectorial o no (simple)
+    // The key is vectorial or not (simple)
     private boolean vectorial = false;
-
+    
+    private static final Logger logger = LogConfig.getLogger(
+            null,
+            Level.INFO,
+            true,
+            true,
+            true,
+            true,
+            1024 * 1024,
+            3,
+            true
+    );
+    
     public ElGamalPublicKey(String fullPathToKey) {
         this.fullPath = fullPathToKey;
-        load();
+        this.loaded = load();
     }
 
-    private void load() {
+    private boolean load() {
         try {
             File file = new File(fullPath);
-            loaded = file.exists();
-            if (!loaded) {
-                System.out.println("El archivo no existe: " + fullPath);
-                return;
+//            loaded = file.exists();
+            if (!file.exists()) {
+                logger.severe("El archivo no existe: " + fullPath);
+                return false;
             }
 
             ByteTreeReaderF rootReader = new ByteTreeReaderF(file);
+            logger.info("Lectura ByteTree de la llave pública realizada.");
 
-            // Primer hijo: grupo
+            // First child: Group
             ByteTreeReader groupReader = rootReader.getNextChild();
+            logger.info("Lectura del primer Child de la llave pública realizada.");
             PGroup group = Marshalizer.unmarshalAux_PGroup(groupReader, null, 1);
+            logger.info("Desempaquetamiento de la llave pública realizada.");
 
             switch (group) {
                 case ECqPGroup eCqPGroup -> {
-                    // llave simple
+                    // Simple key
                     vectorial = false;
                     ecqGroup = eCqPGroup;
                     numberOfKeys = 1;
@@ -66,11 +81,11 @@ public class ElGamalPublicKey {
                     ByteTreeReader elemsReader = rootReader.getNextChild();
                     g = ecqGroup.toElement(elemsReader.getNextChild());
                     y = ecqGroup.toElement(elemsReader.getNextChild());
-                    System.out.println("Llave pública simple ElGamal cargada.");
-                    
+                    logger.info("Llave pública simple ElGamal cargada.");
+                    return true;
                 }
                 case PPGroup pPGroup -> {
-                    // llave vectorial
+                    // Vectorial key
                     vectorial = true;
                     ppGroup = pPGroup;
                     baseGroups = ppGroup.getFactors();
@@ -79,13 +94,14 @@ public class ElGamalPublicKey {
                     ByteTreeReader elemsReader = rootReader.getNextChild();
                     g = ppGroup.toElement(elemsReader.getNextChild());
                     y = ppGroup.toElement(elemsReader.getNextChild());
-                    System.out.println("Llave pública vectorial ElGamal cargada, keywidth: " + numberOfKeys);
-                    
+                    logger.info("Llave pública vectorial ElGamal cargada, keywidth: " + numberOfKeys);
+                    return true;
                 }
                 default -> throw new RuntimeException("Formato de grupo desconocido: " + group.getClass().getName());
             }
         } catch (EIOException | ArithmFormatException ex) {
-            Logger.getLogger(ElGamalPublicKey.class.getName()).log(Level.SEVERE, null, ex);
+            logger.severe("La llave pública no puede ser cargada:\n" + ex.toString());
+            return false;
         }
     }
 
@@ -123,7 +139,7 @@ public class ElGamalPublicKey {
         return baseGroups;
     }
 
-    // Acceso a las múltiples llaves contenidas en la llave vectorial total
+    // It gets the multiple keys containered into the total vectorial key
     public PGroupElement[] getGFactors() {
         return g != null ? ((PPGroupElement)g).getFactors() : null;
     }
@@ -135,7 +151,7 @@ public class ElGamalPublicKey {
     @Override
     public String toString() {
         if (!loaded) {
-            return "No se pudo cargar la llave pública.";
+            return "La llave pública no ha sido cargada.";
         }
 
         if (!vectorial) {

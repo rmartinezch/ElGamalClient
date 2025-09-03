@@ -18,35 +18,48 @@ import java.util.logging.Logger;
  */
 public class ElGamalMain {
 
+    private static final Logger logger = LogConfig.getLogger(
+            "./logs/sistema.log",
+            Level.INFO,
+            true,
+            true,
+            true,
+            true,
+            1024 * 1024,
+            3,
+            true
+    );
+    
     public static void main(String[] args) {
+        logger.info("Iniciamos la lectura de parámetros en la ejecución");
         if (args.length != 4) {
-            System.out.println("""
+            logger.warning("""
                                El n\u00famero de argumentos es 4, as\u00ed:
                                java -jar ElGamalCipher-1.0-SNAPSHOT-jar-with-dependencies.jar public_Key_file_name plain_votes_file_name ciphered_votes_file_name -(hw/sw)""");
             return;
         }
 
         String mainPath = Paths.get("").toAbsolutePath().toString() + File.separator;
-        System.out.println("Directorio actual: " + mainPath);
+        logger.info("Directorio actual: " + mainPath);
 
         // Input files exists?
         File[] files = new File[args.length];
         for (int i = 0; i < args.length - 1; i++) {
             files[i] = new File(mainPath + args[i]);
-            System.out.println("Parámetro " + (i + 1) + ": " + files[i].getAbsolutePath());
+            logger.info("Parámetro " + (i + 1) + ": " + files[i].getAbsolutePath());
             if (!files[i].exists() && (i != args.length - 2)) {
-                System.out.println("No existe el archivo: " + files[i].getAbsolutePath());
+                logger.severe("No existe el archivo: " + files[i].getAbsolutePath());
                 return;
             }
         }
 
-        // Seleccionar el Generador de números aleatorios hw/sw
+        // Select the Random Number Generator of HW/SW
         boolean trueRNG;
         switch (args[3]) {
             case "-hw" -> trueRNG = true;
             case "-sw" -> trueRNG = false;
             default -> {
-                System.out.println("Cuarto parámetro inválido: " + args[args.length - 1]);
+                logger.warning("Cuarto parámetro inválido: " + args[args.length - 1]);
                 return;
             }
         }
@@ -56,7 +69,7 @@ public class ElGamalMain {
         if (!publicKey.isLoaded()) {
             return;
         }
-        System.out.println(publicKey.toString());
+        logger.info(publicKey.toString());
 
         // Encoder initialization
         ElGamalEncoder encoder = new ElGamalEncoder(publicKey);
@@ -83,7 +96,7 @@ public class ElGamalMain {
         // Reading of vectorial or simples votes from plain votes file, and it considers the number of inner keys
         String[][] vectorVotes = Tools.readVectorVotesFromFile(files[1].getAbsolutePath(), publicKey.getNumberOfKeys());
         if (vectorVotes == null) {
-            System.out.println("Los votos en texto plano no han podido ser leidos.");
+            logger.severe("Los votos en texto plano no han podido ser leidos.");
             return;
         }
 
@@ -107,7 +120,7 @@ public class ElGamalMain {
         }
 //        */
         
-        // Integración con un Generador de números aleatorios verdadero de hardware con interfaz USB, solo para JAVA
+        // Integration of the Random Number Generator of HW/SW
 //        boolean trueRNG = true;
         String device;
         File rngDevice;
@@ -116,26 +129,26 @@ public class ElGamalMain {
             device = "/dev/TrueRNG0";                   // Dispositivo de linux donde está indexado el generador de hardware USB
             rngDevice = new File(device);
             if (!rngDevice.exists()) {
-                System.out.println("El dispositivo no responde: " + rngDevice.getAbsolutePath());
+                logger.severe("El dispositivo no responde: " + rngDevice.getAbsolutePath());
                 return;
             }
             randomSource = new RandomDevice(rngDevice); // Representación del dispositivo en el formato de Verificatum
         } else {
             randomSource = new RandomDevice();          // por defecto /dev/urandom
         }
-        System.out.println("randomSource.toByteTree().toHexString(): " + randomSource.toByteTree().toHexString());
+        logger.info("randomSource.toByteTree().toHexString(): " + randomSource.toByteTree().toHexString());
 
-        // Desde aquí randomSource.toByteTree().toHexString() sabemos que randomSource tiene una hoja ByteTree
-        // Obtener representación ByteTreeBasic
+        // From randomSource.toByteTree().toHexString() we know that randomSource has a ByteTree leaf
+        // Get ByteTreeBasic representation
         ByteTreeBasic btb = randomSource.toByteTree();
-        // Realizar cast explícito a ByteTree
+        // Explicit cast to ByteTree
         if (!(btb instanceof ByteTree)) {
             throw new IllegalStateException("El objeto no es un ByteTree.");
         }
         ByteTree bt = (ByteTree) btb;
         try {
             String deviceFromByteTree = ByteTree.byteTreeToString(bt);
-            System.out.println("deviceFromByteTree: " + deviceFromByteTree);
+            logger.info("deviceFromByteTree: " + deviceFromByteTree);
         } catch (EIOException ex) {
             Logger.getLogger(ElGamalSingleMain.class.getName()).log(Level.SEVERE, null, ex);
         }
