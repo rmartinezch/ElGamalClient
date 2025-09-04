@@ -21,7 +21,7 @@ public class ElGamalSingleMain {
         System.out.println("java.library.path:\n" + System.getProperty("java.library.path"));
 
         System.out.println("Leyendo la llave pública ElGamal.");
-        String mainPath = System.getProperty("user.home") + "/verificatum/eleccion05/01/";
+        String mainPath = System.getProperty("user.home") + "/Verificatum/eleccion08/01/";
         //String mainPath = "/home/rmartinezch/verificatum-vmn-3.1.0-full/verificatum-vmn-3.1.0/demo/mixnet/mydemodir/Party01/";
         String publicKeyName = "publicKey";
         ElGamalSinglePublicKey publicKey = new ElGamalSinglePublicKey(mainPath + publicKeyName);

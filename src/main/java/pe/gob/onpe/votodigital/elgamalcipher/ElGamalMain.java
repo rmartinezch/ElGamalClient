@@ -136,21 +136,22 @@ public class ElGamalMain {
         } else {
             randomSource = new RandomDevice();          // por defecto /dev/urandom
         }
+        // From randomSource.toByteTree().toHexString() we know that randomSource has a ByteTree leaf
         logger.info("randomSource.toByteTree().toHexString(): " + randomSource.toByteTree().toHexString());
 
-        // From randomSource.toByteTree().toHexString() we know that randomSource has a ByteTree leaf
         // Get ByteTreeBasic representation
         ByteTreeBasic btb = randomSource.toByteTree();
         // Explicit cast to ByteTree
         if (!(btb instanceof ByteTree)) {
-            throw new IllegalStateException("El objeto no es un ByteTree.");
-        }
-        ByteTree bt = (ByteTree) btb;
-        try {
-            String deviceFromByteTree = ByteTree.byteTreeToString(bt);
-            logger.info("deviceFromByteTree: " + deviceFromByteTree);
-        } catch (EIOException ex) {
-            Logger.getLogger(ElGamalSingleMain.class.getName()).log(Level.SEVERE, null, ex);
+            logger.warning("El objeto no puede ser convertido a un ByteTree.");
+        } else {
+            ByteTree bt = (ByteTree) btb;
+            try {
+                String deviceFromByteTree = ByteTree.byteTreeToString(bt);
+                logger.info("deviceFromByteTree: " + deviceFromByteTree);
+            } catch (EIOException ex) {
+                logger.severe("La ubicación del dispositivo no puede ser obtenida desde el ByteTree:\n" + ex.toString());
+            }
         }
 
         // Encrypt votes

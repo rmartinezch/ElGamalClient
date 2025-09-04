@@ -32,6 +32,7 @@ build/
 *.swo
 
 # Log files
+log/
 *.log
 
 # Eclipse project files (in case you ever open it in Eclipse)
