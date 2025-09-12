@@ -38,12 +38,12 @@ public class ElGamalEncoder {
             this.ecqGroup = null;
             this.ppGroup = publicKey.getPPGroup();
             this.baseGroups = publicKey.getBaseGroups();
-            logger.info("La llave ElGamal es vectorial.");
+            logger.info(() -> String.format("La llave ElGamal es vectorial."));
         } else {
             this.ecqGroup = publicKey.getECqGroup();
             this.ppGroup = null;
             this.baseGroups = null;
-            logger.info("La llave ElGamal es simple.");
+            logger.info(() -> String.format("La llave ElGamal es simple."));
         }
         this.numberOfKeys = publicKey.getNumberOfKeys();
     }
@@ -79,17 +79,7 @@ public class ElGamalEncoder {
         } else {
             vectorElement = encodedElements[0];
         }
-//        System.out.println(showEncodedVector(vectorVote, encodedElements));
         return vectorElement;
     }
 
-    private String showEncodedVector(String[] messages, PGroupElement[] encoded) {
-        StringBuilder sb = new StringBuilder("[\n");
-        for (int i = 0; i < encoded.length; i++) {
-            sb.append("   {").append(messages[i]).append("; ")
-                    .append(encoded[i].toString()).append("}\n");
-        }
-        sb.append("]\n");
-        return sb.toString();
-    }
 }

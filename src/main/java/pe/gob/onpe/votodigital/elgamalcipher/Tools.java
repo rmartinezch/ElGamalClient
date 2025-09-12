@@ -3,7 +3,6 @@ package pe.gob.onpe.votodigital.elgamalcipher;
 import com.verificatum.eio.ByteTree;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -19,6 +18,11 @@ import java.util.logging.Logger;
  */
 public class Tools {
     
+    // Evita la creación de instancias
+    private Tools() {
+        throw new UnsupportedOperationException("Esta clase no debe ser instanciada.");
+    }
+    
     private static final Logger logger = LogConfig.getLogger(
             null,                   // Ruta del log
             Level.INFO,             // Nivel mínimo
@@ -30,45 +34,10 @@ public class Tools {
             3,                      // Archivos de respaldo
             true                    // También mostrar en consola
     );
-    /*
-    public static String base64Encoder(PGroupElement codificado) {
-        ByteTreeBasic btb = codificado.toByteTree();
-        String base64 = Base64.getEncoder().encodeToString(btb.toByteArray());
-        return base64;
-    }*/
-/*
-    public static String HexEncoder(PGroupElement codificado) {
-        return codificado.toByteTree().toHexString();
-    }*/
-/*
-    public static void hexFormatReader(byte[] serialized) {
-        for (int j = 0; j < serialized.length; j++) {
-            System.out.print(String.format("%02x", serialized[j]));
-            if ((j + 1) % 16 == 0) {
-                System.out.println();
-            }
-        }
-        System.out.println();
-    }*/
-/*
-    public static void nativeFormatWriter(byte[] serialized, String fullOutputPath) {
-        StringBuilder hexLine = new StringBuilder();
-        for (byte b : serialized) {
-            hexLine.append(String.format("%02x", b));
-        }
-
-        // Escribir en un archivo en una única línea
-        try (PrintWriter out = new PrintWriter(new FileWriter(fullOutputPath))) {
-            out.println(hexLine.toString());
-            System.out.println("Voto cifrado escrito como línea única en: " + fullOutputPath);
-        } catch (IOException ex) {
-            Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
-        }
-    }*/
 
     public static void serialize(ElGamalCipheredVote[] cipheredTexts, String outputPath) {
         if (cipheredTexts.length == 0) {
-            logger.warning("Sin elementos a escribir.");
+            logger.warning(() -> String.format("Sin elementos a escribir."));
             return;
         }
 
@@ -86,26 +55,17 @@ public class Tools {
                 // write the line
                 out.println(hexLine.toString());
             }
-            logger.info("Se escribieron " + cipheredTexts.length + " votos cifrados en " + outputPath);
+            logger.info(() -> String.format("Se escribieron %d %s %s", cipheredTexts.length, " votos cifrados en ", outputPath));
         } catch (IOException ex) {
-            logger.severe(ex.toString());
+            logger.severe(() -> ex.toString());
         }
     }
-/*
-    public static void serialize(ByteTree cipheredText, String outputPath) {
-        // Serializar
-        byte[] serialized = new byte[(int) cipheredText.totalByteSize()];
-        cipheredText.toByteArray(serialized, 0);
-
-        // Escribir en formato nativo
-        nativeFormatWriter(serialized, outputPath);
-    }*/
 
     public static String[] readSingleVotesFromFile(String ruta) {
         File file = new File(ruta);
         if (!file.exists()) {
-            logger.severe("El archivo no existe: " + ruta);
-            return null;
+            logger.severe(() -> String.format("El archivo no existe: %s", ruta));
+            return new String[0];
         }
         List<String> lineas = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(ruta))) {
@@ -115,10 +75,9 @@ public class Tools {
                     lineas.add(linea.trim());
                 }
             }
-        } catch (FileNotFoundException ex) {
-            logger.severe(ex.toString());
         } catch (IOException ex) {
-            logger.severe(ex.toString());
+            logger.severe(() -> ex.toString());
+            return new String[0];
         }
         return lineas.toArray(String[]::new);
     }
@@ -126,8 +85,8 @@ public class Tools {
     public static String[][] readVectorVotesFromFile(String path, int numberOfKeys) {
         File file = new File(path);
         if (!file.exists()) {
-            logger.severe("El archivo no existe: " + path);
-            return null;
+            logger.severe(() -> String.format("El archivo no existe: %s", path));
+            return new String[0][0];
         }
         List<String> lines = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(path))) {
@@ -137,19 +96,23 @@ public class Tools {
                     lines.add(line.trim());
                 }
             }
-        } catch (FileNotFoundException ex) {
-            Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
-            Logger.getLogger(Tools.class.getName()).log(Level.SEVERE, null, ex);
+            logger.severe(() -> ex.toString());
+            return new String[0][0];
+        }
+        
+        if (lines.isEmpty()) {
+            logger.warning(() -> String.format("El archivo está vacío: %s", path));
+            return new String[0][0];
         }
 
         int lengthOfMessage = lines.get(0).length();                            // longitud de cada mensaje
         boolean isMultiple = (lengthOfMessage % numberOfKeys == 0);
         if (!isMultiple) {
-            logger.severe("El mensaje no es divisible por " + numberOfKeys + " llave(s)");
-            return null;
+            logger.severe(() -> String.format("El mensaje no es divisible por %d %s", numberOfKeys, " llave(s)"));
+            return new String[0][0];
         } else {
-            logger.info("El mensaje es divisible por " + numberOfKeys + " llave(s)");
+            logger.info(() -> String.format("El mensaje es divisible por %d %s", numberOfKeys, " llave(s)"));
         }
 
         int numberOfFields = numberOfKeys;                                      // número de campos dentro del mensaje

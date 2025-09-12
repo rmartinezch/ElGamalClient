@@ -20,7 +20,7 @@ import java.util.logging.Logger;
  */
 public class ElGamalPublicKey {
 
-    private boolean loaded;
+    private final boolean loaded;
     private final String fullPath;
     private int numberOfKeys;
 
@@ -56,20 +56,19 @@ public class ElGamalPublicKey {
     private boolean load() {
         try {
             File file = new File(fullPath);
-//            loaded = file.exists();
             if (!file.exists()) {
-                logger.severe("El archivo no existe: " + fullPath);
+                logger.severe(() -> String.format("El archivo no existe: %s", fullPath));
                 return false;
             }
 
             ByteTreeReaderF rootReader = new ByteTreeReaderF(file);
-            logger.info("Lectura ByteTree de la llave pública realizada.");
+            logger.info(() -> String.format("Lectura ByteTree de la llave pública realizada."));
 
             // First child: Group
             ByteTreeReader groupReader = rootReader.getNextChild();
-            logger.info("Lectura del primer Child de la llave pública realizada.");
+            logger.info(() -> String.format("Lectura del primer Child de la llave pública realizada."));
             PGroup group = Marshalizer.unmarshalAux_PGroup(groupReader, null, 1);
-            logger.info("Desempaquetamiento de la llave pública realizada.");
+            logger.info(() -> String.format("Desempaquetamiento de la llave pública realizada."));
 
             switch (group) {
                 case ECqPGroup eCqPGroup -> {
@@ -81,7 +80,7 @@ public class ElGamalPublicKey {
                     ByteTreeReader elemsReader = rootReader.getNextChild();
                     g = ecqGroup.toElement(elemsReader.getNextChild());
                     y = ecqGroup.toElement(elemsReader.getNextChild());
-                    logger.info("Llave pública simple ElGamal cargada.");
+                    logger.info(() -> String.format("Llave pública simple ElGamal cargada."));
                     return true;
                 }
                 case PPGroup pPGroup -> {
@@ -94,13 +93,16 @@ public class ElGamalPublicKey {
                     ByteTreeReader elemsReader = rootReader.getNextChild();
                     g = ppGroup.toElement(elemsReader.getNextChild());
                     y = ppGroup.toElement(elemsReader.getNextChild());
-                    logger.info("Llave pública vectorial ElGamal cargada, keywidth: " + numberOfKeys);
+                    logger.info(() -> String.format("Llave pública vectorial ElGamal cargada, keywidth: %d", numberOfKeys));
                     return true;
                 }
-                default -> throw new RuntimeException("Formato de grupo desconocido: " + group.getClass().getName());
+                default -> {
+                    logger.severe(() -> String.format("Formato de grupo desconocido: %s", group.getClass().getName()));
+                    return false;
+                }
             }
         } catch (EIOException | ArithmFormatException ex) {
-            logger.severe("La llave pública no puede ser cargada:\n" + ex.toString());
+            logger.severe(() -> String.format("La llave pública no puede ser cargada:\n" + ex.toString()));
             return false;
         }
     }
@@ -158,7 +160,7 @@ public class ElGamalPublicKey {
             return "Llave pública simple:\nGrupo: " + ecqGroup + "\ng: " + g + "\ny: " + y;
         } else {
             StringBuilder sb = new StringBuilder();
-            sb.append("Llave pública vectorial (keywidth=").append(baseGroups.length).append("):\n");
+            sb.append("Llave pública vectorial (keywidth: ").append(baseGroups.length).append("):\n");
             for (int i = 0; i < baseGroups.length; i++) {
                 sb.append("Componente ").append(i + 1).append(":\n");
                 sb.append("  Grupo base: ").append(baseGroups[i]).append("\n");

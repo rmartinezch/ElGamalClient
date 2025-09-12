@@ -1,5 +1,6 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -7,6 +8,7 @@ import java.util.logging.*;
 
 /**
  * Class to configure a logger into this project
+ *
  * @author rmartinezch
  */
 public class LogConfig {
@@ -14,8 +16,11 @@ public class LogConfig {
     private static final String DEFAULT_LOG_DIR = "./logs";
     private static final String DEFAULT_LOG_FILE = "aplicacion.log";
     private static Logger globalLogger;
-    private static FileHandler fileHandler;
-    private static ConsoleHandler consoleHandler;
+    
+    // Evita la creación de instancias
+    private LogConfig() {
+        throw new UnsupportedOperationException("Esta clase no debe ser instanciada.");
+    }
 
     /**
      * Return a global logger, configuration only once to all project.
@@ -42,7 +47,6 @@ public class LogConfig {
             int maxBackupFiles,
             boolean enableConsoleOutput) {
 
-        // If it exists, reuse the global logger
         if (globalLogger != null) {
             return globalLogger;
         }
@@ -50,83 +54,78 @@ public class LogConfig {
         globalLogger = Logger.getLogger("GlobalLogger");
         globalLogger.setUseParentHandlers(false);
 
-        // If a path is not specified, use default path
-        if (logFilePath == null || logFilePath.isBlank()) {
-            logFilePath = DEFAULT_LOG_DIR + "/" + DEFAULT_LOG_FILE;
+        Path logFile = resolveLogFilePath(logFilePath);
+        FileHandler fileHandler = createFileHandlerWithFallback(logFile, maxFileSize, maxBackupFiles);
+
+        Formatter formatter = buildCustomFormatter(showDateTime, showClassName, showLogLevel, showLineNumber);
+        configureFileHandler(fileHandler, formatter, logLevel);
+        globalLogger.addHandler(fileHandler);
+
+        if (enableConsoleOutput) {
+            ConsoleHandler consoleHandler = createConsoleHandler(formatter, logLevel);
+            globalLogger.addHandler(consoleHandler);
         }
 
-        Path targetLogFile = Path.of(logFilePath).toAbsolutePath();
+        globalLogger.setLevel(logLevel);
+        return globalLogger;
+    }//*/
+
+    private static Path resolveLogFilePath(String logFilePath) {
+        if (logFilePath == null || logFilePath.isBlank()) {
+            logFilePath = DEFAULT_LOG_DIR + File.separator + DEFAULT_LOG_FILE;
+        }
+        return Path.of(logFilePath).toAbsolutePath();
+    }
+
+    private static FileHandler createFileHandlerWithFallback(Path target, int maxFileSize, int maxBackupFiles) {
+        try {
+            Files.createDirectories(target.getParent());
+            return new FileHandler(target.toString(), maxFileSize, maxBackupFiles, true);
+        } catch (IOException e) {
+            return createFallbackHandler(maxFileSize, maxBackupFiles, target);
+        }
+    }
+
+    private static FileHandler createFallbackHandler(int maxFileSize, int maxBackupFiles, Path failedTarget) {
+        Path fallbackDir = Path.of(DEFAULT_LOG_DIR).toAbsolutePath();
+        Path fallbackFile = fallbackDir.resolve(DEFAULT_LOG_FILE);
 
         try {
-            Files.createDirectories(targetLogFile.getParent());
-            fileHandler = new FileHandler(
-                    targetLogFile.toString(),
-                    maxFileSize,
-                    maxBackupFiles,
-                    true
-            );
-        } catch (IOException e) {
-            // If it fails, use the default path
-            Path fallbackDir = Path.of(DEFAULT_LOG_DIR).toAbsolutePath();
-            Path fallbackLogFile = fallbackDir.resolve(DEFAULT_LOG_FILE);
+            Files.createDirectories(fallbackDir);
+            System.err.println("[LOG CONFIG] No se pudo usar la ruta '" + failedTarget + "'");
+            System.err.println("[LOG CONFIG] Usando ruta alternativa: " + fallbackFile);
+            return new FileHandler(fallbackFile.toString(), maxFileSize, maxBackupFiles, true);
+        } catch (IOException ex) {
+            Path tmpLog = Path.of(System.getProperty("java.io.tmpdir"), DEFAULT_LOG_FILE);
             try {
-                Files.createDirectories(fallbackDir);
-                fileHandler = new FileHandler(
-                        fallbackLogFile.toString(),
-                        maxFileSize,
-                        maxBackupFiles,
-                        true
-                );
-                System.err.println("[LOG CONFIG] No se pudo usar la ruta '" + targetLogFile + "'");
-                System.err.println("[LOG CONFIG] Usando ruta alternativa: " + fallbackLogFile);
-            } catch (IOException ex) {
-                // If also it fails, use /tmp
-                Path tmpLog = Path.of(System.getProperty("java.io.tmpdir"), DEFAULT_LOG_FILE);
-                try {
-                    fileHandler = new FileHandler(
-                            tmpLog.toString(),
-                            maxFileSize,
-                            maxBackupFiles,
-                            true
-                    );
-                    System.err.println("[LOG CONFIG] Error creando log en ruta por defecto.");
-                    System.err.println("[LOG CONFIG] Usando ruta temporal: " + tmpLog);
-                } catch (IOException fatal) {
-                    System.err.println("[LOG CONFIG] No se pudo crear ningún archivo de log.");
-                    return globalLogger;
-                }
+                System.err.println("[LOG CONFIG] Error creando log en ruta por defecto.");
+                System.err.println("[LOG CONFIG] Usando ruta temporal: " + tmpLog);
+                return new FileHandler(tmpLog.toString(), maxFileSize, maxBackupFiles, true);
+            } catch (IOException fatal) {
+                System.err.println("[LOG CONFIG] No se pudo crear ningún archivo de log.");
+                return null;
             }
         }
+    }
 
-        // Customizing the format of the log
-        Formatter customFormatter = new Formatter() {
+    private static Formatter buildCustomFormatter(
+            boolean showDateTime, boolean showClassName, boolean showLogLevel, boolean showLineNumber) {
+
+        return new Formatter() {
             @Override
             public String format(LogRecord record) {
                 StringBuilder sb = new StringBuilder();
 
-                // Date and time
                 if (showDateTime) {
                     sb.append("[").append(new java.util.Date(record.getMillis())).append("] ");
                 }
-
-                // Level of log
                 if (showLogLevel) {
                     sb.append("[").append(record.getLevel()).append("] ");
                 }
-
-                // Class name and line of code
                 if (showClassName || showLineNumber) {
                     StackTraceElement[] stack = Thread.currentThread().getStackTrace();
-                    // Get the frame which contains the class name
                     String callerClass = record.getSourceClassName();
-                    int line = -1;
-
-                    for (StackTraceElement frame : stack) {
-                        if (frame.getClassName().equals(callerClass)) {
-                            line = frame.getLineNumber();
-                            break;
-                        }
-                    }
+                    int line = findCallerLine(stack, callerClass);
 
                     if (showClassName) {
                         sb.append("[").append(callerClass);
@@ -139,26 +138,33 @@ public class LogConfig {
                     }
                 }
 
-                // Main message
                 sb.append(record.getMessage()).append("\n");
                 return sb.toString();
             }
         };
-
-        // Configurate the FileHandler
-        fileHandler.setFormatter(customFormatter);
-        fileHandler.setLevel(logLevel);
-        globalLogger.addHandler(fileHandler);
-
-        // Configure the output at console, it it is enabled.
-        if (enableConsoleOutput) {
-            consoleHandler = new ConsoleHandler();
-            consoleHandler.setFormatter(customFormatter);
-            consoleHandler.setLevel(logLevel);
-            globalLogger.addHandler(consoleHandler);
-        }
-
-        globalLogger.setLevel(logLevel);
-        return globalLogger;
     }
+
+    private static int findCallerLine(StackTraceElement[] stack, String callerClass) {
+        for (StackTraceElement frame : stack) {
+            if (frame.getClassName().equals(callerClass)) {
+                return frame.getLineNumber();
+            }
+        }
+        return -1;
+    }
+
+    private static void configureFileHandler(FileHandler handler, Formatter formatter, Level level) {
+        if (handler != null) {
+            handler.setFormatter(formatter);
+            handler.setLevel(level);
+        }
+    }
+
+    private static ConsoleHandler createConsoleHandler(Formatter formatter, Level level) {
+        ConsoleHandler handler = new ConsoleHandler();
+        handler.setFormatter(formatter);
+        handler.setLevel(level);
+        return handler;
+    }
+
 }
