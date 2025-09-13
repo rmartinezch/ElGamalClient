@@ -27,8 +27,8 @@ public class ElGamalSingleMain {
     );
 
     public static void main(String[] args) {
-        logger.info(() -> String.format("LD_LIBRARY_PATH:\n%s", System.getenv("LD_LIBRARY_PATH")));
-        logger.info(() -> String.format("java.library.path:\n%s", System.getProperty("java.library.path")));
+        logger.info(() -> String.format("LD_LIBRARY_PATH:%n%s", System.getenv("LD_LIBRARY_PATH")));
+        logger.info(() -> String.format("java.library.path:%n%s", System.getProperty("java.library.path")));
 
         logger.info(() -> "Leyendo la llave pública ElGamal.");
         String mainPath = System.getProperty("user.home") + "/Verificatum/eleccion08/01/";

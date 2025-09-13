@@ -52,7 +52,7 @@ public class LogConfig {
         globalLogger.setUseParentHandlers(false);
 
         Path logFile = resolveLogFilePath(logFilePath);
-        FileHandler fileHandler = createFileHandlerWithFallback(logFile);//, maxFileSize, maxBackupFiles);
+        FileHandler fileHandler = createFileHandlerWithFallback(logFile);
 
         Formatter formatter = buildCustomFormatter(showDateTime, showClassName, showLogLevel, showLineNumber);
         configureFileHandler(fileHandler, formatter, logLevel);
@@ -95,8 +95,8 @@ public class LogConfig {
 
         try {
             Files.createDirectories(fallbackDir);
-            internalLogger.warning("[LOG CONFIG] No se pudo usar la ruta '" + failedTarget + "'");
-            internalLogger.warning("[LOG CONFIG] Usando ruta alternativa: " + fallbackFile);
+            internalLogger.log(Level.WARNING, "[LOG CONFIG] No se pudo usar la ruta: {0}", failedTarget);
+            internalLogger.log(Level.WARNING, "[LOG CONFIG] Usando ruta alternativa: {0}", fallbackFile);
             return new FileHandler(fallbackFile.toString(), maxFileSize, maxBackupFiles, true);
         } catch (IOException ex) {
             Path tmpLog = Path.of(System.getProperty("java.io.tmpdir"), DEFAULT_LOG_FILE);
@@ -141,9 +141,7 @@ public class LogConfig {
         }
     }
 
-    private static void appendClassAndLine(
-            StringBuilder sb, LogRecord rec, boolean showClassName, boolean showLineNumber) {
-
+    private static void appendClassAndLine(StringBuilder sb, LogRecord rec, boolean showClassName, boolean showLineNumber) {
         if (!(showClassName || showLineNumber)) {
             return;
         }
@@ -158,7 +156,7 @@ public class LogConfig {
                 sb.append(":").append(line);
             }
             sb.append("] ");
-        } else if (showLineNumber && line >= 0) {
+        } else if (line >= 0) {
             sb.append("[Línea ").append(line).append("] ");
         }
     }

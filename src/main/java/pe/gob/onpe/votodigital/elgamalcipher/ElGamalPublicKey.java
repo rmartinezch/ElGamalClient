@@ -100,7 +100,7 @@ public class ElGamalPublicKey {
                 }
             }
         } catch (EIOException | ArithmFormatException ex) {
-            logger.severe(() -> String.format("La llave pública no puede ser cargada:\n%s", ex.toString()));
+            logger.severe(() -> String.format("La llave pública no puede ser cargada:%n%s", ex.toString()));
             return false;
         }
     }
