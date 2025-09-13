@@ -27,8 +27,6 @@ public class ElGamalEncoder {
             true,
             true,
             true,
-            1024 * 1024,
-            3,
             true
     );
 
@@ -38,12 +36,12 @@ public class ElGamalEncoder {
             this.ecqGroup = null;
             this.ppGroup = publicKey.getPPGroup();
             this.baseGroups = publicKey.getBaseGroups();
-            logger.info(() -> String.format("La llave ElGamal es vectorial."));
+            logger.info(() -> "La llave ElGamal es vectorial.");
         } else {
             this.ecqGroup = publicKey.getECqGroup();
             this.ppGroup = null;
             this.baseGroups = null;
-            logger.info(() -> String.format("La llave ElGamal es simple."));
+            logger.info(() -> "La llave ElGamal es simple.");
         }
         this.numberOfKeys = publicKey.getNumberOfKeys();
     }

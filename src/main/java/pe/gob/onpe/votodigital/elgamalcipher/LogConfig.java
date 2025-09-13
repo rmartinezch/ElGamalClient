@@ -16,7 +16,8 @@ public class LogConfig {
     private static final String DEFAULT_LOG_DIR = "./logs";
     private static final String DEFAULT_LOG_FILE = "aplicacion.log";
     private static Logger globalLogger;
-    
+    private static final Logger internalLogger = Logger.getAnonymousLogger();
+
     // Evita la creación de instancias
     private LogConfig() {
         throw new UnsupportedOperationException("Esta clase no debe ser instanciada.");
@@ -31,8 +32,6 @@ public class LogConfig {
      * @param showClassName Show class name.
      * @param showLogLevel Show log level.
      * @param showLineNumber Show the number of line in the code.
-     * @param maxFileSize Maximal size in every log file.
-     * @param maxBackupFiles Maximal number of backup log files.
      * @param enableConsoleOutput Show at console.
      * @return Logger
      */
@@ -43,8 +42,6 @@ public class LogConfig {
             boolean showClassName,
             boolean showLogLevel,
             boolean showLineNumber,
-            int maxFileSize,
-            int maxBackupFiles,
             boolean enableConsoleOutput) {
 
         if (globalLogger != null) {
@@ -55,7 +52,7 @@ public class LogConfig {
         globalLogger.setUseParentHandlers(false);
 
         Path logFile = resolveLogFilePath(logFilePath);
-        FileHandler fileHandler = createFileHandlerWithFallback(logFile, maxFileSize, maxBackupFiles);
+        FileHandler fileHandler = createFileHandlerWithFallback(logFile);//, maxFileSize, maxBackupFiles);
 
         Formatter formatter = buildCustomFormatter(showDateTime, showClassName, showLogLevel, showLineNumber);
         configureFileHandler(fileHandler, formatter, logLevel);
@@ -68,13 +65,19 @@ public class LogConfig {
 
         globalLogger.setLevel(logLevel);
         return globalLogger;
-    }//*/
+    }
 
     private static Path resolveLogFilePath(String logFilePath) {
         if (logFilePath == null || logFilePath.isBlank()) {
             logFilePath = DEFAULT_LOG_DIR + File.separator + DEFAULT_LOG_FILE;
         }
         return Path.of(logFilePath).toAbsolutePath();
+    }
+
+    private static FileHandler createFileHandlerWithFallback(Path target) {
+        int maxFileSize = 1024 * 1024;
+        int maxBackupFiles = 3;
+        return createFileHandlerWithFallback(target, maxFileSize, maxBackupFiles);
     }
 
     private static FileHandler createFileHandlerWithFallback(Path target, int maxFileSize, int maxBackupFiles) {
@@ -92,17 +95,17 @@ public class LogConfig {
 
         try {
             Files.createDirectories(fallbackDir);
-            System.err.println("[LOG CONFIG] No se pudo usar la ruta '" + failedTarget + "'");
-            System.err.println("[LOG CONFIG] Usando ruta alternativa: " + fallbackFile);
+            internalLogger.warning("[LOG CONFIG] No se pudo usar la ruta '" + failedTarget + "'");
+            internalLogger.warning("[LOG CONFIG] Usando ruta alternativa: " + fallbackFile);
             return new FileHandler(fallbackFile.toString(), maxFileSize, maxBackupFiles, true);
         } catch (IOException ex) {
             Path tmpLog = Path.of(System.getProperty("java.io.tmpdir"), DEFAULT_LOG_FILE);
             try {
-                System.err.println("[LOG CONFIG] Error creando log en ruta por defecto.");
-                System.err.println("[LOG CONFIG] Usando ruta temporal: " + tmpLog);
+                internalLogger.warning("[LOG CONFIG] Error creando log en ruta por defecto.");
+                internalLogger.warning("[LOG CONFIG] Usando ruta temporal: " + tmpLog);
                 return new FileHandler(tmpLog.toString(), maxFileSize, maxBackupFiles, true);
             } catch (IOException fatal) {
-                System.err.println("[LOG CONFIG] No se pudo crear ningún archivo de log.");
+                internalLogger.warning("[LOG CONFIG] No se pudo crear ningún archivo de log.");
                 return null;
             }
         }
@@ -113,35 +116,51 @@ public class LogConfig {
 
         return new Formatter() {
             @Override
-            public String format(LogRecord record) {
+            public String format(LogRecord rec) {
                 StringBuilder sb = new StringBuilder();
 
-                if (showDateTime) {
-                    sb.append("[").append(new java.util.Date(record.getMillis())).append("] ");
-                }
-                if (showLogLevel) {
-                    sb.append("[").append(record.getLevel()).append("] ");
-                }
-                if (showClassName || showLineNumber) {
-                    StackTraceElement[] stack = Thread.currentThread().getStackTrace();
-                    String callerClass = record.getSourceClassName();
-                    int line = findCallerLine(stack, callerClass);
+                appendDateTime(sb, rec, showDateTime);
+                appendLogLevel(sb, rec, showLogLevel);
+                appendClassAndLine(sb, rec, showClassName, showLineNumber);
 
-                    if (showClassName) {
-                        sb.append("[").append(callerClass);
-                        if (showLineNumber && line >= 0) {
-                            sb.append(":").append(line);
-                        }
-                        sb.append("] ");
-                    } else if (showLineNumber && line >= 0) {
-                        sb.append("[Línea ").append(line).append("] ");
-                    }
-                }
-
-                sb.append(record.getMessage()).append("\n");
+                sb.append(rec.getMessage()).append("\n");
                 return sb.toString();
             }
         };
+    }
+
+    private static void appendDateTime(StringBuilder sb, LogRecord rec, boolean showDateTime) {
+        if (showDateTime) {
+            sb.append("[").append(new java.util.Date(rec.getMillis())).append("] ");
+        }
+    }
+
+    private static void appendLogLevel(StringBuilder sb, LogRecord rec, boolean showLogLevel) {
+        if (showLogLevel) {
+            sb.append("[").append(rec.getLevel()).append("] ");
+        }
+    }
+
+    private static void appendClassAndLine(
+            StringBuilder sb, LogRecord rec, boolean showClassName, boolean showLineNumber) {
+
+        if (!(showClassName || showLineNumber)) {
+            return;
+        }
+
+        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+        String callerClass = rec.getSourceClassName();
+        int line = findCallerLine(stack, callerClass);
+
+        if (showClassName) {
+            sb.append("[").append(callerClass);
+            if (showLineNumber && line >= 0) {
+                sb.append(":").append(line);
+            }
+            sb.append("] ");
+        } else if (showLineNumber && line >= 0) {
+            sb.append("[Línea ").append(line).append("] ");
+        }
     }
 
     private static int findCallerLine(StackTraceElement[] stack, String callerClass) {

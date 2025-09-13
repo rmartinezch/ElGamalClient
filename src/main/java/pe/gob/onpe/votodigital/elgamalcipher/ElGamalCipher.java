@@ -29,8 +29,6 @@ public class ElGamalCipher {
             true,
             true,
             true,
-            1024 * 1024,
-            3,
             true
     );
     
@@ -43,11 +41,11 @@ public class ElGamalCipher {
         if (this.vectorial) {
             this.ecqGroup = null;
             this.ppGroup = publicKey.getPPGroup();
-            logger.info(() -> String.format("La llave ElGamal es vectorial."));
+            logger.info(() -> "La llave ElGamal es vectorial.");
         } else {
             this.ecqGroup = publicKey.getECqGroup();
             this.ppGroup = null;
-            logger.info(() -> String.format("La llave ElGamal es simple."));
+            logger.info(() -> "La llave ElGamal es simple.");
         }
         this.g = publicKey.getG();
         this.y = publicKey.getY();

@@ -25,13 +25,11 @@ public class ElGamalMain {
             true,
             true,
             true,
-            1024 * 1024,
-            3,
             true
     );
     
     public static void main(String[] args) {
-        logger.info(() -> String.format("Iniciamos la lectura de parámetros en la ejecución"));
+        logger.info(() -> "Iniciamos la lectura de parámetros en la ejecución");
         if (args.length != 4) {
             logger.warning(() -> String.format("""
                                El n\u00famero de argumentos es 4, as\u00ed:
@@ -70,7 +68,7 @@ public class ElGamalMain {
         if (!publicKey.isLoaded()) {
             return;
         }
-        logger.info(() -> publicKey.toString());
+        logger.info(publicKey::toString);
 
         // Encoder initialization
         ElGamalEncoder encoder = new ElGamalEncoder(publicKey);
@@ -78,7 +76,7 @@ public class ElGamalMain {
         // Reading of vectorial or simples votes from plain votes file, and it considers the number of inner keys
         String[][] vectorVotes = Tools.readVectorVotesFromFile(files[1].getAbsolutePath(), publicKey.getNumberOfKeys());
         if (vectorVotes.length == 0) {
-            logger.severe(() -> String.format("No se pudieron leer votos (archivo inexistente, vacío o con formato inválido)."));
+            logger.severe(() -> "No se pudieron leer votos (archivo inexistente, vacío o con formato inválido).");
             return;
         }
 
@@ -117,7 +115,7 @@ public class ElGamalMain {
             rngDevice = new File(device);
             if (!rngDevice.exists()) {
                 logger.severe(() -> String.format("El dispositivo de hardware no responde: %s", rngDevice.getAbsolutePath()));
-                logger.warning(() -> String.format("Se seleccionó el dispositivo de Software por defecto"));
+                logger.warning(() -> "Se seleccionó el dispositivo de Software por defecto");
                 return new RandomDevice();              // Return default Software device /dev/urandom
             }
             rngSource = new RandomDevice(rngDevice);    // Representation of the device in the Verificatum format
@@ -131,7 +129,7 @@ public class ElGamalMain {
         ByteTreeBasic btb = rngSource.toByteTree();
         // Explicit cast to ByteTree
         if (!(btb instanceof ByteTree)) {
-            logger.warning(() -> String.format("El objeto no puede ser convertido a un ByteTree."));
+            logger.warning(() -> "El objeto no puede ser convertido a un ByteTree.");
         } else {
             ByteTree bt = (ByteTree) btb;
             try {

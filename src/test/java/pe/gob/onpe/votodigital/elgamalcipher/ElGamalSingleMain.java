@@ -16,40 +16,38 @@ import java.util.logging.Logger;
  */
 public class ElGamalSingleMain {
 
-    public static void main(String[] args) {
-        System.out.println("LD_LIBRARY_PATH:\n" + System.getenv("LD_LIBRARY_PATH"));
-        System.out.println("java.library.path:\n" + System.getProperty("java.library.path"));
+    private static final Logger logger = LogConfig.getLogger(
+            "./logs/sistema.log",
+            Level.INFO,
+            true,
+            true,
+            true,
+            true,
+            true
+    );
 
-        System.out.println("Leyendo la llave pública ElGamal.");
+    public static void main(String[] args) {
+        logger.info(() -> String.format("LD_LIBRARY_PATH:\n%s", System.getenv("LD_LIBRARY_PATH")));
+        logger.info(() -> String.format("java.library.path:\n%s", System.getProperty("java.library.path")));
+
+        logger.info(() -> "Leyendo la llave pública ElGamal.");
         String mainPath = System.getProperty("user.home") + "/Verificatum/eleccion08/01/";
-        //String mainPath = "/home/rmartinezch/verificatum-vmn-3.1.0-full/verificatum-vmn-3.1.0/demo/mixnet/mydemodir/Party01/";
         String publicKeyName = "publicKey";
         ElGamalSinglePublicKey publicKey = new ElGamalSinglePublicKey(mainPath + publicKeyName);
         if (!publicKey.isLoaded()) {
             return;
         }
-        System.out.println(publicKey.toString());
+        logger.info(publicKey::toString);
 
-        System.out.println("Codificando los votos planos.");
+        logger.info(() -> "Codificando los votos planos.");
         // codificación
         ElGamalSingleEncoder coder = new ElGamalSingleEncoder(publicKey.getECqGroup());
 
-        /*
-        String[] messages = {
-            "0000000000000000000000000027",
-            "0000000000000000000000000027",
-            "0000000000000000000000000072",
-            "0000000000000000000000000008",
-            "0000000000000000000000000008",
-            "0000000000000000000000000023",
-            "0000000000000000000000000023",
-            "0000000000000000000000000041",
-            "0000000000000000000000000031",
-            "0000000000000000000000000001"};
-//        */
         String[] messages = Tools.readSingleVotesFromFile(mainPath + "shuffled_votes.txt");
-        
-        if (messages == null) return;
+
+        if (messages.length == 0) {
+            return;
+        }
 
         PGroupElement[] codificados = new PGroupElement[messages.length];
         // codificando mensajes
@@ -60,9 +58,9 @@ public class ElGamalSingleMain {
         }
         // verificando que los mensajes codificados han sido correctamente creados
         for (PGroupElement codificado : codificados) {
-            System.out.println(codificado.toByteTree().toHexString());
+            logger.info(() -> codificado.toByteTree().toHexString());
             if (coder.verifyCodedMessage(codificado)) {
-                System.out.println("Esta codificación es decodificable.");
+                logger.info(() -> "Esta codificación es decodificable.");
             }
         }
 
@@ -78,7 +76,7 @@ public class ElGamalSingleMain {
         } else {
             randomSource = new RandomDevice();          // por defecto /dev/urandom
         }
-        System.out.println("randomSource.toByteTree().toHexString(): " + randomSource.toByteTree().toHexString());
+        logger.info(() -> String.format("randomSource.toByteTree().toHexString(): %s", randomSource.toByteTree().toHexString()));
 
         // Desde aquí randomSource.toByteTree().toHexString() sabemos que randomSource tiene una hoja ByteTree
         // Obtener representación ByteTreeBasic
@@ -90,12 +88,12 @@ public class ElGamalSingleMain {
         ByteTree bt = (ByteTree) btb;
         try {
             String deviceFromByteTree = ByteTree.byteTreeToString(bt);
-            System.out.println("deviceFromByteTree: " + deviceFromByteTree);
+            logger.info(() -> String.format("deviceFromByteTree: %s", deviceFromByteTree));
         } catch (EIOException ex) {
-            Logger.getLogger(ElGamalSingleMain.class.getName()).log(Level.SEVERE, null, ex);
+            logger.info(ex::toString);
         }
 
-        System.out.println("Cifrando los mensajes codificados con ElGamal.");
+        logger.info(() -> "Cifrando los mensajes codificados con ElGamal.");
         // cifrando los mensajes codificados
         ElGamalSingleCipher cipher = new ElGamalSingleCipher(publicKey);
         ElGamalCipheredVote[] cipheredTexts = new ElGamalCipheredVote[codificados.length];
@@ -103,8 +101,8 @@ public class ElGamalSingleMain {
         i = 0;
         for (PGroupElement codificado : codificados) {
             cipheredTexts[i] = cipher.encrypt(codificado, randomSource);
-            System.out.println(cipheredTexts[i].toString());
-            System.out.println(cipheredTexts[i].toHexString());
+            logger.info(cipheredTexts[i]::toString);
+            logger.info(cipheredTexts[i]::toHexString);
             i++;
         }
 

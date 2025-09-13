@@ -22,8 +22,6 @@ public class ElGamalCipheredVote {
             true,
             true,
             true,
-            1024 * 1024,
-            3,
             true
     );
 

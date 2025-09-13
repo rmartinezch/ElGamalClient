@@ -24,6 +24,16 @@ public class ElGamalSinglePublicKey {
     private final String fullPath;
     private boolean loaded;
 
+    private static final Logger logger = LogConfig.getLogger(
+            null,
+            Level.INFO,
+            true,
+            true,
+            true,
+            true,
+            true
+    );
+    
     public ECqPGroup getECqGroup() {
         return eCqPGroup;
     }
@@ -47,14 +57,14 @@ public class ElGamalSinglePublicKey {
 
     private void loadPublicKey() {
         if (fullPath.isEmpty()) {
-            System.out.println("Ruta a la llave pública ElGamal invalida: " + fullPath);
+            logger.info(() -> String.format("Ruta a la llave pública ElGamal invalida: %s", fullPath));
             return;
         }
         try {
             File file = new File(fullPath);
             loaded = file.exists();
             if (!loaded) {
-                System.out.println("El archivo en la ruta especificada no ha podido ser cargado: " + fullPath);
+                logger.info(() -> String.format("El archivo en la ruta especificada no ha podido ser cargado: %s", fullPath));
                 return;
             }
             // Leer archivo como árbol de bytes
@@ -64,17 +74,17 @@ public class ElGamalSinglePublicKey {
             PGroup group = Marshalizer.unmarshalAux_PGroup(groupReader, null, 1);
             // Verificación de tipo de grupo
             if (!(group instanceof ECqPGroup)) {
-                throw new RuntimeException("Se esperaba ECqPGroup, pero se encontró: " + group.getClass().getName());
+                logger.severe(() -> String.format("Se esperaba ECqPGroup, pero se encontró: %s", group.getClass().getName()));
+                return;
             }
             eCqPGroup = (ECqPGroup) group;
 
-            // Leer {g, y}
             ByteTreeReader gensReader = rootReader.getNextChild();
 
             g = eCqPGroup.toElement(gensReader.getNextChild());
             y = eCqPGroup.toElement(gensReader.getNextChild());
 
-            System.out.println("Lectura de llave pública ElGamal completada.");
+            logger.info(() -> "Lectura de llave pública ElGamal completada.");
         } catch (EIOException | ArithmFormatException ex) {
             Logger.getLogger(ElGamalSinglePublicKey.class.getName()).log(Level.SEVERE, null, ex);
         }

@@ -30,14 +30,12 @@ public class Tools {
             true,                   // Mostrar nombre de la clase
             true,                   // Mostrar nivel de log
             true,                   // Mostrar número de línea
-            1024 * 1024,            // Tamaño máximo: 1MB
-            3,                      // Archivos de respaldo
             true                    // También mostrar en consola
     );
 
     public static void serialize(ElGamalCipheredVote[] cipheredTexts, String outputPath) {
         if (cipheredTexts.length == 0) {
-            logger.warning(() -> String.format("Sin elementos a escribir."));
+            logger.warning(() -> "Sin elementos a escribir.");
             return;
         }
 
@@ -57,7 +55,7 @@ public class Tools {
             }
             logger.info(() -> String.format("Se escribieron %d %s %s", cipheredTexts.length, " votos cifrados en ", outputPath));
         } catch (IOException ex) {
-            logger.severe(() -> ex.toString());
+            logger.severe(ex::toString);
         }
     }
 
@@ -76,7 +74,7 @@ public class Tools {
                 }
             }
         } catch (IOException ex) {
-            logger.severe(() -> ex.toString());
+            logger.severe(ex::toString);
             return new String[0];
         }
         return lineas.toArray(String[]::new);
@@ -97,7 +95,7 @@ public class Tools {
                 }
             }
         } catch (IOException ex) {
-            logger.severe(() -> ex.toString());
+            logger.severe(ex::toString);
             return new String[0][0];
         }
         

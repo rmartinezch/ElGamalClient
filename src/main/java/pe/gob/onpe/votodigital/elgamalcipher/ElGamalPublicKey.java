@@ -43,8 +43,6 @@ public class ElGamalPublicKey {
             true,
             true,
             true,
-            1024 * 1024,
-            3,
             true
     );
     
@@ -62,13 +60,13 @@ public class ElGamalPublicKey {
             }
 
             ByteTreeReaderF rootReader = new ByteTreeReaderF(file);
-            logger.info(() -> String.format("Lectura ByteTree de la llave pública realizada."));
+            logger.info(() -> "Lectura ByteTree de la llave pública realizada.");
 
             // First child: Group
             ByteTreeReader groupReader = rootReader.getNextChild();
-            logger.info(() -> String.format("Lectura del primer Child de la llave pública realizada."));
+            logger.info(() -> "Lectura del primer Child de la llave pública realizada.");
             PGroup group = Marshalizer.unmarshalAux_PGroup(groupReader, null, 1);
-            logger.info(() -> String.format("Desempaquetamiento de la llave pública realizada."));
+            logger.info(() -> "Desempaquetamiento de la llave pública realizada.");
 
             switch (group) {
                 case ECqPGroup eCqPGroup -> {
@@ -80,7 +78,7 @@ public class ElGamalPublicKey {
                     ByteTreeReader elemsReader = rootReader.getNextChild();
                     g = ecqGroup.toElement(elemsReader.getNextChild());
                     y = ecqGroup.toElement(elemsReader.getNextChild());
-                    logger.info(() -> String.format("Llave pública simple ElGamal cargada."));
+                    logger.info(() -> "Llave pública simple ElGamal cargada.");
                     return true;
                 }
                 case PPGroup pPGroup -> {
@@ -102,7 +100,7 @@ public class ElGamalPublicKey {
                 }
             }
         } catch (EIOException | ArithmFormatException ex) {
-            logger.severe(() -> String.format("La llave pública no puede ser cargada:\n" + ex.toString()));
+            logger.severe(() -> String.format("La llave pública no puede ser cargada:\n%s", ex.toString()));
             return false;
         }
     }

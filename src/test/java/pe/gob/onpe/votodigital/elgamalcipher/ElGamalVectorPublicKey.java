@@ -25,6 +25,16 @@ public class ElGamalVectorPublicKey {
     private final String fullPath;
     private boolean loaded;
 
+    private static final Logger logger = LogConfig.getLogger(
+            null,
+            Level.INFO,
+            true,
+            true,
+            true,
+            true,
+            true
+    );
+    
     public ElGamalVectorPublicKey(String fullPathToPublicKey) {
         this.fullPath = fullPathToPublicKey;
         loadPublicKey();
@@ -60,7 +70,7 @@ public class ElGamalVectorPublicKey {
     
     private void loadPublicKey() {
         if (fullPath.isEmpty()) {
-            System.out.println("Ruta inválida a la llave pública vectorial ElGamal: " + fullPath);
+            logger.info(() -> String.format("Ruta inválida a la llave pública vectorial ElGamal: %s", fullPath));
             return;
         }
 
@@ -68,7 +78,7 @@ public class ElGamalVectorPublicKey {
             File file = new File(fullPath);
             loaded = file.exists();
             if (!loaded) {
-                System.out.println("El archivo no existe: " + fullPath);
+                logger.info(() -> String.format("El archivo no existe: %s", fullPath));
                 return;
             }
 
@@ -79,7 +89,8 @@ public class ElGamalVectorPublicKey {
             PGroup group = Marshalizer.unmarshalAux_PGroup(groupReader, null, 1);
 
             if (!(group instanceof PPGroup)) {
-                throw new RuntimeException("Se esperaba PPGroup, pero se encontró: " + group.getClass().getName());
+                logger.severe(() -> String.format("Se esperaba PPGroup, pero se encontró: %s", group.getClass().getName()));
+                return;
             }
 
             ppGroup = (PPGroup) group;
@@ -91,13 +102,14 @@ public class ElGamalVectorPublicKey {
             PGroupElement yRaw = ppGroup.toElement(elementReader.getNextChild());
 
             if (!(gRaw instanceof PPGroupElement) || !(yRaw instanceof PPGroupElement)) {
-                throw new RuntimeException("Se esperaban elementos PPGroupElement");
+                logger.severe(() -> "Se esperaban elementos PPGroupElement");
+                return;
             }
 
             g = (PPGroupElement) gRaw;
             y = (PPGroupElement) yRaw;
 
-            System.out.println("Lectura de llave pública vectorial ElGamal completada.");
+            logger.info(() -> "Lectura de llave pública vectorial ElGamal completada.");
 
         } catch (EIOException | ArithmFormatException ex) {
             Logger.getLogger(ElGamalVectorPublicKey.class.getName()).log(Level.SEVERE, null, ex);

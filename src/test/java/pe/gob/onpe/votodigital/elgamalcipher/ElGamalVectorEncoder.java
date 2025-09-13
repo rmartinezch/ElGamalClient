@@ -6,6 +6,8 @@ import com.verificatum.arithm.PGroupElement;
 import com.verificatum.arithm.PPGroup;
 import com.verificatum.arithm.PPGroupElement;
 import java.nio.charset.StandardCharsets;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -13,6 +15,16 @@ import java.nio.charset.StandardCharsets;
  */
 public class ElGamalVectorEncoder {
 
+    private static final Logger logger = LogConfig.getLogger(
+            null,
+            Level.INFO,
+            true,
+            true,
+            true,
+            true,
+            true
+    );
+    
     private final PPGroup ppGroup;
     private final PGroup[] baseGroups;
 
@@ -47,7 +59,7 @@ public class ElGamalVectorEncoder {
             encodedElements[i] = group.encode(msgBytes, 0, msgBytes.length);
         }
 
-        System.out.println(showEncodedVector(uncodedMessageElements, encodedElements));
+        logger.info(() -> showEncodedVector(uncodedMessageElements, encodedElements));
 
         return (PPGroupElement) ppGroup.product(encodedElements);
     }
@@ -57,7 +69,6 @@ public class ElGamalVectorEncoder {
         sb.append("[\n");
         for (int i = 0; i < encodedElements.length; i++) {
             sb.append("   ");
-            // {elemento sin codificar; elemento codificado}
             sb.append("{").append(uncodedMessageElements[i]).append("; ");
             sb.append(encodedElements[i].toString()).append("}\n");
         }

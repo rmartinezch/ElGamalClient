@@ -13,6 +13,16 @@ import java.util.logging.Logger;
  */
 public class ElGamalSingleEncoder {
 
+    private static final Logger logger = LogConfig.getLogger(
+            null,
+            Level.INFO,
+            true,
+            true,
+            true,
+            true,
+            true
+    );
+
     private final ECqPGroup eCqPGroup;
 
     public ElGamalSingleEncoder(ECqPGroup eCqPGroup) {
@@ -20,24 +30,24 @@ public class ElGamalSingleEncoder {
     }
 
     public PGroupElement encoder(String uncodedMessage) {
-        System.out.println("uncodedMessage: " + uncodedMessage);
+        logger.info(() -> String.format("uncodedMessage: %s", uncodedMessage));
         // Paso 1: Convertir mensaje a bytes
         byte[] uncodedMessageInBytes = uncodedMessage.getBytes(StandardCharsets.UTF_8);
-        System.out.println("uncodedMessageInBytes.length: " + uncodedMessageInBytes.length);
+        logger.info(() -> String.format("uncodedMessageInBytes.length: %s", uncodedMessageInBytes.length));
 
         // Paso 2: Validar que no exceda la capacidad de codificación
         int maxAllowedLength = eCqPGroup.getEncodeLength();
-        System.out.println("Máxima longitud que permite " + eCqPGroup.toString() + ": " + maxAllowedLength);
+        logger.info(() -> String.format("Máxima longitud que permite %s %s %d", eCqPGroup.toString(), ":", maxAllowedLength));
         if (uncodedMessageInBytes.length > maxAllowedLength) {
             throw new IllegalArgumentException("Mensaje demasiado largo para ser codificado en el grupo.");
         }
 
         // Paso 3: Codificar usando el método encode disponible
         PGroupElement codedMessage = eCqPGroup.encode(uncodedMessageInBytes, 0, uncodedMessageInBytes.length);
-        System.out.println("codedMessage.toString(): " + codedMessage.toString());
-        System.out.println("codedMessage.toString().length(): " + codedMessage.toString().length());
-        System.out.println("codedMessage.toByteTree().toHexString(): " + codedMessage.toByteTree().toHexString());
-        System.out.println("codedMessage.toByteTree().toHexString().length(): " + codedMessage.toByteTree().toHexString().length());
+        logger.info(() -> String.format("codedMessage.toString(): %s", codedMessage.toString()));
+        logger.info(() -> String.format("codedMessage.toString().length(): %s", codedMessage.toString().length()));
+        logger.info(() -> String.format("codedMessage.toByteTree().toHexString(): %s", codedMessage.toByteTree().toHexString()));
+        logger.info(() -> String.format("codedMessage.toByteTree().toHexString().length(): %s", codedMessage.toByteTree().toHexString().length()));
 
         return codedMessage;
     }
@@ -46,8 +56,8 @@ public class ElGamalSingleEncoder {
         boolean b = false;
         try {
             PGroupElement decoded = eCqPGroup.toElement(codedMessage.toByteTree().getByteTreeReader());
-            System.out.println("decoded.decode(): " + new String(decoded.decode(), StandardCharsets.UTF_8));
-            System.out.println("decoded.toString(): " + decoded.toString());
+            logger.info(() -> String.format("decoded.decode(): %s", new String(decoded.decode(), StandardCharsets.UTF_8)));
+            logger.info(() -> String.format("decoded.toString(): %s", decoded.toString()));
             b = decoded.equals(codedMessage);
         } catch (ArithmFormatException ex) {
             Logger.getLogger(ElGamalSingleEncoder.class.getName()).log(Level.SEVERE, null, ex);
