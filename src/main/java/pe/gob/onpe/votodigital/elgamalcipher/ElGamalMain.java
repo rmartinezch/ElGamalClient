@@ -30,10 +30,10 @@ public class ElGamalMain {
     
     public static void main(String[] args) {
         logger.info(() -> "Iniciamos la lectura de parámetros en la ejecución");
-        if (args.length != 4) {
+        if (args.length < 4 || args.length > 5) {
             logger.warning(() -> String.format("""
-                               El n\u00famero de argumentos es 4, as\u00ed:
-                               java -jar ElGamalCipher-1.0-SNAPSHOT-jar-with-dependencies.jar public_Key_file_name plain_votes_file_name ciphered_votes_file_name -(hw/sw)"""));
+                               El n\u00famero de argumentos es 4 o 5, as\u00ed:
+                               java -jar ElGamalCipher-1.0-SNAPSHOT-jar-with-dependencies.jar public_Key_file_name plain_votes_file_name ciphered_votes_file_name -(hw/sw) [-p]"""));
             return;
         }
 
@@ -41,12 +41,13 @@ public class ElGamalMain {
         logger.info(() -> String.format("Directorio actual: %s", mainPath));
 
         // Input files exists?
-        File[] files = new File[args.length];
-        for (int i = 0; i < args.length - 1; i++) {
+        File[] files = new File[3]; // Fixed size for the 3 main files
+        for (int i = 0; i < 3; i++) {
             files[i] = new File(mainPath + args[i]);
             final int index = i;
             logger.info(() -> String.format("Parámetro %d %s %s", (index + 1), ":", files[index].getAbsoluteFile()));
-            if (!files[i].exists() && (i != args.length - 2)) {
+            // Check existence for input files (0: publicKey, 1: plainVotes), but not for output file (2: cipheredVotes)
+            if (!files[i].exists() && (i != 2)) {
                 logger.severe(() -> String.format("No existe el archivo: %s", files[index].getAbsolutePath()));
                 return;
             }
@@ -62,6 +63,8 @@ public class ElGamalMain {
                 return;
             }
         }
+        
+        final boolean showProgressBar = (args.length == 5 && "-p".equals(args[4]));
 
         // Read ElGamal public key
         ElGamalPublicKey publicKey = new ElGamalPublicKey(files[0].getAbsolutePath());
@@ -72,7 +75,8 @@ public class ElGamalMain {
 
         // Encoder initialization
         ElGamalEncoder encoder = new ElGamalEncoder(publicKey);
-
+        logger.info(() -> "Iniciando codificaci\u00f3n de votos en paralelo...");
+        
         // Reading of vectorial or simples votes from plain votes file, and it considers the number of inner keys
         String[][] vectorVotes = Tools.readVectorVotesFromFile(files[1].getAbsolutePath(), publicKey.getNumberOfKeys());
         if (vectorVotes.length == 0) {
@@ -81,20 +85,69 @@ public class ElGamalMain {
         }
 
         // Containers of (vectorial or simple) coded votes
-        PGroupElement[] encodedVectorVotes = new PGroupElement[vectorVotes.length];
-        for (int i = 0; i < encodedVectorVotes.length; i++) {
-            encodedVectorVotes[i] = encoder.encodeVote(vectorVotes[i]);
-        }
+        PGroupElement[] encodedVectorVotes = Arrays.stream(vectorVotes)
+                .parallel()
+                .map(encoder::encodeVote)
+                .toArray(PGroupElement[]::new);
+
+        logger.info(() -> "Codificaci\u00f3n finalizada. Iniciando cifrado en paralelo...");
 
         // Select RNG device
-        RandomSource randomSource = selectRandomSource(trueRNG);
+        // Use ThreadLocal to give each thread its own RandomSource, avoiding synchronization bottlenecks
+        ThreadLocal<RandomSource> threadLocalRng = ThreadLocal.withInitial(() -> selectRandomSource(trueRNG));
 
         // Encrypt votes
-        ElGamalCipheredVote[] cipheredVotes = new ElGamalCipheredVote[vectorVotes.length];
         ElGamalCipher cipher = new ElGamalCipher(publicKey);
-        for (int i = 0; i < cipheredVotes.length; i++) {
-            cipheredVotes[i] = cipher.encryptVote(encodedVectorVotes[i], randomSource);
+        
+        java.util.concurrent.atomic.AtomicInteger progressCounter = new java.util.concurrent.atomic.AtomicInteger(0);
+        int totalVotes = encodedVectorVotes.length;
+        Thread progressThread = null;
+        
+        if (showProgressBar) {
+            progressThread = new Thread(() -> {
+                try {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        int current = progressCounter.get();
+                        int percent = (int) ((current * 100.0) / totalVotes);
+                        StringBuilder bar = new StringBuilder("[");
+                        int bars = percent / 2; // 50 chars for 100%
+                        for (int i = 0; i < 50; i++) {
+                            if (i < bars) bar.append("=");
+                            else bar.append(" ");
+                        }
+                        bar.append("] ").append(percent).append("%\r");
+                        System.out.print(bar.toString());
+                        
+                        if (current >= totalVotes) break;
+                        Thread.sleep(200); // 5 updates per second
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            progressThread.start();
         }
+
+        ElGamalCipheredVote[] cipheredVotes = Arrays.stream(encodedVectorVotes)
+                .parallel()
+                .map(vote -> {
+                    ElGamalCipheredVote v = cipher.encryptVote(vote, threadLocalRng.get());
+                    if (showProgressBar) progressCounter.incrementAndGet();
+                    return v;
+                })
+                .toArray(ElGamalCipheredVote[]::new);
+        
+        if (showProgressBar && progressThread != null) {
+            try {
+                progressThread.interrupt();
+                progressThread.join();
+                System.out.println("\n"); // New line after progress bar
+            } catch (InterruptedException ex) {
+                logger.warning(ex::toString);
+            }
+        }
+        
+        logger.info(() -> "Cifrado finalizado.");
 
         // Serialize ciphered votes
         Tools.serialize(cipheredVotes, files[2].getAbsolutePath());
