@@ -48,3 +48,6 @@ Thumbs.db
 */Thumbs.db
 .localized
 *.bak
+
+# Scannerwork
+.scannerwork/
