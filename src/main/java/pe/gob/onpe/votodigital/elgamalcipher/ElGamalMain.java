@@ -90,26 +90,21 @@ public class ElGamalMain {
                 .map(encoder::encodeVote)
                 .toArray(PGroupElement[]::new);
 
-        logger.info(() -> "Codificaci\u00f3n finalizada. Iniciando cifrado en paralelo...");
-
-        // Select RNG device
-        // Use ThreadLocal to give each thread its own RandomSource, avoiding synchronization bottlenecks
-        ThreadLocal<RandomSource> threadLocalRng = ThreadLocal.withInitial(() -> selectRandomSource(trueRNG));
+        logger.info(() -> "Codificaci\u00f3n finalizada. Iniciando cifrado...");
 
         // Encrypt votes
         ElGamalCipher cipher = new ElGamalCipher(publicKey);
-        
         java.util.concurrent.atomic.AtomicInteger progressCounter = new java.util.concurrent.atomic.AtomicInteger(0);
         int totalVotes = encodedVectorVotes.length;
         Thread progressThread = null;
-        
+
         if (showProgressBar) {
             progressThread = new Thread(() -> {
                 try {
                     while (!Thread.currentThread().isInterrupted()) {
                         int current = progressCounter.get();
                         int percent = (int) ((current * 100.0) / totalVotes);
-                        StringBuilder bar = new StringBuilder("[");
+                        StringBuilder bar = new StringBuilder("Cifrando: [");
                         int bars = percent / 2; // 50 chars for 100%
                         for (int i = 0; i < 50; i++) {
                             if (i < bars) bar.append("=");
@@ -117,9 +112,9 @@ public class ElGamalMain {
                         }
                         bar.append("] ").append(percent).append("%\r");
                         System.out.print(bar.toString());
-                        
+
                         if (current >= totalVotes) break;
-                        Thread.sleep(200); // 5 updates per second
+                        Thread.sleep(100); // 10 updates per second
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -128,15 +123,35 @@ public class ElGamalMain {
             progressThread.start();
         }
 
-        ElGamalCipheredVote[] cipheredVotes = Arrays.stream(encodedVectorVotes)
-                .parallel()
-                .map(vote -> {
-                    ElGamalCipheredVote v = cipher.encryptVote(vote, threadLocalRng.get());
-                    if (showProgressBar) progressCounter.incrementAndGet();
-                    return v;
-                })
-                .toArray(ElGamalCipheredVote[]::new);
-        
+        ElGamalCipheredVote[] cipheredVotes;
+
+        if (trueRNG) {
+            // Hardware RNG: Use sequential processing and single RandomSource instance
+            logger.info(() -> "Modo Hardware RNG detectado: Usando procesamiento secuencial.");
+            RandomSource hwRng = selectRandomSource(true);
+            
+            cipheredVotes = Arrays.stream(encodedVectorVotes)
+                    .map(vote -> {
+                        ElGamalCipheredVote v = cipher.encryptVote(vote, hwRng);
+                        if (showProgressBar) progressCounter.incrementAndGet();
+                        return v;
+                    })
+                    .toArray(ElGamalCipheredVote[]::new);
+        } else {
+            // Software RNG: Use parallel processing with ThreadLocal RandomSource
+            logger.info(() -> "Modo Software RNG detectado: Usando procesamiento paralelo.");
+            ThreadLocal<RandomSource> threadLocalRng = ThreadLocal.withInitial(() -> selectRandomSource(false));
+            
+            cipheredVotes = Arrays.stream(encodedVectorVotes)
+                    .parallel()
+                    .map(vote -> {
+                        ElGamalCipheredVote v = cipher.encryptVote(vote, threadLocalRng.get());
+                        if (showProgressBar) progressCounter.incrementAndGet();
+                        return v;
+                    })
+                    .toArray(ElGamalCipheredVote[]::new);
+        }
+
         if (showProgressBar && progressThread != null) {
             try {
                 progressThread.interrupt();
