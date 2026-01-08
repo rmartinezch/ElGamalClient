@@ -60,7 +60,7 @@ mvn clean package -DskipTests
 
 ### Ejecución
 ```bash
-java -jar target/ElGamalCipher-1.1.0-jar-with-dependencies.jar \
+java -jar target/ElGamalCipher-1.1.0.jar \
      <ruta_publicKey> \
      <ruta_votos_planos> \
      <ruta_salida_cifrados> \
