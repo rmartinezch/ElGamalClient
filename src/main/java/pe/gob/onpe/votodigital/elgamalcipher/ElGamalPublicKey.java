@@ -59,44 +59,45 @@ public class ElGamalPublicKey {
                 return false;
             }
 
-            ByteTreeReaderF rootReader = new ByteTreeReaderF(file);
-            logger.info(() -> "Lectura ByteTree de la llave pública realizada.");
+            try (ByteTreeReaderF rootReader = new ByteTreeReaderF(file)) {
+                logger.info(() -> "Lectura ByteTree de la llave pública realizada.");
 
-            // First child: Group
-            ByteTreeReader groupReader = rootReader.getNextChild();
-            logger.info(() -> "Lectura del primer Child de la llave pública realizada.");
-            PGroup group = Marshalizer.unmarshalAux_PGroup(groupReader, null, 1);
-            logger.info(() -> "Desempaquetamiento de la llave pública realizada.");
+                // First child: Group
+                ByteTreeReader groupReader = rootReader.getNextChild();
+                logger.info(() -> "Lectura del primer Child de la llave pública realizada.");
+                PGroup group = Marshalizer.unmarshalAux_PGroup(groupReader, null, 1);
+                logger.info(() -> "Desempaquetamiento de la llave pública realizada.");
 
-            switch (group) {
-                case ECqPGroup eCqPGroup -> {
-                    // Simple key
-                    vectorial = false;
-                    ecqGroup = eCqPGroup;
-                    numberOfKeys = 1;
-                    
-                    ByteTreeReader elemsReader = rootReader.getNextChild();
-                    g = ecqGroup.toElement(elemsReader.getNextChild());
-                    y = ecqGroup.toElement(elemsReader.getNextChild());
-                    logger.info(() -> "Llave pública simple ElGamal cargada.");
-                    return true;
-                }
-                case PPGroup pPGroup -> {
-                    // Vectorial key
-                    vectorial = true;
-                    ppGroup = pPGroup;
-                    baseGroups = ppGroup.getFactors();
-                    numberOfKeys = baseGroups.length;
-                    
-                    ByteTreeReader elemsReader = rootReader.getNextChild();
-                    g = ppGroup.toElement(elemsReader.getNextChild());
-                    y = ppGroup.toElement(elemsReader.getNextChild());
-                    logger.info(() -> String.format("Llave pública vectorial ElGamal cargada, keywidth: %d", numberOfKeys));
-                    return true;
-                }
-                default -> {
-                    logger.severe(() -> String.format("Formato de grupo desconocido: %s", group.getClass().getName()));
-                    return false;
+                switch (group) {
+                    case ECqPGroup eCqPGroup -> {
+                        // Simple key
+                        vectorial = false;
+                        ecqGroup = eCqPGroup;
+                        numberOfKeys = 1;
+
+                        ByteTreeReader elemsReader = rootReader.getNextChild();
+                        g = ecqGroup.toElement(elemsReader.getNextChild());
+                        y = ecqGroup.toElement(elemsReader.getNextChild());
+                        logger.info(() -> "Llave pública simple ElGamal cargada.");
+                        return true;
+                    }
+                    case PPGroup pPGroup -> {
+                        // Vectorial key
+                        vectorial = true;
+                        ppGroup = pPGroup;
+                        baseGroups = ppGroup.getFactors();
+                        numberOfKeys = baseGroups.length;
+
+                        ByteTreeReader elemsReader = rootReader.getNextChild();
+                        g = ppGroup.toElement(elemsReader.getNextChild());
+                        y = ppGroup.toElement(elemsReader.getNextChild());
+                        logger.info(() -> String.format("Llave pública vectorial ElGamal cargada, keywidth: %d", numberOfKeys));
+                        return true;
+                    }
+                    default -> {
+                        logger.severe(() -> String.format("Formato de grupo desconocido: %s", group.getClass().getName()));
+                        return false;
+                    }
                 }
             }
         } catch (EIOException | ArithmFormatException ex) {

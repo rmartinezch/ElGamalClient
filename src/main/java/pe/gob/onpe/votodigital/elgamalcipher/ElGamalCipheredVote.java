@@ -48,7 +48,7 @@ public class ElGamalCipheredVote {
                     c2.toByteTree().getByteTreeReader().readByteTree()
             );
         } catch (EIOException ex) {
-            logger.severe(() -> String.format("No se puede instanciar el ByteTree desde los componentes facilitados (c1, c2):\n%s", ex.toString()));
+            logger.severe(() -> String.format("No se puede instanciar el ByteTree desde los componentes facilitados (c1, c2):%n%s", ex.toString()));
         }
         return root;
     }
