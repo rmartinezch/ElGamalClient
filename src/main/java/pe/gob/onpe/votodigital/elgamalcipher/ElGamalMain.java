@@ -1,7 +1,6 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.arithm.PGroupElement;
-import com.verificatum.crypto.RandomDevice;
 import com.verificatum.crypto.RandomSource;
 import com.verificatum.eio.ByteTree;
 import com.verificatum.eio.ByteTreeBasic;
@@ -24,7 +23,6 @@ public class ElGamalMain {
             Level.INFO,
             true, true, true, true, true
     );
-    private static final String HARDWARE_RNG_DEVICE = "/dev/TrueRNG0";
     private static final String APP_VERSION = "1.1.0";
 
     public static void main(String[] args) {
@@ -171,7 +169,6 @@ public class ElGamalMain {
     }
 
     private static ElGamalCipheredVote[] encryptWithHardware(ElGamalCipher cipher, PGroupElement[] votes, AtomicInteger counter, boolean track) {
-        logger.info(() -> "Modo Hardware RNG detectado: Usando procesamiento secuencial.");
         RandomSource hwRng = selectRandomSource(true);
         return Arrays.stream(votes)
                 .map(vote -> {
@@ -183,7 +180,6 @@ public class ElGamalMain {
     }
 
     private static ElGamalCipheredVote[] encryptWithSoftware(ElGamalCipher cipher, PGroupElement[] votes, AtomicInteger counter, boolean track) {
-        logger.info(() -> "Modo Software RNG detectado: Usando procesamiento paralelo.");
         ThreadLocal<RandomSource> threadLocalRng = ThreadLocal.withInitial(() -> selectRandomSource(false));
         return Arrays.stream(votes)
                 .parallel()
@@ -196,18 +192,7 @@ public class ElGamalMain {
     }
 
     private static RandomSource selectRandomSource(boolean rngOption) {
-        RandomSource rngSource;
-        if (rngOption) {
-            File rngDevice = new File(HARDWARE_RNG_DEVICE);
-            if (!rngDevice.exists()) {
-                logger.severe(() -> String.format("El dispositivo de hardware no responde: %s", rngDevice.getAbsolutePath()));
-                logger.warning(() -> "Se seleccionó el dispositivo de Software por defecto");
-                return new RandomDevice();
-            }
-            rngSource = new RandomDevice(rngDevice);
-        } else {
-            rngSource = new RandomDevice();
-        }
+        RandomSource rngSource = RandomSourceFactory.create(rngOption, logger);
 
         logger.info(() -> String.format("randomSource.toByteTree().toHexString(): %s", rngSource.toByteTree().toHexString()));
 

@@ -18,7 +18,8 @@ import java.util.logging.Logger;
 public final class NativeLibraryLoader {
 
     private static final String REEXEC_PROPERTY = "elgamal.native.reexec";
-    private static final String[] LIBRARIES = {"vecj-2.2.0", "vmgj-1.3.0"};
+    private static final String[] REQUIRED_LIBRARIES = {"vecj-2.2.0"};
+    private static final String[] OPTIONAL_LIBRARIES = {"vmgj-1.3.0"};
 
     private NativeLibraryLoader() {
         throw new UnsupportedOperationException("Esta clase no debe ser instanciada.");
@@ -29,14 +30,19 @@ public final class NativeLibraryLoader {
             return;
         }
 
-        Path librariesDir = findLibrariesDirectory();
+        RuntimePlatform platform = RuntimePlatform.current();
+        Path librariesDir = findLibrariesDirectory(platform, logger);
         if (librariesDir == null) {
-            logger.info(() -> "No se encontró un directorio local de bibliotecas nativas.");
+            String requiredName = System.mapLibraryName(REQUIRED_LIBRARIES[0]);
+            logger.warning(() -> String.format("No se encontró una biblioteca nativa compatible con %s. "
+                    + "Se buscó %s en los directorios esperados de libs.",
+                    platform.classifier(), requiredName));
             return;
         }
 
         if (hasLibraryPathEntry(librariesDir)) {
             logger.info(() -> String.format("Usando bibliotecas nativas desde java.library.path: %s", librariesDir));
+            logOptionalLibraries(librariesDir, logger);
             return;
         }
 
@@ -96,24 +102,45 @@ public final class NativeLibraryLoader {
         return librariesDir.toAbsolutePath() + java.io.File.pathSeparator + currentPath;
     }
 
-    private static Path findLibrariesDirectory() {
-        String mappedVecj = System.mapLibraryName(LIBRARIES[0]);
-        for (Path directory : getCandidateDirectories()) {
-            if (Files.isRegularFile(directory.resolve(mappedVecj))) {
+    private static Path findLibrariesDirectory(RuntimePlatform platform, Logger logger) {
+        for (Path directory : getCandidateDirectories(platform)) {
+            if (containsAllRequiredLibraries(directory)) {
+                logOptionalLibraries(directory, logger);
                 return directory;
             }
         }
         return null;
     }
 
-    private static List<Path> getCandidateDirectories() {
+    private static boolean containsAllRequiredLibraries(Path directory) {
+        for (String library : REQUIRED_LIBRARIES) {
+            if (!Files.isRegularFile(directory.resolve(System.mapLibraryName(library)))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void logOptionalLibraries(Path directory, Logger logger) {
+        for (String library : OPTIONAL_LIBRARIES) {
+            Path candidate = directory.resolve(System.mapLibraryName(library));
+            if (!Files.isRegularFile(candidate)) {
+                logger.info(() -> String.format("Biblioteca opcional no encontrada en %s: %s",
+                        directory, candidate.getFileName()));
+            }
+        }
+    }
+
+    private static List<Path> getCandidateDirectories(RuntimePlatform platform) {
         Set<Path> directories = new LinkedHashSet<>();
+        directories.add(Path.of("libs", platform.classifier()).toAbsolutePath().normalize());
         directories.add(Path.of("libs").toAbsolutePath().normalize());
 
         Path codeSourceDir = getCodeSourceDirectory();
         if (codeSourceDir != null) {
             Path current = codeSourceDir;
             for (int i = 0; i < 3 && current != null; i++) {
+                directories.add(current.resolve("libs").resolve(platform.classifier()).normalize());
                 directories.add(current.resolve("libs").normalize());
                 current = current.getParent();
             }

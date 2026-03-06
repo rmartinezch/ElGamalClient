@@ -53,6 +53,14 @@ Prueba realizada con **10,000 votos**:
 *   Java 21 o superior
 *   Maven 3.x
 
+### Soporte de Plataforma
+*   Linux: validado funcionalmente en esta rama.
+*   Windows x64: la aplicacion ya detecta plataforma, busca bibliotecas
+    nativas por layout (`libs/windows-x64`) y usa un RNG portable basado
+    en `SecureRandom`.
+*   Para ejecucion nativa en Windows aun se requiere incorporar
+    `vecj-2.2.0.dll` y sus DLL auxiliares en `libs/windows-x64`.
+
 ### Compilación
 ```bash
 mvn clean package -DskipTests
@@ -72,8 +80,31 @@ java -jar target/ElGamalCipher-1.1.0.jar \
 1.  `public_Key_file_name`: Ruta al archivo de clave pública.
 2.  `plain_votes_file_name`: Archivo de entrada con votos.
 3.  `ciphered_votes_file_name`: Archivo de salida.
-4.  `-sw` / `-hw`: Usar generador por software (rápido) o hardware (seguro/lento).
+4.  `-sw` / `-hw`: Usar generador por software portable o hardware.
 5.  `-p` (Opcional): Mostrar barra de progreso.
+
+### RNG y Dispositivo por Hardware
+*   `-sw` usa una implementación portable basada en `SecureRandom`.
+*   `-hw` intenta usar un dispositivo configurado por:
+    *   propiedad JVM `-Delgamal.rng.device=<ruta>`
+    *   variable de entorno `ELGAMAL_RNG_DEVICE`
+*   En Linux, si no se configura nada, intenta `/dev/TrueRNG0`.
+*   Si el dispositivo no existe o no es legible, la aplicación vuelve a
+    `SecureRandom`.
+
+### Layout Nativo por Plataforma
+La aplicación busca bibliotecas nativas en este orden:
+
+1.  `libs/<os-arch>`
+2.  `libs`
+
+Ejemplos:
+
+*   `libs/linux-x64/libvecj-2.2.0.so`
+*   `libs/windows-x64/vecj-2.2.0.dll`
+
+Si el JAR se ejecuta sin `java.library.path` y encuentra un layout
+válido local, se relanza automáticamente con la ruta correcta.
 
 **Ejemplo:**
 ```bash
@@ -97,3 +128,9 @@ java -jar ElGamalCipher.jar publicKey votos.txt cifrados.txt -sw -p
 *   **Rendimiento:** Implementación de Streams Paralelos y ThreadLocal. Optimización 8x.
 *   **Seguridad:** Corrección de concurrencia para Hardware RNG.
 *   **Usabilidad:** Barra de progreso visual.
+
+### Rama `cifradorM`
+*   **Fecha:** 2026-03-06
+*   **Portabilidad:** Se introduce detección de plataforma, selección de
+    RNG portable, layout nativo por plataforma y base de empaquetado
+    para Windows.
