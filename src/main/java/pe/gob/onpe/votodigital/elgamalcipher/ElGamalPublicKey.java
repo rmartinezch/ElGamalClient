@@ -8,6 +8,7 @@ import com.verificatum.arithm.PPGroup;
 import com.verificatum.arithm.PPGroupElement;
 import com.verificatum.eio.ByteTreeReader;
 import com.verificatum.eio.ByteTreeReaderF;
+import com.verificatum.eio.EIOError;
 import com.verificatum.eio.EIOException;
 import com.verificatum.eio.Marshalizer;
 import java.io.File;
@@ -100,10 +101,23 @@ public class ElGamalPublicKey {
                     }
                 }
             }
-        } catch (EIOException | ArithmFormatException ex) {
+        } catch (EIOException | ArithmFormatException | EIOError ex) {
             logger.severe(() -> String.format("La llave pública no puede ser cargada:%n%s", ex.toString()));
+            Throwable rootCause = getRootCause(ex);
+            if (rootCause instanceof UnsatisfiedLinkError) {
+                logger.severe(() -> String.format("Dependencia nativa faltante al interpretar la llave pública: %s",
+                        rootCause.getMessage()));
+            }
             return false;
         }
+    }
+
+    private Throwable getRootCause(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     public boolean isLoaded() {

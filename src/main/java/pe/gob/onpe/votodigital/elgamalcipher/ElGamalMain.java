@@ -7,7 +7,7 @@ import com.verificatum.eio.ByteTree;
 import com.verificatum.eio.ByteTreeBasic;
 import com.verificatum.eio.EIOException;
 import java.io.File;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
@@ -30,15 +30,16 @@ public class ElGamalMain {
     public static void main(String[] args) {
         logger.info(() -> String.format("Iniciando ElGamalCipher v%s", APP_VERSION));
         logger.info(() -> "Iniciamos la lectura de parámetros en la ejecución");
+        NativeLibraryLoader.ensureLibraryPath(args, logger);
         if (args.length < 4 || args.length > 5) {
             printUsage();
             return;
         }
 
-        String mainPath = Paths.get("").toAbsolutePath().toString() + File.separator;
-        logger.info(() -> String.format("Directorio actual: %s", mainPath));
+        Path workingDirectory = Path.of("").toAbsolutePath().normalize();
+        logger.info(() -> String.format("Directorio actual: %s", workingDirectory));
 
-        File[] files = validateFiles(mainPath, args);
+        File[] files = validateFiles(args);
         if (files.length == 0) {
             return;
         }
@@ -61,13 +62,13 @@ public class ElGamalMain {
     private static void printUsage() {
         logger.warning(() -> String.format("""
                            El n\u00famero de argumentos es 4 o 5, as\u00ed:
-                           java -jar ElGamalCipher-1.0-SNAPSHOT-jar-with-dependencies.jar public_Key_file_name plain_votes_file_name ciphered_votes_file_name -(hw/sw) [-p]"""));
+                           java -jar ElGamalCipher-1.1.0.jar public_Key_file_name plain_votes_file_name ciphered_votes_file_name -(hw/sw) [-p]"""));
     }
 
-    private static File[] validateFiles(String mainPath, String[] args) {
-        File[] files = new File[3]; 
+    private static File[] validateFiles(String[] args) {
+        File[] files = new File[3];
         for (int i = 0; i < 3; i++) {
-            files[i] = new File(mainPath + args[i]);
+            files[i] = Path.of(args[i]).toAbsolutePath().normalize().toFile();
             final int index = i;
             logger.info(() -> String.format("Parámetro %d : %s", (index + 1), files[index].getAbsoluteFile()));
             // Check existence for input files (0: publicKey, 1: plainVotes), but not for output (2)
