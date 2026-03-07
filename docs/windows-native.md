@@ -16,19 +16,24 @@ Implementado en esta rama:
 - RNG portable basado en `SecureRandom`
 - soporte para parametrizar un dispositivo RNG por hardware
 - pruebas automáticas de regresión en Linux
+- build nativo Windows x64 reproducible desde código fuente
+- validación real en Windows con `publicKey` y `shuffled_votes.txt`
+- generación de `app-image` con `jpackage`
 
-Pendiente exclusivo de Windows:
+Validado en Windows x64:
 
-- incorporar `vecj-2.2.0.dll`
-- incorporar DLL auxiliares necesarias
-- validar carga real en un host Windows
-- generar el paquete final con `jpackage`
+- compilación local de `vecj-2.2.0.dll`
+- compilación local de `vmgj-1.3.0.dll`
+- carga JNI real desde `libs/windows-x64`
+- ejecución completa del cifrador con `2125` votos
+- generación del paquete final con `jpackage`
 
-Bloqueador actual:
+Hallazgo técnico adicional:
 
-- no se dispone en este arbol de trabajo del binario `vecj-2.2.0.dll`
-- tampoco existe aqui el proyecto `verificatum-vecj` para reconstruirlo
-  directamente
+- el flujo real no depende solo de `vecj`; también requiere
+  `vmgj-1.3.0.dll`
+- `verificatum-vmgj` usa casts de punteros vía `long`, lo cual rompe en
+  `Windows x64`; para compilarlo correctamente se debe usar `intptr_t`
 
 ## Validacion ejecutada en Linux
 
@@ -53,7 +58,7 @@ libs/
     libvecj-2.2.0.so
   windows-x64/
     vecj-2.2.0.dll
-    ...
+    vmgj-1.3.0.dll
 ```
 
 El cargador busca primero `libs/<os-arch>` y luego `libs`.
@@ -66,22 +71,77 @@ El cargador busca primero `libs/<os-arch>` y luego `libs`.
 
 Si el dispositivo no está disponible, el flujo vuelve a `SecureRandom`.
 
+TODO de RNG en Windows:
+
+- agregar soporte operativo y documentado para un dispositivo TrueRNG
+  real en Windows usando `-hw`
+- validar en un host Windows real qué ruta o interfaz expone el
+  dispositivo para que `RandomDevice` pueda abrirlo correctamente
+
 ## Empaquetado Windows
 
 Se incluye el script:
 
 - [package-windows.ps1](/home/soettamusb/verificatum/cifradorM/scripts/package-windows.ps1)
+- [build-native-windows.ps1](/home/soettamusb/verificatum/cifradorM/scripts/build-native-windows.ps1)
 
-Ese script:
+`build-native-windows.ps1`:
+
+- instala `MSYS2 UCRT64` si no existe
+- compila `verificatum-vec` y `verificatum-gmpmee`
+- compila `vecj-2.2.0.dll` y `vmgj-1.3.0.dll`
+- deja las DLL en `libs/windows-x64`
+- ejecuta una prueba mínima JNI
+
+`package-windows.ps1`:
 
 - valida la presencia del JAR
 - valida la presencia de `vecj-2.2.0.dll`
+- valida la presencia de `vmgj-1.3.0.dll`
 - arma un directorio de entrada para `jpackage`
-- genera una `app-image` para Windows
+- genera una `app-image` para Windows con launcher de consola
+
+## Scripts de automatizacion
+
+Se agregan estos scripts operativos:
+
+- `scripts/build-cifrador-exe.ps1`
+- `scripts/package-cifrador-portable.ps1`
+- `scripts/test-remote-verificatum-mix.bat`
+- `scripts/test-remote-verificatum-mix.ps1`
+
+`build-cifrador-exe.ps1`:
+
+- asegura dependencias Maven locales si faltan
+- compila el proyecto con Maven
+- compila DLL nativas Windows si faltan
+- empaqueta `dist/windows/image/Cifrador/Cifrador.exe`
+
+`package-cifrador-portable.ps1`:
+
+- empaqueta la carpeta `dist/windows/image/Cifrador`
+- genera `dist/windows/Cifrador-1.1.0-windows-x64-portable.zip`
+- puede reconstruir el ejecutable antes de comprimir
+
+`test-remote-verificatum-mix.bat`:
+
+- delega en `test-remote-verificatum-mix.ps1`
+- sirve para lanzar la prueba desde consola o doble clic
+
+`test-remote-verificatum-mix.ps1`:
+
+- usa `Cifrador.exe` para cifrar los votos reales
+- usa `OpenSSH` nativo de Windows
+- automatiza la prueba contra un Verificatum Linux remoto
+- ejecuta `vmn -shuffle`, `vmn -decrypt` y `vmnv`
+- compara `plaintexts` contra `recursos/shuffled_votes.txt`
+- deja logs y resumen en `.build/remote-mix-test-<host>`
+- devuelve el control al prompt con un resumen final
 
 ## Validación mínima esperada en Windows
 
 1. `java -jar ... -sw` debe relanzarse con `java.library.path` correcto
 2. la llave pública debe cargar sin `UnsatisfiedLinkError`
-3. debe generarse salida hexadecimal compatible
-4. la app-image debe ejecutar sin instalación manual de Verificatum
+3. deben cargarse `vecj` y `vmgj` sin error JNI
+4. debe generarse salida hexadecimal compatible
+5. la app-image debe ejecutar sin instalación manual de Verificatum

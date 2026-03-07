@@ -120,15 +120,15 @@ El cuello de botella tecnico principal es JNI.
 
 Tareas:
 
-- [ ] obtener el codigo fuente de `verificatum-vecj`
-- [ ] identificar dependencias nativas requeridas por `vecj`
-- [ ] preparar toolchain Windows para compilar JNI
-- [ ] compilar los binarios requeridos para `Windows x64`
-- [ ] verificar carga con una prueba minima de `System.loadLibrary(...)`
+- [x] obtener el codigo fuente de `verificatum-vecj`
+- [x] identificar dependencias nativas requeridas por `vecj`
+- [x] preparar toolchain Windows para compilar JNI
+- [x] compilar los binarios requeridos para `Windows x64`
+- [x] verificar carga con una prueba minima de `System.loadLibrary(...)`
 
 Resultado esperado:
 
-- [ ] `vecj-2.2.0.dll` y las DLL auxiliares necesarias para el runtime
+- [x] `vecj-2.2.0.dll` y las DLL auxiliares necesarias para el runtime
 
 ### 4. Hacer el cifrador agnostico al sistema operativo
 
@@ -169,15 +169,15 @@ Verificatum.
 
 Tareas:
 
-- [ ] crear una distribucion para `Windows x64`
-- [ ] incluir JRE embebido mediante `jpackage` o estrategia equivalente
-- [ ] incluir DLL requeridas en el paquete final
-- [ ] crear launcher `.exe`
+- [x] crear una distribucion para `Windows x64`
+- [x] incluir JRE embebido mediante `jpackage` o estrategia equivalente
+- [x] incluir DLL requeridas en el paquete final
+- [x] crear launcher `.exe`
 - [ ] validar ejecucion desde consola y desde doble clic
 
 Resultado esperado:
 
-- [ ] paquete autocontenido para Windows
+- [x] paquete autocontenido para Windows
 
 ### 7. Validacion funcional y de compatibilidad
 
@@ -188,7 +188,7 @@ Tareas:
 - [ ] comparar resultados con Linux sobre el mismo set de entrada
 - [ ] validar formato de salida hexadecimal y ByteTree
 - [ ] probar llaves simples y vectoriales si aplica
-- [ ] ejecutar pruebas de volumen
+- [x] ejecutar pruebas de volumen
 - [ ] medir tiempo de ejecucion y consumo de memoria
 
 Resultado esperado:
@@ -218,6 +218,10 @@ Condiciones de cierre:
    - GMP y/o dependencias nativas asociadas
    - empaquetado correcto de DLL
 
+   Hallazgo confirmado en Windows x64:
+   - `verificatum-vmgj` requiere adaptar casts de punteros a `intptr_t`
+     para no truncar direcciones en 64 bits
+
 3. El RNG actual depende de rutas Linux y debe redisenarse si se quiere
    un comportamiento razonable en Windows.
 
@@ -237,16 +241,21 @@ Avance implementado en esta rama:
 
 Pendiente para declarar soporte nativo real en Windows:
 
-- [ ] compilar u obtener `vecj-2.2.0.dll`
-- [ ] identificar e incorporar DLL auxiliares requeridas
-- [ ] validar carga real de JNI en un host `Windows x64`
-- [ ] generar y probar el paquete final con `jpackage`
+- [x] compilar u obtener `vecj-2.2.0.dll`
+- [x] identificar e incorporar DLL auxiliares requeridas
+- [x] validar carga real de JNI en un host `Windows x64`
+- [x] generar y probar el paquete final con `jpackage`
+
+Pendiente de cierre funcional:
+
+- [ ] comparar salidas Linux/Windows byte a byte
+- [ ] validar el launcher final con doble clic en entorno de usuario
 
 ## Entregables
 
 - [x] correcciones funcionales en el cifrador actual
 - [x] soporte de carga nativa para Windows
-- [ ] paquete autocontenido `Windows x64`
+- [x] paquete autocontenido `Windows x64`
 - [ ] documento de instalacion y ejecucion
 - [ ] matriz de compatibilidad y dependencias
 - [ ] evidencia de pruebas cruzadas Linux/Windows

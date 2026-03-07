@@ -53,18 +53,54 @@ Prueba realizada con **10,000 votos**:
 *   Java 21 o superior
 *   Maven 3.x
 
+### Bootstrap de dependencias Verificatum
+Las dependencias `com.verificatum` usadas por este proyecto no estan en
+Maven Central. En esta rama se puede poblar un repositorio Maven local
+del proyecto ejecutando:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-verificatum.ps1
+```
+
+Eso genera e instala en `.mvn/local-repo`:
+
+*   `com.verificatum:verificatum-vmgj:1.3.0`
+*   `com.verificatum:verificatum-vecj:2.2.0`
+*   `com.verificatum:verificatum-vcr-vmgj-vecj:3.1.0`
+
 ### Soporte de Plataforma
 *   Linux: validado funcionalmente en esta rama.
 *   Windows x64: la aplicacion ya detecta plataforma, busca bibliotecas
     nativas por layout (`libs/windows-x64`) y usa un RNG portable basado
     en `SecureRandom`.
-*   Para ejecucion nativa en Windows aun se requiere incorporar
-    `vecj-2.2.0.dll` y sus DLL auxiliares en `libs/windows-x64`.
+*   La compilacion nativa Windows queda cerrada con
+    `vecj-2.2.0.dll` y `vmgj-1.3.0.dll` en `libs/windows-x64`.
+*   `verificatum-vmgj` requiere un ajuste de 64 bits en su JNI:
+    los punteros se transportan como `jlong` usando `intptr_t`.
 
 ### Compilación
 ```bash
+mvn -q -version
+powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-verificatum.ps1
 mvn clean package -DskipTests
 ```
+
+### Compilacion Nativa Windows
+Con los fuentes locales de Verificatum disponibles, el repositorio puede
+construir las DLL JNI de Windows x64 con:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build-native-windows.ps1
+```
+
+El script:
+
+*   instala `MSYS2 UCRT64` si no existe
+*   compila `verificatum-vec` y `verificatum-gmpmee` como librerias
+    estaticas locales
+*   compila `vecj-2.2.0.dll` y `vmgj-1.3.0.dll`
+*   deja ambas DLL en `libs/windows-x64`
+*   ejecuta una prueba minima JNI en Windows
 
 ### Ejecución
 ```bash
@@ -111,6 +147,145 @@ válido local, se relanza automáticamente con la ruta correcta.
 java -jar ElGamalCipher.jar publicKey votos.txt cifrados.txt -sw -p
 ```
 
+### Empaquetado Windows
+Con el JAR ya compilado y con `vecj-2.2.0.dll` y `vmgj-1.3.0.dll`
+presentes en `libs/windows-x64`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\package-windows.ps1
+```
+
+### Build reproducible de `Cifrador.exe`
+Para compilar el ejecutable Windows portable desde este repo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build-cifrador-exe.ps1
+```
+
+Salida esperada:
+
+*   `dist/windows/image/Cifrador/Cifrador.exe`
+*   `dist/windows/image/Cifrador/runtime`
+*   `dist/windows/image/Cifrador/app`
+*   `dist/windows/image/Cifrador/libs/windows-x64`
+
+El script:
+
+*   compila el JAR con Maven
+*   reconstruye las DLL JNI de Windows si faltan
+*   copia un runtime Java 21 embebido
+*   genera un launcher nativo `Cifrador.exe`
+*   deja una carpeta autocontenida en `dist/windows/image/Cifrador`
+
+### Uso del ejecutable generado
+El ejecutable se invoca asi:
+
+```powershell
+.\dist\windows\image\Cifrador\Cifrador.exe `
+    .\recursos\publicKey `
+    .\recursos\shuffled_votes.txt `
+    .\salida\ciphertexts_ext `
+    -sw
+```
+
+### Portabilidad de la carpeta Windows
+El artefacto portable actual es esta carpeta completa:
+
+*   `dist/windows/image/Cifrador`
+
+Si copias **toda** esa carpeta a otra ruta de un Windows x64 compatible,
+el ejecutable se puede usar sin reinstalar Java ni volver a compilar,
+porque el launcher busca todo de forma relativa:
+
+*   `runtime\bin\java.exe`
+*   `app\ElGamalCipher-1.1.0.jar`
+*   `libs\windows-x64\vecj-2.2.0.dll`
+*   `libs\windows-x64\vmgj-1.3.0.dll`
+
+Importante:
+
+*   lo portable es `Cifrador`, no `ElGamalCipher`
+*   no copies solo `Cifrador.exe`; copia la carpeta completa
+*   si existe una carpeta `dist/windows/image/ElGamalCipher`, corresponde
+    al empaquetado viejo con `jpackage` y no es el flujo principal actual
+
+### Empaquetado ZIP portable
+Para generar un `.zip` portable del ejecutable autocontenido:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\package-cifrador-portable.ps1
+```
+
+Salida esperada:
+
+*   `dist/windows/Cifrador-1.1.0-windows-x64-portable.zip`
+
+Si quieres forzar la reconstrucción de `Cifrador.exe` antes de crear el
+ZIP:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\package-cifrador-portable.ps1 -RebuildExe
+```
+
+### Prueba remota automatizada con Verificatum Linux
+La prueba completa de mezcla de `1` party usando `Cifrador.exe` se puede
+ejecutar con:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-remote-verificatum-mix.ps1 `
+    -SshHost CHUWIN11 `
+    -Password "123456." `
+    -RebuildExe
+```
+
+El script:
+
+*   usa `OpenSSH` nativo de Windows
+*   recompila `Cifrador.exe` si hace falta o si se pasa `-RebuildExe`
+*   genera una eleccion temporal en Linux
+*   descarga `publicKey`
+*   cifra `recursos/shuffled_votes.txt` usando `Cifrador.exe`
+*   sube `ciphertexts_ext` al Linux
+*   ejecuta `shuffle`, `decrypt` y `vmnv`
+*   descarga `plaintexts`
+*   compara localmente los votos originales contra los descifrados
+*   escribe un resumen final y devuelve el control al prompt
+
+Ejemplo validado:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-remote-verificatum-mix.ps1 `
+    -Password "123456." `
+    -SshHost CHUWIN11
+```
+
+Tambien existe un wrapper `.bat` para consola o doble clic:
+
+```bat
+.\scripts\test-remote-verificatum-mix.bat -Password "123456." -SshHost CHUWIN11
+```
+
+Salida final esperada:
+
+*   `Resumen comparacion: originales=2125, descifrados=2125, mismo_conjunto=True, mismo_orden=False`
+*   `Prueba remota completada correctamente.`
+
+Artefactos de la prueba:
+
+*   `.build/remote-mix-test-CHUWIN11/publicKey`
+*   `.build/remote-mix-test-CHUWIN11/ciphertexts_ext`
+*   `.build/remote-mix-test-CHUWIN11/plaintexts`
+*   `.build/remote-mix-test-CHUWIN11/remote-mix.log`
+*   `.build/remote-mix-test-CHUWIN11/summary.json`
+
+### TODO
+Pendiente para cerrar completamente el RNG por hardware en Windows:
+
+*   agregar soporte operativo y documentado para un dispositivo TrueRNG
+    real en Windows usando `-hw`
+*   validar en un equipo Windows real qué ruta o interfaz expone el
+    dispositivo para que `RandomDevice` pueda abrirlo correctamente
+
 ---
 
 ## 📜 Historial de Revisiones
@@ -134,3 +309,6 @@ java -jar ElGamalCipher.jar publicKey votos.txt cifrados.txt -sw -p
 *   **Portabilidad:** Se introduce detección de plataforma, selección de
     RNG portable, layout nativo por plataforma y base de empaquetado
     para Windows.
+*   **Windows x64:** Se compilan localmente `vecj` y `vmgj`, se valida
+    una corrida real con `publicKey` y `shuffled_votes.txt`, y se genera
+    una `app-image` con `jpackage`.
