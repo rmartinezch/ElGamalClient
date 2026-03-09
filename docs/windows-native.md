@@ -14,7 +14,6 @@ Implementado en esta rama:
 - carga de bibliotecas nativas desde `libs/<os-arch>` o `libs`
 - relanzamiento automático del JAR con `java.library.path`
 - RNG portable basado en `SecureRandom`
-- soporte para parametrizar un dispositivo RNG por hardware
 - pruebas automáticas de regresión en Linux
 - build nativo Windows x64 reproducible desde código fuente
 - validación real en Windows con `publicKey` y `shuffled_votes.txt`
@@ -47,8 +46,7 @@ Resultado observado:
 
 - carga correcta de la llave publica EC
 - cifrado completo de `2125` votos
-- salida generada en archivo sin depender de `RandomDevice()` como RNG
-  por defecto
+- salida generada en archivo usando `SecureRandom` en el flujo Windows
 
 ## Layout esperado
 
@@ -66,24 +64,15 @@ El cargador busca primero `libs/<os-arch>` y luego `libs`.
 ## RNG
 
 - `-sw`: usa `PlatformRandomSource`, basado en `SecureRandom`
-- `-hw`: usa un dispositivo definido por
-  `-Delgamal.rng.device=<ruta>` o `ELGAMAL_RNG_DEVICE`
-
-Si el dispositivo no está disponible, el flujo vuelve a `SecureRandom`.
-
-TODO de RNG en Windows:
-
-- agregar soporte operativo y documentado para un dispositivo TrueRNG
-  real en Windows usando `-hw`
-- validar en un host Windows real qué ruta o interfaz expone el
-  dispositivo para que `RandomDevice` pueda abrirlo correctamente
+- `-hw`: se mantiene por compatibilidad de CLI, pero en Windows también
+  usa `SecureRandom`
 
 ## Empaquetado Windows
 
 Se incluye el script:
 
-- [package-windows.ps1](/home/soettamusb/verificatum/cifradorM/scripts/package-windows.ps1)
-- [build-native-windows.ps1](/home/soettamusb/verificatum/cifradorM/scripts/build-native-windows.ps1)
+- `scripts/windows/package-windows.ps1`
+- `scripts/windows/build-native-windows.ps1`
 
 `build-native-windows.ps1`:
 
@@ -105,10 +94,10 @@ Se incluye el script:
 
 Se agregan estos scripts operativos:
 
-- `scripts/build-cifrador-exe.ps1`
-- `scripts/package-cifrador-portable.ps1`
-- `scripts/test-remote-verificatum-mix.bat`
-- `scripts/test-remote-verificatum-mix.ps1`
+- `scripts/windows/build-cifrador-exe.ps1`
+- `scripts/windows/package-cifrador-portable.ps1`
+- `scripts/windows/test-remote-verificatum-mix.bat`
+- `scripts/windows/test-remote-verificatum-mix.ps1`
 
 `build-cifrador-exe.ps1`:
 

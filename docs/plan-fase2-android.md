@@ -18,8 +18,9 @@ todavía un producto móvil final con UX cerrada.
 Ya resuelto en la rama actual:
 
 - el cifrador funciona nativamente en `Windows x64`
-- existe un RNG portable basado en `SecureRandom`
-- el código Java principal ya no depende de `/dev/urandom`
+- el RNG ya está separado por plataforma:
+  - Ubuntu usa `RandomDevice` (`/dev/urandom` y TrueRNG)
+  - otros sistemas usan `SecureRandom`
 - `vecj` y `vmgj` compilan y cargan en Windows
 - existe empaquetado portable y prueba automatizada contra Verificatum
 

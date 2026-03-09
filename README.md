@@ -54,34 +54,50 @@ Prueba realizada con **10,000 votos**:
 *   Maven 3.x
 
 ### Bootstrap de dependencias Verificatum
-Las dependencias `com.verificatum` usadas por este proyecto no estan en
+Las dependencias `com.verificatum` usadas por este proyecto no están en
 Maven Central. En esta rama se puede poblar un repositorio Maven local
 del proyecto ejecutando:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-verificatum.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\bootstrap-verificatum.ps1
 ```
 
-Eso genera e instala en `.mvn/local-repo`:
+En Ubuntu/Linux, la validación de prerequisitos locales se hace con:
+
+```bash
+./scripts/ubuntu/bootstrap-verificatum.sh
+```
+
+En Windows, el bootstrap genera e instala en `.mvn/local-repo`:
 
 *   `com.verificatum:verificatum-vmgj:1.3.0`
 *   `com.verificatum:verificatum-vecj:2.2.0`
 *   `com.verificatum:verificatum-vcr-vmgj-vecj:3.1.0`
 
 ### Soporte de Plataforma
-*   Linux: validado funcionalmente en esta rama.
-*   Windows x64: la aplicacion ya detecta plataforma, busca bibliotecas
-    nativas por layout (`libs/windows-x64`) y usa un RNG portable basado
-    en `SecureRandom`.
+*   Ubuntu: validado funcionalmente con RNG de `RandomDevice`:
+    `-sw` usa `/dev/urandom` y `-hw` usa TrueRNG (`/dev/TrueRNG0` por
+    defecto, configurable).
+*   Windows x64: la aplicación ya detecta plataforma, busca bibliotecas
+    nativas por layout (`libs/windows-x64`) y usa RNG portable con
+    `SecureRandom`.
+*   Otros sistemas operativos: usan `SecureRandom` en `-sw` y `-hw`.
 *   La compilacion nativa Windows queda cerrada con
     `vecj-2.2.0.dll` y `vmgj-1.3.0.dll` en `libs/windows-x64`.
 *   `verificatum-vmgj` requiere un ajuste de 64 bits en su JNI:
     los punteros se transportan como `jlong` usando `intptr_t`.
 
+### Scripts por Plataforma
+*   `scripts/windows`: scripts PowerShell y `.bat` para build, empaquetado
+    y pruebas remotas en Windows.
+*   `scripts/ubuntu`: scripts `.sh` para validación de prerequisitos,
+    compilación, ejecución local y empaquetado portable en Ubuntu.
+*   `scripts/` mantiene wrappers de compatibilidad para comandos legacy.
+
 ### Compilación
 ```bash
 mvn -q -version
-powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-verificatum.ps1
+./scripts/ubuntu/bootstrap-verificatum.sh
 mvn clean package -DskipTests
 ```
 
@@ -90,7 +106,7 @@ Con los fuentes locales de Verificatum disponibles, el repositorio puede
 construir las DLL JNI de Windows x64 con:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build-native-windows.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\build-native-windows.ps1
 ```
 
 El script:
@@ -116,17 +132,21 @@ java -jar target/ElGamalCipher-1.1.0.jar \
 1.  `public_Key_file_name`: Ruta al archivo de clave pública.
 2.  `plain_votes_file_name`: Archivo de entrada con votos.
 3.  `ciphered_votes_file_name`: Archivo de salida.
-4.  `-sw` / `-hw`: Usar generador por software portable o hardware.
+4.  `-sw` / `-hw`: Seleccionar modalidad RNG (ver reglas por plataforma).
 5.  `-p` (Opcional): Mostrar barra de progreso.
 
 ### RNG y Dispositivo por Hardware
-*   `-sw` usa una implementación portable basada en `SecureRandom`.
-*   `-hw` intenta usar un dispositivo configurado por:
-    *   propiedad JVM `-Delgamal.rng.device=<ruta>`
-    *   variable de entorno `ELGAMAL_RNG_DEVICE`
-*   En Linux, si no se configura nada, intenta `/dev/TrueRNG0`.
-*   Si el dispositivo no existe o no es legible, la aplicación vuelve a
-    `SecureRandom`.
+*   En `Ubuntu`:
+    *   `-sw` usa `RandomDevice()` (`/dev/urandom`).
+    *   `-hw` usa TrueRNG por:
+        *   propiedad JVM `-Delgamal.rng.device=<ruta>`
+        *   variable de entorno `ELGAMAL_RNG_DEVICE`
+        *   valor por defecto `/dev/TrueRNG0`
+    *   si el dispositivo TrueRNG no existe o no es legible, vuelve a
+        `RandomDevice()` (`/dev/urandom`).
+*   En `Windows`, `macOS`, `Android` y otros sistemas:
+    *   `-sw` y `-hw` usan `PlatformRandomSource` basado en
+        `SecureRandom`.
 
 ### Layout Nativo por Plataforma
 La aplicación busca bibliotecas nativas en este orden:
@@ -152,14 +172,58 @@ Con el JAR ya compilado y con `vecj-2.2.0.dll` y `vmgj-1.3.0.dll`
 presentes en `libs/windows-x64`:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\package-windows.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\package-windows.ps1
 ```
+
+### Empaquetado Portable Ubuntu
+Para generar una imagen portable en Linux:
+
+```bash
+./scripts/ubuntu/build-cifrador-portable.sh
+```
+
+Salida esperada:
+
+*   `dist/linux/image/Cifrador/Cifrador`
+*   `dist/linux/image/Cifrador/runtime`
+*   `dist/linux/image/Cifrador/app`
+*   `dist/linux/image/Cifrador/libs/linux-x64` (o `linux-arm64`)
+
+El script:
+
+*   compila el JAR con Maven
+*   copia runtime Java embebido
+*   copia JNI de Verificatum (`libvecj`, `libvmgj`)
+*   copia dependencias nativas transitivas detectadas en `/usr/local/lib`
+  (por ejemplo `libvec.so.0`, `libgmpmee.so.0`)
+*   genera launcher `Cifrador` con `LD_LIBRARY_PATH` y
+  `java.library.path` relativos
+
+### Uso del launcher portable Ubuntu
+
+```bash
+./dist/linux/image/Cifrador/Cifrador \
+  recursos/publicKey \
+  recursos/shuffled_votes.txt \
+  salida/ciphertexts_ext \
+  -sw
+```
+
+### Empaquetado TAR.GZ portable Ubuntu
+
+```bash
+./scripts/ubuntu/package-cifrador-portable.sh
+```
+
+Salida esperada:
+
+*   `dist/linux/Cifrador-1.1.0-linux-x64-portable.tar.gz`
 
 ### Build reproducible de `Cifrador.exe`
 Para compilar el ejecutable Windows portable desde este repo:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build-cifrador-exe.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\build-cifrador-exe.ps1
 ```
 
 Salida esperada:
@@ -213,7 +277,7 @@ Importante:
 Para generar un `.zip` portable del ejecutable autocontenido:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\package-cifrador-portable.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\package-cifrador-portable.ps1
 ```
 
 Salida esperada:
@@ -224,7 +288,7 @@ Si quieres forzar la reconstrucción de `Cifrador.exe` antes de crear el
 ZIP:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\package-cifrador-portable.ps1 -RebuildExe
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\package-cifrador-portable.ps1 -RebuildExe
 ```
 
 ### Prueba remota automatizada con Verificatum Linux
@@ -232,7 +296,7 @@ La prueba completa de mezcla de `1` party usando `Cifrador.exe` se puede
 ejecutar con:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-remote-verificatum-mix.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-remote-verificatum-mix.ps1 `
     -SshHost CHUWIN11 `
     -Password "123456." `
     -RebuildExe
@@ -254,7 +318,7 @@ El script:
 Ejemplo validado:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-remote-verificatum-mix.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-remote-verificatum-mix.ps1 `
     -Password "123456." `
     -SshHost CHUWIN11
 ```
@@ -262,7 +326,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-remote-verifi
 Tambien existe un wrapper `.bat` para consola o doble clic:
 
 ```bat
-.\scripts\test-remote-verificatum-mix.bat -Password "123456." -SshHost CHUWIN11
+.\scripts\windows\test-remote-verificatum-mix.bat -Password "123456." -SshHost CHUWIN11
 ```
 
 Salida final esperada:
@@ -279,12 +343,10 @@ Artefactos de la prueba:
 *   `.build/remote-mix-test-CHUWIN11/summary.json`
 
 ### TODO
-Pendiente para cerrar completamente el RNG por hardware en Windows:
+Pendiente de la siguiente fase:
 
-*   agregar soporte operativo y documentado para un dispositivo TrueRNG
-    real en Windows usando `-hw`
-*   validar en un equipo Windows real qué ruta o interfaz expone el
-    dispositivo para que `RandomDevice` pueda abrirlo correctamente
+*   agregar layout y scripts dedicados para Android (`scripts/android`)
+*   definir ABI y flujo NDK final para `libs/android-<abi>`
 
 ---
 
