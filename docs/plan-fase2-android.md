@@ -1,5 +1,39 @@
 # Plan Fase 2: Port a Android
 
+## Estado de avance (2026-03-09)
+
+Arranque completado en esta fecha:
+
+- se desacopló el core cifrador del parsing CLI (`ElGamalCipherService`,
+  `CifradorRequest`, `CifradorRngMode`)
+- se creó proyecto Android mínimo en `android/` con Gradle wrapper y app
+  base para check de ABI/JNI
+- se creó `scripts/android` con flujo inicial (`doctor`, `assembleDebug`,
+  `installDebug`)
+- se cerró el port JNI Android para `x86_64` y `arm64-v8a`
+- se agregó smoke test real sobre `vecj` y `vmgj` dentro de la app
+- se agregó automatización para AVD headless y `connectedAndroidTest`
+- se integró el core reusable del cifrador dentro de la app Android
+- se agregó prueba instrumentada de cifrado real y exportación de
+  `ciphertexts_ext`
+- se agregó prueba híbrida Android -> Linux con Verificatum
+- se agregó empaquetado portable Android bajo `dist/android`
+
+Estado actual del host:
+
+- SDK Android configurado
+- NDK instalado
+- imagen de emulador `x86_64` instalada
+- `KVM` operativo y validado
+- emulador `x86_64` operativo para `connectedAndroidTest`
+- validación híbrida ejecutada exitosamente en esta máquina:
+  - Android cifra `2125` votos reales
+  - Linux mezcla, descifra y verifica
+  - mismo conjunto de votos: sí
+  - mismo orden: no
+- imagen portable Android validada desde `dist/android/image/Cifrador`
+  usando instalación por `adb` y smoke test instrumentado
+
 ## Objetivo
 
 Llevar el cifrador a Android manteniendo compatibilidad criptográfica

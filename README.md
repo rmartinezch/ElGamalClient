@@ -92,6 +92,8 @@ En Windows, el bootstrap genera e instala en `.mvn/local-repo`:
     y pruebas remotas en Windows.
 *   `scripts/ubuntu`: scripts `.sh` para validación de prerequisitos,
     compilación, ejecución local y empaquetado portable en Ubuntu.
+*   `scripts/android`: scripts `.sh` para chequeo de entorno,
+    compilación e instalación de la app Android de fase 2.
 *   `scripts/` mantiene wrappers de compatibilidad para comandos legacy.
 
 ### Compilación
@@ -219,6 +221,75 @@ Salida esperada:
 
 *   `dist/linux/Cifrador-1.1.0-linux-x64-portable.tar.gz`
 
+### Inicio Fase 2 Android
+Se creó un proyecto Android mínimo en `android/` para arrancar pruebas de
+host, ABI y carga JNI.
+
+Comandos base:
+
+```bash
+./scripts/android/doctor.sh
+./scripts/android/build-debug.sh
+./scripts/android/install-debug.sh
+```
+
+### Empaquetado Portable Android
+Para generar una imagen portable Android en `dist/`:
+
+```bash
+./scripts/android/build-cifrador-portable.sh
+```
+
+Wrapper equivalente:
+
+```bash
+./scripts/build-cifrador-portable-android.sh
+```
+
+Salida esperada:
+
+*   `dist/android/image/Cifrador/apk/Cifrador.apk`
+*   `dist/android/image/Cifrador/apk/pruebas_auto.apk`
+*   `dist/android/image/Cifrador/scripts/install.sh`
+*   `dist/android/image/Cifrador/scripts/run-smoke-test.sh`
+*   `dist/android/image/Cifrador/metadata/checksums.sha256`
+
+El script:
+
+*   compila el APK principal
+*   compila el APK de pruebas instrumentadas
+*   copia ambos artefactos a `dist/android/image/Cifrador`
+*   genera scripts portables de instalación y smoke test basados en `adb`
+*   genera checksums SHA-256
+
+### Empaquetado ZIP portable Android
+
+```bash
+./scripts/android/package-cifrador-portable.sh
+```
+
+Wrapper equivalente:
+
+```bash
+./scripts/package-cifrador-portable-android.sh
+```
+
+Salida esperada:
+
+*   `dist/android/Cifrador-1.1.0-android-portable.zip`
+
+### Uso del artefacto portable Android
+
+```bash
+./dist/android/image/Cifrador/scripts/install.sh
+./dist/android/image/Cifrador/scripts/run-smoke-test.sh
+```
+
+Detalles de la fase:
+
+*   [android/README.md](/home/willy/cifradorM/android/README.md)
+*   [docs/plan-fase2-android.md](/home/willy/cifradorM/docs/plan-fase2-android.md)
+
 ### Build reproducible de `Cifrador.exe`
 Para compilar el ejecutable Windows portable desde este repo:
 
@@ -343,10 +414,12 @@ Artefactos de la prueba:
 *   `.build/remote-mix-test-CHUWIN11/summary.json`
 
 ### TODO
-Pendiente de la siguiente fase:
+Estado Android al 2026-03-09:
 
-*   agregar layout y scripts dedicados para Android (`scripts/android`)
-*   definir ABI y flujo NDK final para `libs/android-<abi>`
+*   JNI Android validado para `x86_64` y `arm64-v8a`
+*   cifrado real ejecutado en Android
+*   validación híbrida completada: Android cifra, Linux mezcla y
+    descifra, y el conjunto de votos coincide en distinto orden
 
 ---
 
