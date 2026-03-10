@@ -240,12 +240,6 @@ Para generar una imagen portable Android en `dist/`:
 ./scripts/android/build-cifrador-portable.sh
 ```
 
-Wrapper equivalente:
-
-```bash
-./scripts/build-cifrador-portable-android.sh
-```
-
 Salida esperada:
 
 *   `dist/android/image/Cifrador/apk/Cifrador.apk`
@@ -266,12 +260,6 @@ El script:
 
 ```bash
 ./scripts/android/package-cifrador-portable.sh
-```
-
-Wrapper equivalente:
-
-```bash
-./scripts/package-cifrador-portable-android.sh
 ```
 
 Salida esperada:

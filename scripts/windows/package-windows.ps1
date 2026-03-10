@@ -1,5 +1,5 @@
 param(
-    [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot/..").Path,
+    [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot/../..").Path,
     [string]$AppVersion = "1.1.0",
     [string]$AppName = "ElGamalCipher",
     [string]$JavaHome = $env:JAVA_HOME

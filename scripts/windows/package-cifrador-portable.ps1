@@ -1,5 +1,5 @@
 param(
-    [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot/..").Path,
+    [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot/../..").Path,
     [string]$AppName = "Cifrador",
     [string]$AppVersion = "1.1.0",
     [string]$OutputDir,

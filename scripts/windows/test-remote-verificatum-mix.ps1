@@ -1,5 +1,5 @@
 param(
-    [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot/..").Path,
+    [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot/../..").Path,
     [string]$SshHost = "CHUWIN11",
     [int]$Port = 22,
     [string]$User = "verificatum",
@@ -414,24 +414,34 @@ $script:SshHost = $SshHost
 $script:SshPort = $Port
 $script:SshUser = $User
 $script:AskPassPath = New-AskPassScript -Root $script:WorkRoot -PasswordValue $Password
+$SafeSudoPassword = Convert-ToShellSingleQuotedArgument -Value $Password
 
 Write-Host "[1/6] Preparando eleccion remota en $RemoteDir"
 
-$remoteSetupScript = @'
+$remoteSetupScript = @"
 set -euo pipefail
-REMOTE_DIR="$1"
-rm -rf "$REMOTE_DIR"
-mkdir -p "$REMOTE_DIR"
-cd "$REMOTE_DIR"
-PGROUP=$(vog -gen ECqPGroup -name "P-256")
-vmni -prot -sid 'ONPE' -name 'Eleccion Onpe' -nopart 1 -thres 1 -pgroup "$PGROUP"
-RAND=$(vog -gen RandomDevice /dev/urandom)
-vmni -party -e -name "Servidor01" -hint "localhost:4041" -http "http://localhost:8041" -rand "$RAND"
+REMOTE_DIR="`$1"
+CURRENT_HOST="`$(hostname)"
+NORMALIZED_HOST="`$(printf '%s' "`$CURRENT_HOST" | tr '[:upper:]' '[:lower:]')"
+if [ "`$CURRENT_HOST" != "`$NORMALIZED_HOST" ]; then
+  printf '%s\n' $SafeSudoPassword | sudo -S hostname "`$NORMALIZED_HOST" >/dev/null 2>&1 || true
+fi
+if [ "`$(hostname)" != "`$NORMALIZED_HOST" ]; then
+  echo "No se pudo normalizar el hostname remoto a minúsculas. Host actual: `$(hostname)" >&2
+  exit 1
+fi
+rm -rf "`$REMOTE_DIR"
+mkdir -p "`$REMOTE_DIR"
+cd "`$REMOTE_DIR"
+PGROUP=`$(vog -gen ECqPGroup -name "P-256")
+vmni -prot -sid 'ONPE' -name 'Eleccion Onpe' -nopart 1 -thres 1 -pgroup "`$PGROUP"
+RAND=`$(vog -gen RandomDevice /dev/urandom)
+vmni -party -e -name "Servidor01" -hint "localhost:4041" -http "http://localhost:8041" -rand "`$RAND"
 cp localProtInfo.xml protInfo01.xml
 vmni -merge protInfo01.xml protInfo.xml
 vmn -keygen -e publicKey
 wc -c publicKey
-'@
+"@
 
 $remoteSetupResult = Invoke-RemoteScript `
     -RemoteDirValue $RemoteDir `
