@@ -3,13 +3,14 @@ package pe.gob.onpe.votodigital.elgamalcipher;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.verificatum.crypto.RandomDevice;
 import com.verificatum.crypto.RandomSource;
 import com.verificatum.eio.ByteTree;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.logging.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -54,18 +55,49 @@ class PlatformRandomSourceTest {
     void hardwareFactoryUsesPortableRandomSourceOutsideUbuntu() {
         RuntimePlatform platform = RuntimePlatform.forTesting(
                 RuntimePlatform.OperatingSystem.WINDOWS, "x86_64");
-        RandomSource source = RandomSourceFactory.create(true, Logger.getAnonymousLogger(), platform);
+        RandomSource source = RandomSourceFactory.create(
+                true,
+                Logger.getAnonymousLogger(),
+                platform,
+                logger -> Optional.empty()
+        );
 
         assertInstanceOf(PlatformRandomSource.class, source);
+    }
+
+    @Test
+    void windowsHardwareFactoryUsesTrueRngProviderWhenAvailable() {
+        RuntimePlatform platform = RuntimePlatform.forTesting(
+                RuntimePlatform.OperatingSystem.WINDOWS, "x86_64");
+        RandomSource hardwareSource = new PlatformRandomSource();
+
+        RandomSource source = RandomSourceFactory.create(
+                true,
+                Logger.getAnonymousLogger(),
+                platform,
+                logger -> Optional.of(hardwareSource)
+        );
+
+        assertSame(hardwareSource, source);
     }
 
     @Test
     void ubuntuSoftwareFactoryUsesRandomDeviceUrandom() {
         RuntimePlatform platform = RuntimePlatform.forTesting(
                 RuntimePlatform.OperatingSystem.UBUNTU, "x86_64");
-        RandomSource source = RandomSourceFactory.create(false, Logger.getAnonymousLogger(), platform);
+        RandomSource ubuntuSoftwareSource = new PlatformRandomSource();
+        RandomSource source = RandomSourceFactory.create(
+                false,
+                Logger.getAnonymousLogger(),
+                platform,
+                logger -> Optional.empty(),
+                (hardwareRequested, logger) -> {
+                    assertFalse(hardwareRequested);
+                    return ubuntuSoftwareSource;
+                }
+        );
 
-        assertInstanceOf(RandomDevice.class, source);
+        assertSame(ubuntuSoftwareSource, source);
     }
 
     @Test
@@ -78,9 +110,19 @@ class PlatformRandomSourceTest {
         }
 
         System.setProperty(RNG_DEVICE_PROPERTY, missingDevice.toString());
-        RandomSource source = RandomSourceFactory.create(true, Logger.getAnonymousLogger(), platform);
+        RandomSource ubuntuHardwareFallback = new PlatformRandomSource();
+        RandomSource source = RandomSourceFactory.create(
+                true,
+                Logger.getAnonymousLogger(),
+                platform,
+                logger -> Optional.empty(),
+                (hardwareRequested, logger) -> {
+                    assertTrue(hardwareRequested);
+                    return ubuntuHardwareFallback;
+                }
+        );
 
-        assertInstanceOf(RandomDevice.class, source);
+        assertSame(ubuntuHardwareFallback, source);
     }
 
     private boolean isAllZero(byte[] bytes) {

@@ -8,6 +8,9 @@ param(
     [string]$RemoteDir = "/home/verificatum/codex_mix_test_auto",
     [string]$AppName = "Cifrador",
     [string]$AppVersion = "1.1.0",
+    [ValidateSet("sw", "hw")]
+    [string]$RngMode = "sw",
+    [string]$RngDevice,
     [switch]$RebuildExe
 )
 
@@ -460,14 +463,28 @@ foreach ($path in @($CiphertextsExtPath, $ExeLogPath, $ExeStdOutLogPath, $ExeStd
     }
 }
 
-$exeProcess = Start-Process `
-    -FilePath $ExePath `
-    -ArgumentList @($PublicKeyPath, $VotesPath, $CiphertextsExtPath, "-sw") `
-    -NoNewWindow `
-    -Wait `
-    -PassThru `
-    -RedirectStandardOutput $ExeStdOutLogPath `
-    -RedirectStandardError $ExeStdErrLogPath
+$rngFlag = "-" + $RngMode.ToLowerInvariant()
+$previousRngDevice = $env:ELGAMAL_RNG_DEVICE
+if ($RngDevice -and -not [string]::IsNullOrWhiteSpace($RngDevice)) {
+    $env:ELGAMAL_RNG_DEVICE = $RngDevice.Trim()
+}
+
+try {
+    $exeProcess = Start-Process `
+        -FilePath $ExePath `
+        -ArgumentList @($PublicKeyPath, $VotesPath, $CiphertextsExtPath, $rngFlag) `
+        -NoNewWindow `
+        -Wait `
+        -PassThru `
+        -RedirectStandardOutput $ExeStdOutLogPath `
+        -RedirectStandardError $ExeStdErrLogPath
+} finally {
+    if ($null -eq $previousRngDevice) {
+        Remove-Item Env:ELGAMAL_RNG_DEVICE -ErrorAction SilentlyContinue
+    } else {
+        $env:ELGAMAL_RNG_DEVICE = $previousRngDevice
+    }
+}
 
 $exeLogContent = ""
 if (Test-Path $ExeStdOutLogPath) {

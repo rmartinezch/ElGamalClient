@@ -1,11 +1,13 @@
 package pe.gob.onpe.votodigital.cifrador.android
 
 import android.content.Context
+import android.net.Uri
 import pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest
 import pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode
 import pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService
 import pe.gob.onpe.votodigital.elgamalcipher.LogConfig
 import java.io.File
+import java.io.IOException
 import java.util.logging.Level
 
 class AndroidCipherRunner(private val context: Context) {
@@ -16,6 +18,18 @@ class AndroidCipherRunner(private val context: Context) {
         val logFile: File,
         val byteCount: Long,
         val lineCount: Int,
+        val message: String
+    )
+
+    data class ImportedInput(
+        val targetFile: File,
+        val byteCount: Long,
+        val message: String
+    )
+
+    data class ExportResult(
+        val exportedFile: File,
+        val byteCount: Long,
         val message: String
     )
 
@@ -96,9 +110,61 @@ class AndroidCipherRunner(private val context: Context) {
         )
     }
 
+    fun importPublicKey(sourceUri: Uri): ImportedInput {
+        return importIntoSandbox(sourceUri, PUBLIC_KEY_FILE_NAME, "publicKey")
+    }
+
+    fun importVotes(sourceUri: Uri): ImportedInput {
+        return importIntoSandbox(sourceUri, VOTES_FILE_NAME, VOTES_FILE_NAME)
+    }
+
+    fun exportCiphertexts(targetUri: Uri): ExportResult {
+        val exportDir = File(context.filesDir, EXPORT_DIR_NAME)
+        val ciphertextsFile = File(exportDir, CIPHERTEXTS_FILE_NAME)
+        requireReadable(ciphertextsFile, CIPHERTEXTS_FILE_NAME)
+
+        context.contentResolver.openOutputStream(targetUri, "wt")?.use { output ->
+            ciphertextsFile.inputStream().use { input ->
+                input.copyTo(output)
+            }
+        } ?: throw IOException("No se pudo abrir el destino de exportacion.")
+
+        return ExportResult(
+            exportedFile = ciphertextsFile,
+            byteCount = ciphertextsFile.length(),
+            message = "ciphertexts_ext exportado desde ${ciphertextsFile.absolutePath}"
+        )
+    }
+
+    fun currentPublicKeyFile(): File {
+        return File(File(context.filesDir, INPUT_DIR_NAME), PUBLIC_KEY_FILE_NAME)
+    }
+
+    fun currentVotesFile(): File {
+        return File(File(context.filesDir, INPUT_DIR_NAME), VOTES_FILE_NAME)
+    }
+
     private fun requireReadable(file: File, label: String) {
         check(file.isFile) { "Falta archivo de entrada $label en ${file.absolutePath}" }
         check(file.canRead()) { "No se puede leer $label en ${file.absolutePath}" }
+    }
+
+    private fun importIntoSandbox(sourceUri: Uri, targetName: String, label: String): ImportedInput {
+        val inputDir = File(context.filesDir, INPUT_DIR_NAME)
+        val targetFile = File(inputDir, targetName)
+        inputDir.mkdirs()
+
+        context.contentResolver.openInputStream(sourceUri)?.use { input ->
+            targetFile.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        } ?: throw IOException("No se pudo abrir $label desde $sourceUri")
+
+        return ImportedInput(
+            targetFile = targetFile,
+            byteCount = targetFile.length(),
+            message = "$label importado en ${targetFile.absolutePath}"
+        )
     }
 
     companion object {

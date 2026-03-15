@@ -79,8 +79,10 @@ En Windows, el bootstrap genera e instala en `.mvn/local-repo`:
     `-sw` usa `/dev/urandom` y `-hw` usa TrueRNG (`/dev/TrueRNG0` por
     defecto, configurable).
 *   Windows x64: la aplicación ya detecta plataforma, busca bibliotecas
-    nativas por layout (`libs/windows-x64`) y usa RNG portable con
-    `SecureRandom`.
+    nativas por layout (`libs/windows-x64`).
+    `-sw` usa `SecureRandom` y `-hw` usa TrueRNG por puerto serie
+    (`COMx`) si el dispositivo USB ya expone un puerto serial en
+    Windows; si no está disponible, vuelve a `SecureRandom`.
 *   Otros sistemas operativos: usan `SecureRandom` en `-sw` y `-hw`.
 *   La compilacion nativa Windows queda cerrada con
     `vecj-2.2.0.dll` y `vmgj-1.3.0.dll` en `libs/windows-x64`.
@@ -94,7 +96,6 @@ En Windows, el bootstrap genera e instala en `.mvn/local-repo`:
     compilación, ejecución local y empaquetado portable en Ubuntu.
 *   `scripts/android`: scripts `.sh` para chequeo de entorno,
     compilación e instalación de la app Android de fase 2.
-*   `scripts/` mantiene wrappers de compatibilidad para comandos legacy.
 
 ### Compilación
 ```bash
@@ -146,7 +147,17 @@ java -jar target/ElGamalCipher-1.1.0.jar \
         *   valor por defecto `/dev/TrueRNG0`
     *   si el dispositivo TrueRNG no existe o no es legible, vuelve a
         `RandomDevice()` (`/dev/urandom`).
-*   En `Windows`, `macOS`, `Android` y otros sistemas:
+*   En `Windows`:
+    *   `-sw` usa `PlatformRandomSource` basado en `SecureRandom`.
+    *   `-hw` usa TrueRNG por:
+        *   autodetección de puerto serie USB por `VID:PID 04D8:F5FE`
+        *   o propiedad JVM `-Delgamal.rng.device=COMx`
+        *   o variable de entorno `ELGAMAL_RNG_DEVICE=COMx`
+    *   no requiere crear `/dev/TrueRNG0`; solo que el driver del
+        dispositivo ya lo exponga como puerto `COM`.
+    *   si el puerto no está disponible o no puede abrirse, vuelve a
+        `SecureRandom`.
+*   En `macOS`, `Android` y otros sistemas:
     *   `-sw` y `-hw` usan `PlatformRandomSource` basado en
         `SecureRandom`.
 
@@ -380,6 +391,16 @@ Ejemplo validado:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-remote-verificatum-mix.ps1 `
     -Password "123456." `
     -SshHost CHUWIN11
+```
+
+Para ejecutar la misma prueba remota usando TrueRNG en Windows:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-remote-verificatum-mix.ps1 `
+    -Password "123456." `
+    -SshHost CHUWIN11 `
+    -RngMode hw `
+    -RngDevice COM6
 ```
 
 Tambien existe un wrapper `.bat` para consola o doble clic:

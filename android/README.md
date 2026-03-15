@@ -7,6 +7,12 @@ Proyecto mínimo Android para iniciar el port del cifrador.
 - app base creada en `android/app`
 - runner Android con smoke test real de `vecj` y `vmgj`
 - runner Android con cifrado real usando `ElGamalCipherService`
+- UI basica para:
+  - ejecutar prueba JNI
+  - importar `publicKey`
+  - importar `shuffled_votes.txt`
+  - ejecutar cifrado en Android
+  - exportar `ciphertexts_ext`
 - estructura `jniLibs` operativa para `x86_64` y `arm64-v8a`
 - build JNI automatizado con Android NDK
 - pruebas instrumentadas para emulador `x86_64`
@@ -55,6 +61,24 @@ Salida:
 ```bash
 ../scripts/android/install-debug.sh
 ```
+
+## Uso de la UI Android
+
+La app ahora expone una interfaz básica para validación manual en el
+teléfono o emulador:
+
+1. ejecutar la prueba JNI
+2. seleccionar `publicKey`
+3. seleccionar el archivo de votos
+4. ejecutar el cifrado
+5. exportar `ciphertexts_ext`
+
+Restricciones actuales:
+
+- la UI usa `SecureRandom` en Android
+- no hay soporte de `TrueRNG` USB en la app Android actual
+- el flujo de importación/exportación usa el selector de documentos del
+  sistema
 
 ## Pruebas automáticas en emulador
 

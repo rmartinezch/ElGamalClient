@@ -16,30 +16,87 @@ public final class RandomSourceFactory {
     private static final String HARDWARE_DEVICE_ENV = "ELGAMAL_RNG_DEVICE";
     private static final String DEFAULT_UBUNTU_HARDWARE_DEVICE = "/dev/TrueRNG0";
 
+    @FunctionalInterface
+    interface WindowsHardwareRandomSourceProvider {
+        Optional<RandomSource> create(Logger logger);
+    }
+
+    @FunctionalInterface
+    interface UbuntuRandomSourceProvider {
+        RandomSource create(boolean hardwareRequested, Logger logger);
+    }
+
     private RandomSourceFactory() {
         throw new UnsupportedOperationException("Esta clase no debe ser instanciada.");
     }
 
     public static RandomSource create(boolean hardwareRequested, Logger logger) {
-        return create(hardwareRequested, logger, RuntimePlatform.current());
+        return create(
+                hardwareRequested,
+                logger,
+                RuntimePlatform.current(),
+                WindowsTrueRngRandomSource::tryCreate,
+                RandomSourceFactory::createUbuntuRandomSource
+        );
     }
 
     static RandomSource create(boolean hardwareRequested,
                                Logger logger,
                                RuntimePlatform platform) {
+        return create(
+                hardwareRequested,
+                logger,
+                platform,
+                WindowsTrueRngRandomSource::tryCreate,
+                RandomSourceFactory::createUbuntuRandomSource
+        );
+    }
+
+    static RandomSource create(boolean hardwareRequested,
+                               Logger logger,
+                               RuntimePlatform platform,
+                               WindowsHardwareRandomSourceProvider windowsProvider) {
+        return create(
+                hardwareRequested,
+                logger,
+                platform,
+                windowsProvider,
+                RandomSourceFactory::createUbuntuRandomSource
+        );
+    }
+
+    static RandomSource create(boolean hardwareRequested,
+                               Logger logger,
+                               RuntimePlatform platform,
+                               WindowsHardwareRandomSourceProvider windowsProvider,
+                               UbuntuRandomSourceProvider ubuntuProvider) {
         if (platform.isUbuntu()) {
-            return createUbuntuRandomSource(hardwareRequested, logger);
+            return ubuntuProvider.create(hardwareRequested, logger);
         }
 
-        if (hardwareRequested) {
-            logger.warning(() -> String.format("Modo -hw solicitado en %s, "
-                    + "pero TrueRNG dedicado solo está habilitado para Ubuntu. "
-                    + "Se usará SecureRandom portable.",
-                    platform.classifier()));
-        } else {
-            logger.info(() -> String.format("Modo Software RNG detectado en %s: "
-                    + "usando SecureRandom portable.", platform.classifier()));
+        if (platform.isWindows()) {
+            return createWindowsRandomSource(hardwareRequested, logger, windowsProvider);
         }
+
+        logPortableRandomSource(platform, hardwareRequested, logger);
+        return new PlatformRandomSource();
+    }
+
+    private static RandomSource createWindowsRandomSource(boolean hardwareRequested,
+                                                          Logger logger,
+                                                          WindowsHardwareRandomSourceProvider windowsProvider) {
+        if (!hardwareRequested) {
+            logger.info(() -> "Windows -sw: usando SecureRandom portable.");
+            return new PlatformRandomSource();
+        }
+
+        Optional<RandomSource> hardwareSource = windowsProvider.create(logger);
+        if (hardwareSource.isPresent()) {
+            return hardwareSource.get();
+        }
+
+        logger.warning(() -> "Windows -hw: no se pudo usar el TrueRNG. "
+                + "Se usará SecureRandom portable.");
         return new PlatformRandomSource();
     }
 
@@ -80,5 +137,20 @@ public final class RandomSourceFactory {
             return Optional.empty();
         }
         return Optional.of(candidate);
+    }
+
+    private static void logPortableRandomSource(RuntimePlatform platform,
+                                                boolean hardwareRequested,
+                                                Logger logger) {
+        if (hardwareRequested) {
+            logger.warning(() -> String.format("Modo -hw solicitado en %s, "
+                    + "pero TrueRNG dedicado solo está habilitado para Ubuntu y Windows. "
+                    + "Se usará SecureRandom portable.",
+                    platform.classifier()));
+            return;
+        }
+
+        logger.info(() -> String.format("Modo Software RNG detectado en %s: "
+                + "usando SecureRandom portable.", platform.classifier()));
     }
 }
