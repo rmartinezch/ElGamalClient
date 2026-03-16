@@ -255,6 +255,8 @@ Salida esperada:
 
 *   `dist/android/image/Cifrador/apk/Cifrador.apk`
 *   `dist/android/image/Cifrador/apk/pruebas_auto.apk`
+*   `dist/android/image/Cifrador/recursos/publicKey`
+*   `dist/android/image/Cifrador/recursos/shuffled_votes.txt`
 *   `dist/android/image/Cifrador/scripts/install.sh`
 *   `dist/android/image/Cifrador/scripts/run-smoke-test.sh`
 *   `dist/android/image/Cifrador/metadata/checksums.sha256`

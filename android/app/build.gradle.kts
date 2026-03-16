@@ -59,6 +59,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
+    compileOnly("com.fazecast:jSerialComm:2.11.4")
     implementation("com.verificatum:verificatum-vcr-vmgj-vecj:3.1.0")
     implementation("com.verificatum:verificatum-vecj:2.2.0")
     implementation("com.verificatum:verificatum-vmgj:1.3.0")

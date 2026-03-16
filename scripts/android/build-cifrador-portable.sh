@@ -11,10 +11,13 @@ IMAGE_ROOT="$PROJECT_ROOT/dist/android/image/$APP_NAME"
 APK_DIR="$IMAGE_ROOT/apk"
 SCRIPT_DIR="$IMAGE_ROOT/scripts"
 METADATA_DIR="$IMAGE_ROOT/metadata"
+RESOURCE_DIR="$IMAGE_ROOT/recursos"
 MAIN_APK_SOURCE="$ANDROID_DIR/app/build/outputs/apk/debug/app-debug.apk"
 TEST_APK_SOURCE="$ANDROID_DIR/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 MAIN_APK_NAME="$APP_NAME.apk"
 TEST_APK_NAME="pruebas_auto.apk"
+PUBLIC_KEY_SOURCE="$PROJECT_ROOT/recursos/publicKey"
+VOTES_SOURCE="$PROJECT_ROOT/recursos/shuffled_votes.txt"
 
 cd "$PROJECT_ROOT"
 
@@ -38,12 +41,14 @@ if [[ "$INCLUDE_TEST_APK" == "1" && ! -f "$TEST_APK_SOURCE" ]]; then
 fi
 
 rm -rf "$IMAGE_ROOT"
-mkdir -p "$APK_DIR" "$SCRIPT_DIR" "$METADATA_DIR"
+mkdir -p "$APK_DIR" "$SCRIPT_DIR" "$METADATA_DIR" "$RESOURCE_DIR"
 
 cp "$MAIN_APK_SOURCE" "$APK_DIR/$MAIN_APK_NAME"
 if [[ "$INCLUDE_TEST_APK" == "1" ]]; then
   cp "$TEST_APK_SOURCE" "$APK_DIR/$TEST_APK_NAME"
 fi
+cp "$PUBLIC_KEY_SOURCE" "$RESOURCE_DIR/publicKey"
+cp "$VOTES_SOURCE" "$RESOURCE_DIR/shuffled_votes.txt"
 
 cat > "$SCRIPT_DIR/install.sh" <<INSTALL
 #!/usr/bin/env bash
@@ -79,6 +84,8 @@ $APP_NAME Android portable
 Contenido:
 - apk/$MAIN_APK_NAME
 $(if [[ "$INCLUDE_TEST_APK" == "1" ]]; then echo "- apk/$TEST_APK_NAME"; fi)
+- recursos/publicKey
+- recursos/shuffled_votes.txt
 - scripts/install.sh
 - scripts/run-smoke-test.sh
 - metadata/checksums.sha256

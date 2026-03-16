@@ -35,7 +35,7 @@ public final class RandomSourceFactory {
                 hardwareRequested,
                 logger,
                 RuntimePlatform.current(),
-                WindowsTrueRngRandomSource::tryCreate,
+                RandomSourceFactory::tryCreateWindowsTrueRngSource,
                 RandomSourceFactory::createUbuntuRandomSource
         );
     }
@@ -47,7 +47,7 @@ public final class RandomSourceFactory {
                 hardwareRequested,
                 logger,
                 platform,
-                WindowsTrueRngRandomSource::tryCreate,
+                RandomSourceFactory::tryCreateWindowsTrueRngSource,
                 RandomSourceFactory::createUbuntuRandomSource
         );
     }
@@ -98,6 +98,38 @@ public final class RandomSourceFactory {
         logger.warning(() -> "Windows -hw: no se pudo usar el TrueRNG. "
                 + "Se usará SecureRandom portable.");
         return new PlatformRandomSource();
+    }
+
+    private static Optional<RandomSource> tryCreateWindowsTrueRngSource(Logger logger) {
+        try {
+            Class<?> providerClass = Class.forName(
+                    "pe.gob.onpe.votodigital.elgamalcipher.WindowsTrueRngRandomSource");
+            Object result = providerClass
+                    .getMethod("tryCreate", Logger.class)
+                    .invoke(null, logger);
+
+            if (result instanceof Optional<?> optional) {
+                if (optional.isEmpty()) {
+                    return Optional.empty();
+                }
+                Object source = optional.get();
+                if (source instanceof RandomSource randomSource) {
+                    return Optional.of(randomSource);
+                }
+            }
+
+            logger.warning(() -> "Windows -hw: el proveedor TrueRNG devolvió un tipo inesperado. "
+                    + "Se usará SecureRandom portable.");
+            return Optional.empty();
+        } catch (ClassNotFoundException e) {
+            logger.warning(() -> "Windows -hw: el proveedor TrueRNG de Windows no está disponible en este runtime. "
+                    + "Se usará SecureRandom portable.");
+            return Optional.empty();
+        } catch (ReflectiveOperationException e) {
+            logger.warning(() -> "Windows -hw: no se pudo inicializar el proveedor TrueRNG de Windows: "
+                    + e.getMessage());
+            return Optional.empty();
+        }
     }
 
     private static RandomSource createUbuntuRandomSource(boolean hardwareRequested, Logger logger) {
