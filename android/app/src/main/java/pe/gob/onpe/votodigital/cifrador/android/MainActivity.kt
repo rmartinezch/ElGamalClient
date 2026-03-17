@@ -1,6 +1,14 @@
 package pe.gob.onpe.votodigital.cifrador.android
 
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -13,19 +21,46 @@ import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
+    data class RngOption(
+        val label: String,
+        val mode: CifradorRngMode
+    )
+
     private lateinit var runner: AndroidPhase2Runner
     private lateinit var cipherRunner: AndroidCipherRunner
+    private lateinit var trueRngSupport: AndroidTrueRngSupport
     private lateinit var jniResultText: TextView
     private lateinit var publicKeyStatusText: TextView
     private lateinit var votesStatusText: TextView
+    private lateinit var trueRngStatusText: TextView
     private lateinit var cipherResultText: TextView
     private lateinit var runCheckButton: Button
     private lateinit var pickPublicKeyButton: Button
     private lateinit var pickVotesButton: Button
+    private lateinit var requestTrueRngPermissionButton: Button
     private lateinit var encryptButton: Button
     private lateinit var exportButton: Button
     private lateinit var rngModeSpinner: Spinner
     private var lastCipherOutputAvailable = false
+    private val rngOptions = listOf(
+        RngOption("Software RNG (-sw)", CifradorRngMode.SOFTWARE),
+        RngOption("TrueRNG USB (-hw)", CifradorRngMode.HARDWARE)
+    )
+
+    private val usbPermissionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != AndroidTrueRngSupport.ACTION_USB_PERMISSION) {
+                return
+            }
+            val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+            val device = readUsbDeviceExtra(intent)
+            trueRngStatusText.text = buildString {
+                append(trueRngSupport.buildPermissionResult(device, granted))
+                append("\n")
+                append(cipherRunner.describeTrueRngStatus())
+            }
+        }
+    }
 
     private val openPublicKeyDocument = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -76,27 +111,30 @@ class MainActivity : AppCompatActivity() {
 
         runner = AndroidPhase2Runner()
         cipherRunner = AndroidCipherRunner(applicationContext)
+        trueRngSupport = AndroidTrueRngSupport(applicationContext)
 
         jniResultText = findViewById(R.id.jniResultText)
         publicKeyStatusText = findViewById(R.id.publicKeyStatusText)
         votesStatusText = findViewById(R.id.votesStatusText)
+        trueRngStatusText = findViewById(R.id.trueRngStatusText)
         cipherResultText = findViewById(R.id.cipherResultText)
         runCheckButton = findViewById(R.id.runCheckButton)
         pickPublicKeyButton = findViewById(R.id.pickPublicKeyButton)
         pickVotesButton = findViewById(R.id.pickVotesButton)
+        requestTrueRngPermissionButton = findViewById(R.id.requestTrueRngPermissionButton)
         encryptButton = findViewById(R.id.encryptButton)
         exportButton = findViewById(R.id.exportButton)
         rngModeSpinner = findViewById(R.id.rngModeSpinner)
 
-        val rngModes = listOf("Software RNG (-sw)")
         rngModeSpinner.adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_dropdown_item,
-            rngModes
+            rngOptions.map { it.label }
         )
-        rngModeSpinner.isEnabled = false
 
+        registerUsbPermissionReceiver()
         renderImportedFileStatus()
+        renderTrueRngStatus()
 
         runCheckButton.setOnClickListener {
             runCheckButton.isEnabled = false
@@ -118,6 +156,17 @@ class MainActivity : AppCompatActivity() {
             openVotesDocument.launch(arrayOf("text/plain", "*/*"))
         }
 
+        requestTrueRngPermissionButton.setOnClickListener {
+            val permissionRequest = trueRngSupport.requestPermission(
+                AndroidTrueRngSupport.buildPermissionIntent(this)
+            )
+            trueRngStatusText.text = buildString {
+                append(permissionRequest.message)
+                append("\n")
+                append(cipherRunner.describeTrueRngStatus())
+            }
+        }
+
         encryptButton.setOnClickListener {
             executeCipher()
         }
@@ -131,21 +180,30 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        unregisterUsbPermissionReceiver()
+    }
+
     private fun executeCipher() {
         if (!cipherRunner.currentPublicKeyFile().isFile || !cipherRunner.currentVotesFile().isFile) {
             cipherResultText.text = "Debes importar publicKey y votos antes de cifrar."
             return
         }
 
+        val selectedMode = rngOptions[rngModeSpinner.selectedItemPosition].mode
         setBusy(true)
-        cipherResultText.text = "Cifrando en Android..."
+        cipherResultText.text = when (selectedMode) {
+            CifradorRngMode.SOFTWARE -> "Cifrando en Android con SecureRandom..."
+            CifradorRngMode.HARDWARE -> "Cifrando en Android con TrueRNG USB..."
+        }
 
         Thread {
             var cipherResult: AndroidCipherRunner.CipherExecutionResult? = null
             var failure: Throwable? = null
 
             try {
-                cipherResult = cipherRunner.encryptSandboxInputs(CifradorRngMode.SOFTWARE)
+                cipherResult = cipherRunner.encryptSandboxInputs(selectedMode)
             } catch (e: Throwable) {
                 failure = e
             }
@@ -153,14 +211,14 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 when {
                     cipherResult != null -> {
-                        lastCipherOutputAvailable = cipherResult!!.success
-                        exportButton.isEnabled = cipherResult!!.success
-                        cipherResultText.text = cipherResult!!.message
+                        lastCipherOutputAvailable = cipherResult.success
+                        exportButton.isEnabled = cipherResult.success
+                        cipherResultText.text = cipherResult.message
                     }
                     failure != null -> {
                         lastCipherOutputAvailable = false
                         exportButton.isEnabled = false
-                        cipherResultText.text = "Error ejecutando cifrado:\n${failure!!.message ?: failure!!.javaClass.simpleName}"
+                        cipherResultText.text = "Error ejecutando cifrado:\n${failure.message ?: failure.javaClass.simpleName}"
                     }
                 }
                 setBusy(false)
@@ -206,6 +264,10 @@ class MainActivity : AppCompatActivity() {
         exportButton.isEnabled = false
     }
 
+    private fun renderTrueRngStatus() {
+        trueRngStatusText.text = cipherRunner.describeTrueRngStatus()
+    }
+
     private fun describeSandboxFile(file: File, missingMessage: String): String {
         if (!file.isFile) {
             return missingMessage
@@ -217,7 +279,35 @@ class MainActivity : AppCompatActivity() {
         runCheckButton.isEnabled = !busy
         pickPublicKeyButton.isEnabled = !busy
         pickVotesButton.isEnabled = !busy
+        requestTrueRngPermissionButton.isEnabled = !busy
+        rngModeSpinner.isEnabled = !busy
         encryptButton.isEnabled = !busy
         exportButton.isEnabled = !busy && lastCipherOutputAvailable
+    }
+
+    private fun registerUsbPermissionReceiver() {
+        val filter = IntentFilter(AndroidTrueRngSupport.ACTION_USB_PERMISSION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbPermissionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(usbPermissionReceiver, filter)
+        }
+    }
+
+    private fun unregisterUsbPermissionReceiver() {
+        try {
+            unregisterReceiver(usbPermissionReceiver)
+        } catch (_: IllegalArgumentException) {
+        }
+    }
+
+    private fun readUsbDeviceExtra(intent: Intent): UsbDevice? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+        }
     }
 }

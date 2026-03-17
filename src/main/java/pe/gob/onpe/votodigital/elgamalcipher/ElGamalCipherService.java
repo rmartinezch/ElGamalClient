@@ -24,6 +24,10 @@ public final class ElGamalCipherService {
     }
 
     public boolean encrypt(CifradorRequest request) {
+        return encrypt(request, null);
+    }
+
+    public boolean encrypt(CifradorRequest request, RandomSource hardwareRandomSourceOverride) {
         Objects.requireNonNull(request, "request");
 
         Path workingDirectory = new File("").toPath().toAbsolutePath().normalize();
@@ -36,7 +40,8 @@ public final class ElGamalCipherService {
 
         processCiphering(files,
                 request.rngMode().hardwareRequested(),
-                request.showProgressBar());
+                request.showProgressBar(),
+                hardwareRandomSourceOverride);
         return true;
     }
 
@@ -65,7 +70,10 @@ public final class ElGamalCipherService {
         return files;
     }
 
-    private void processCiphering(File[] files, boolean trueRNG, boolean showProgressBar) {
+    private void processCiphering(File[] files,
+                                  boolean trueRNG,
+                                  boolean showProgressBar,
+                                  RandomSource hardwareRandomSourceOverride) {
         ElGamalPublicKey publicKey = new ElGamalPublicKey(files[0].getAbsolutePath());
         if (!publicKey.isLoaded()) {
             return;
@@ -88,14 +96,20 @@ public final class ElGamalCipherService {
 
         logger.info(() -> "Codificación finalizada. Iniciando cifrado...");
 
-        encryptAndSave(files[2], encodedVectorVotes, publicKey, trueRNG, showProgressBar);
+        encryptAndSave(files[2],
+                encodedVectorVotes,
+                publicKey,
+                trueRNG,
+                showProgressBar,
+                hardwareRandomSourceOverride);
     }
 
     private void encryptAndSave(File outputFile,
                                 PGroupElement[] encodedVectorVotes,
                                 ElGamalPublicKey publicKey,
                                 boolean trueRNG,
-                                boolean showProgressBar) {
+                                boolean showProgressBar,
+                                RandomSource hardwareRandomSourceOverride) {
         ElGamalCipher cipher = new ElGamalCipher(publicKey);
         AtomicInteger progressCounter = new AtomicInteger(0);
         int totalVotes = encodedVectorVotes.length;
@@ -107,7 +121,13 @@ public final class ElGamalCipherService {
 
         ElGamalCipheredVote[] cipheredVotes;
         if (trueRNG) {
-            cipheredVotes = encryptWithHardware(cipher, encodedVectorVotes, progressCounter, showProgressBar);
+            cipheredVotes = encryptWithHardware(
+                    cipher,
+                    encodedVectorVotes,
+                    progressCounter,
+                    showProgressBar,
+                    hardwareRandomSourceOverride
+            );
         } else {
             cipheredVotes = encryptWithSoftware(cipher, encodedVectorVotes, progressCounter, showProgressBar);
         }
@@ -165,8 +185,11 @@ public final class ElGamalCipherService {
     private ElGamalCipheredVote[] encryptWithHardware(ElGamalCipher cipher,
                                                        PGroupElement[] votes,
                                                        AtomicInteger counter,
-                                                       boolean track) {
-        RandomSource hwRng = selectRandomSource(true);
+                                                       boolean track,
+                                                       RandomSource hardwareRandomSourceOverride) {
+        RandomSource hwRng = hardwareRandomSourceOverride != null
+                ? hardwareRandomSourceOverride
+                : selectRandomSource(true);
         return Arrays.stream(votes)
                 .map(vote -> {
                     ElGamalCipheredVote v = cipher.encryptVote(vote, hwRng);

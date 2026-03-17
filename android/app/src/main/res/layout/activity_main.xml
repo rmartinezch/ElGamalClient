@@ -22,7 +22,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="UI basica para validar JNI, cargar archivos, cifrar y exportar ciphertexts_ext. Android usa SecureRandom; TrueRNG USB no esta integrado en esta app."
+            android:text="UI basica para validar JNI, cargar archivos, cifrar y exportar ciphertexts_ext. Android soporta SecureRandom y TrueRNG USB por OTG."
             android:textAppearance="@style/TextAppearance.AppCompat.Body1" />
 
         <Button
@@ -93,6 +93,21 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp" />
+
+        <Button
+            android:id="@+id/requestTrueRngPermissionButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Solicitar permiso TrueRNG" />
+
+        <TextView
+            android:id="@+id/trueRngStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="TrueRNG no evaluado."
+            android:textAppearance="@style/TextAppearance.AppCompat.Body2" />
 
         <Button
             android:id="@+id/encryptButton"

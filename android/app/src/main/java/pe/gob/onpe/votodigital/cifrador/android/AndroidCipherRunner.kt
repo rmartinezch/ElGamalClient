@@ -3,6 +3,7 @@ package pe.gob.onpe.votodigital.cifrador.android
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.verificatum.crypto.RandomSource
 import pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest
 import pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode
 import pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService
@@ -12,6 +13,8 @@ import java.io.IOException
 import java.util.logging.Level
 
 class AndroidCipherRunner(private val context: Context) {
+
+    private val trueRngSupport = AndroidTrueRngSupport(context)
 
     data class CipherExecutionResult(
         val success: Boolean,
@@ -76,7 +79,11 @@ class AndroidCipherRunner(private val context: Context) {
             false
         )
 
-        val success = ElGamalCipherService(logger).encrypt(request)
+        val success = if (rngMode == CifradorRngMode.HARDWARE) {
+            encryptWithAndroidHardware(request, logger)
+        } else {
+            ElGamalCipherService(logger).encrypt(request)
+        }
         val byteCount = if (ciphertextsFile.isFile) ciphertextsFile.length() else 0L
         val lineCount = if (ciphertextsFile.isFile) {
             ciphertextsFile.useLines { lines -> lines.count() }
@@ -109,6 +116,28 @@ class AndroidCipherRunner(private val context: Context) {
             lineCount = lineCount,
             message = message
         )
+    }
+
+    fun describeTrueRngStatus(): String {
+        return trueRngSupport.scanStatus().message
+    }
+
+    private fun encryptWithAndroidHardware(
+        request: CifradorRequest,
+        logger: java.util.logging.Logger
+    ): Boolean {
+        var hardwareSource: RandomSource? = null
+        try {
+            hardwareSource = trueRngSupport.openRandomSource(logger)
+            return ElGamalCipherService(logger).encrypt(request, hardwareSource)
+        } finally {
+            if (hardwareSource is AutoCloseable) {
+                try {
+                    hardwareSource.close()
+                } catch (_: Throwable) {
+                }
+            }
+        }
     }
 
     fun importPublicKey(sourceUri: Uri): ImportedInput {
