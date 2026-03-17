@@ -3,8 +3,8 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ANDROID_DIR="$PROJECT_ROOT/android"
-DEFAULT_SDK_ROOT="$HOME/Android/Sdk"
-ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$DEFAULT_SDK_ROOT}"
+source "$PROJECT_ROOT/scripts/android/lib-android-env.sh"
+ANDROID_SDK_ROOT="$(resolve_android_sdk_root "$PROJECT_ROOT")"
 NDK_VERSION="27.2.12479018"
 
 echo "[android-doctor] Proyecto: $ANDROID_DIR"
@@ -32,11 +32,12 @@ else
   echo "[android-doctor] WARN: falta android/local.properties (usar local.properties.example)."
 fi
 
-if command -v adb >/dev/null 2>&1; then
-  echo "[android-doctor] adb disponible: $(command -v adb)"
-  adb version | head -n 1
+ADB_BIN="$(resolve_adb_bin "$PROJECT_ROOT")"
+if command -v "$ADB_BIN" >/dev/null 2>&1; then
+  echo "[android-doctor] adb disponible: $ADB_BIN"
+  "$ADB_BIN" version | head -n 1
 else
-  echo "[android-doctor] WARN: adb no está en PATH."
+  echo "[android-doctor] WARN: adb no esta disponible ni en PATH ni en ANDROID_SDK_ROOT."
 fi
 
 if [[ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]]; then

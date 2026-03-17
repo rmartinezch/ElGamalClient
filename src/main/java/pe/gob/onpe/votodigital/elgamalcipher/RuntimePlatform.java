@@ -1,5 +1,6 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,7 +20,7 @@ public final class RuntimePlatform {
         OTHER
     }
 
-    private static final Path OS_RELEASE_PATH = Path.of("/etc/os-release");
+    private static final Path OS_RELEASE_PATH = new File("/etc/os-release").toPath();
 
     private final String osName;
     private final String architecture;

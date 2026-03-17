@@ -26,7 +26,7 @@ public final class ElGamalCipherService {
     public boolean encrypt(CifradorRequest request) {
         Objects.requireNonNull(request, "request");
 
-        Path workingDirectory = Path.of("").toAbsolutePath().normalize();
+        Path workingDirectory = new File("").toPath().toAbsolutePath().normalize();
         logger.info(() -> String.format("Directorio actual: %s", workingDirectory));
 
         File[] files = validateFiles(request);

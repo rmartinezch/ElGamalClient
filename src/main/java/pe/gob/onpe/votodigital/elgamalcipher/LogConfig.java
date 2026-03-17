@@ -71,7 +71,7 @@ public class LogConfig {
         if (logFilePath == null || logFilePath.isBlank()) {
             logFilePath = DEFAULT_LOG_DIR + File.separator + DEFAULT_LOG_FILE;
         }
-        return Path.of(logFilePath).toAbsolutePath();
+        return new File(logFilePath).toPath().toAbsolutePath();
     }
 
     private static FileHandler createFileHandlerWithFallback(Path target) {
@@ -90,7 +90,7 @@ public class LogConfig {
     }
 
     private static FileHandler createFallbackHandler(int maxFileSize, int maxBackupFiles, Path failedTarget) {
-        Path fallbackDir = Path.of(DEFAULT_LOG_DIR).toAbsolutePath();
+        Path fallbackDir = new File(DEFAULT_LOG_DIR).toPath().toAbsolutePath();
         Path fallbackFile = fallbackDir.resolve(DEFAULT_LOG_FILE);
 
         try {
@@ -99,7 +99,7 @@ public class LogConfig {
             internalLogger.log(Level.WARNING, "[LOG CONFIG] Usando ruta alternativa: {0}", fallbackFile);
             return new FileHandler(fallbackFile.toString(), maxFileSize, maxBackupFiles, true);
         } catch (IOException ex) {
-            Path tmpLog = Path.of(System.getProperty("java.io.tmpdir"), DEFAULT_LOG_FILE);
+            Path tmpLog = new File(System.getProperty("java.io.tmpdir"), DEFAULT_LOG_FILE).toPath();
             try {
                 internalLogger.warning("[LOG CONFIG] Error creando log en ruta por defecto.");
                 internalLogger.warning("[LOG CONFIG] Usando ruta temporal: " + tmpLog);

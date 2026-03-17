@@ -1,5 +1,6 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -35,9 +36,9 @@ public class ElGamalMain {
 
         boolean showProgressBar = (args.length == 5 && "-p".equals(args[4]));
         CifradorRequest request = new CifradorRequest(
-                Path.of(args[0]),
-                Path.of(args[1]),
-                Path.of(args[2]),
+                new File(args[0]).toPath(),
+                new File(args[1]).toPath(),
+                new File(args[2]).toPath(),
                 rngMode,
                 showProgressBar
         );

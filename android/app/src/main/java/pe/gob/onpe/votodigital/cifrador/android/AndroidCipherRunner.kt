@@ -2,6 +2,7 @@ package pe.gob.onpe.votodigital.cifrador.android
 
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest
 import pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode
 import pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService
@@ -153,6 +154,7 @@ class AndroidCipherRunner(private val context: Context) {
         val inputDir = File(context.filesDir, INPUT_DIR_NAME)
         val targetFile = File(inputDir, targetName)
         inputDir.mkdirs()
+        val sourceDescription = describeSourceUri(sourceUri)
 
         context.contentResolver.openInputStream(sourceUri)?.use { input ->
             targetFile.outputStream().use { output ->
@@ -163,8 +165,28 @@ class AndroidCipherRunner(private val context: Context) {
         return ImportedInput(
             targetFile = targetFile,
             byteCount = targetFile.length(),
-            message = "$label importado en ${targetFile.absolutePath}"
+            message = "$label importado desde $sourceDescription\ncopiado a ${targetFile.absolutePath}"
         )
+    }
+
+    private fun describeSourceUri(sourceUri: Uri): String {
+        context.contentResolver.query(
+            sourceUri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex >= 0 && cursor.moveToFirst()) {
+                val displayName = cursor.getString(nameIndex)
+                if (!displayName.isNullOrBlank()) {
+                    return "$displayName ($sourceUri)"
+                }
+            }
+        }
+
+        return sourceUri.toString()
     }
 
     companion object {

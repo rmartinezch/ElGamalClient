@@ -2,8 +2,8 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DEFAULT_SDK_ROOT="$HOME/Android/Sdk"
-ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$DEFAULT_SDK_ROOT}"
+source "$PROJECT_ROOT/scripts/android/lib-android-env.sh"
+ANDROID_SDK_ROOT="$(resolve_android_sdk_root "$PROJECT_ROOT")"
 AVD_NAME="${ANDROID_AVD_NAME:-CifradorApi34}"
 EMULATOR_PORT="${ANDROID_EMULATOR_PORT:-5556}"
 EMULATOR_SERIAL="emulator-$EMULATOR_PORT"
@@ -16,7 +16,7 @@ ACCEL_MODE="${ANDROID_EMULATOR_ACCEL:-auto}"
 
 mkdir -p "$LOG_DIR"
 EMULATOR_BIN="$ANDROID_SDK_ROOT/emulator/emulator"
-ADB_BIN="${ADB:-adb}"
+ADB_BIN="$(resolve_adb_bin "$PROJECT_ROOT")"
 
 if [[ ! -x "$EMULATOR_BIN" ]]; then
   echo "[start-emulator] ERROR: falta emulator en $EMULATOR_BIN" >&2

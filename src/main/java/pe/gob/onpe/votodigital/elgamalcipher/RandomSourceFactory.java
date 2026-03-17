@@ -2,6 +2,7 @@ package pe.gob.onpe.votodigital.elgamalcipher;
 
 import com.verificatum.crypto.RandomDevice;
 import com.verificatum.crypto.RandomSource;
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -159,7 +160,7 @@ public final class RandomSourceFactory {
             configuredPath = DEFAULT_UBUNTU_HARDWARE_DEVICE;
         }
 
-        Path candidate = Path.of(configuredPath).toAbsolutePath().normalize();
+        Path candidate = new File(configuredPath).toPath().toAbsolutePath().normalize();
         if (!Files.exists(candidate)) {
             logger.warning(() -> String.format("El dispositivo TrueRNG configurado no existe: %s", candidate));
             return Optional.empty();

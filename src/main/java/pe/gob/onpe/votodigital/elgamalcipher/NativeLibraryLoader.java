@@ -1,5 +1,6 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
@@ -62,7 +63,7 @@ public final class NativeLibraryLoader {
                                                 Path librariesDir,
                                                 Path runtimeArtifact) {
         List<String> command = new ArrayList<>();
-        command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        command.add(new File(new File(System.getProperty("java.home"), "bin"), "java").toPath().toString());
         command.add("-D" + REEXEC_PROPERTY + "=true");
         command.add("-Djava.library.path=" + buildLibraryPath(librariesDir));
         command.add("-jar");
@@ -87,7 +88,7 @@ public final class NativeLibraryLoader {
         String currentPath = System.getProperty("java.library.path", "");
         String normalizedDir = librariesDir.toAbsolutePath().normalize().toString();
         for (String pathEntry : currentPath.split(java.io.File.pathSeparator)) {
-            if (normalizedDir.equals(Path.of(pathEntry).toAbsolutePath().normalize().toString())) {
+            if (normalizedDir.equals(new File(pathEntry).toPath().toAbsolutePath().normalize().toString())) {
                 return true;
             }
         }
@@ -133,8 +134,8 @@ public final class NativeLibraryLoader {
 
     private static List<Path> getCandidateDirectories(RuntimePlatform platform) {
         Set<Path> directories = new LinkedHashSet<>();
-        directories.add(Path.of("libs", platform.classifier()).toAbsolutePath().normalize());
-        directories.add(Path.of("libs").toAbsolutePath().normalize());
+        directories.add(new File(new File("libs"), platform.classifier()).toPath().toAbsolutePath().normalize());
+        directories.add(new File("libs").toPath().toAbsolutePath().normalize());
 
         Path codeSourceDir = getCodeSourceDirectory();
         if (codeSourceDir != null) {
@@ -164,7 +165,7 @@ public final class NativeLibraryLoader {
             if (codeSource == null || codeSource.getLocation() == null) {
                 return null;
             }
-            return Path.of(codeSource.getLocation().toURI()).toAbsolutePath().normalize();
+            return new File(codeSource.getLocation().toURI()).toPath().toAbsolutePath().normalize();
         } catch (URISyntaxException | IllegalArgumentException e) {
             return null;
         }
