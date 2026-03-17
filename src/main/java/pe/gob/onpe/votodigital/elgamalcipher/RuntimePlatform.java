@@ -20,7 +20,11 @@ public final class RuntimePlatform {
         OTHER
     }
 
-    private static final Path OS_RELEASE_PATH = new File("/etc/os-release").toPath();
+    private static final String ANDROID_TOKEN = "android";
+    private static final String UBUNTU_TOKEN = "ubuntu";
+    private static final Path OS_RELEASE_PATH = new File(
+            System.getProperty("elgamal.osReleasePath", "/etc/os-release")
+    ).toPath();
 
     private final String osName;
     private final String architecture;
@@ -103,7 +107,7 @@ public final class RuntimePlatform {
             case WINDOWS -> "windows";
             case UBUNTU, LINUX -> "linux";
             case MACOS -> "macos";
-            case ANDROID -> "android";
+            case ANDROID -> ANDROID_TOKEN;
             case OTHER -> sanitizeToken(rawOs);
         };
     }
@@ -121,7 +125,7 @@ public final class RuntimePlatform {
         if (rawOs.contains("nux") || rawOs.contains("linux")) {
             return detectLinuxFamily();
         }
-        if (rawOs.contains("android")) {
+        if (rawOs.contains(ANDROID_TOKEN)) {
             return OperatingSystem.ANDROID;
         }
         return OperatingSystem.OTHER;
@@ -129,10 +133,10 @@ public final class RuntimePlatform {
 
     private static OperatingSystem detectLinuxFamily() {
         String linuxId = readLinuxDistributionId();
-        if ("ubuntu".equals(linuxId)) {
+        if (UBUNTU_TOKEN.equals(linuxId)) {
             return OperatingSystem.UBUNTU;
         }
-        if ("android".equals(linuxId)) {
+        if (ANDROID_TOKEN.equals(linuxId)) {
             return OperatingSystem.ANDROID;
         }
         return OperatingSystem.LINUX;
@@ -143,8 +147,8 @@ public final class RuntimePlatform {
         String javaVendor = System.getProperty("java.vendor", "").toLowerCase(Locale.ROOT);
         String runtimeName = System.getProperty("java.runtime.name", "").toLowerCase(Locale.ROOT);
         return vmName.contains("dalvik")
-                || javaVendor.contains("android")
-                || runtimeName.contains("android");
+                || javaVendor.contains(ANDROID_TOKEN)
+                || runtimeName.contains(ANDROID_TOKEN);
     }
 
     private static String readLinuxDistributionId() {
@@ -155,36 +159,47 @@ public final class RuntimePlatform {
             String id = "";
             String idLike = "";
             for (String line : Files.readAllLines(OS_RELEASE_PATH)) {
-                String trimmed = line.trim();
-                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-                    continue;
-                }
-                int separator = trimmed.indexOf('=');
-                if (separator < 1) {
-                    continue;
-                }
-                String key = trimmed.substring(0, separator);
-                String value = stripQuotes(trimmed.substring(separator + 1))
-                        .toLowerCase(Locale.ROOT);
-                if ("ID".equals(key)) {
-                    id = value;
-                } else if ("ID_LIKE".equals(key)) {
-                    idLike = value;
+                String[] entry = parseOsReleaseLine(line);
+                if (entry.length == 2) {
+                    if ("ID".equals(entry[0])) {
+                        id = entry[1];
+                    } else if ("ID_LIKE".equals(entry[0])) {
+                        idLike = entry[1];
+                    }
                 }
             }
-            if ("ubuntu".equals(id)) {
-                return "ubuntu";
-            }
-            if ("android".equals(id)) {
-                return "android";
-            }
-            if (idLike.contains("ubuntu")) {
-                return "ubuntu";
-            }
-            return id;
+            return resolveLinuxDistributionId(id, idLike);
         } catch (IOException e) {
             return "";
         }
+    }
+
+    private static String[] parseOsReleaseLine(String line) {
+        String trimmed = line.trim();
+        if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+            return new String[0];
+        }
+        int separator = trimmed.indexOf('=');
+        if (separator < 1) {
+            return new String[0];
+        }
+        String key = trimmed.substring(0, separator);
+        String value = stripQuotes(trimmed.substring(separator + 1))
+                .toLowerCase(Locale.ROOT);
+        return new String[]{key, value};
+    }
+
+    private static String resolveLinuxDistributionId(String id, String idLike) {
+        if (UBUNTU_TOKEN.equals(id)) {
+            return UBUNTU_TOKEN;
+        }
+        if (ANDROID_TOKEN.equals(id)) {
+            return ANDROID_TOKEN;
+        }
+        if (idLike.contains(UBUNTU_TOKEN)) {
+            return UBUNTU_TOKEN;
+        }
+        return id;
     }
 
     private static String stripQuotes(String rawValue) {

@@ -1,6 +1,5 @@
 package pe.gob.onpe.votodigital.cifrador.android
 
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -10,6 +9,7 @@ import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.Spinner
@@ -298,7 +298,8 @@ class MainActivity : AppCompatActivity() {
     private fun unregisterUsbPermissionReceiver() {
         try {
             unregisterReceiver(usbPermissionReceiver)
-        } catch (_: IllegalArgumentException) {
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "El receiver USB ya estaba desregistrado.", e)
         }
     }
 
@@ -309,5 +310,9 @@ class MainActivity : AppCompatActivity() {
             @Suppress("DEPRECATION")
             intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
         }
+    }
+
+    companion object {
+        private const val TAG = "CifradorMainActivity"
     }
 }

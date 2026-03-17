@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.Spinner
@@ -178,7 +179,8 @@ class MainActivity : AppCompatActivity() {
     private fun unregisterReceiverSafe() {
         try {
             unregisterReceiver(usbPermissionReceiver)
-        } catch (_: IllegalArgumentException) {
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "El receiver USB ya estaba desregistrado.", e)
         }
     }
 
@@ -217,6 +219,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val ACTION_USB_PERMISSION = "pe.gob.onpe.votodigital.truerngdiag.USB_PERMISSION"
+        private const val TAG = "TrueRngDiagActivity"
     }
 
     data class StabilityOption(

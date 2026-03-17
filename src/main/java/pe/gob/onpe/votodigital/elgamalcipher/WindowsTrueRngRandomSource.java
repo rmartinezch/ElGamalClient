@@ -38,7 +38,7 @@ public final class WindowsTrueRngRandomSource extends RandomSource {
     public static Optional<RandomSource> tryCreate(Logger logger) {
         String configuredPort = resolveConfiguredPortName();
         if (configuredPort != null) {
-            return openConfiguredPort(configuredPort, logger).map(source -> (RandomSource) source);
+            return openConfiguredPort(configuredPort, logger).map(RandomSource.class::cast);
         }
 
         for (SerialPort candidate : SerialPort.getCommPorts()) {
@@ -48,7 +48,7 @@ public final class WindowsTrueRngRandomSource extends RandomSource {
 
             Optional<WindowsTrueRngRandomSource> source = openPort(candidate, logger);
             if (source.isPresent()) {
-                return source.map(value -> (RandomSource) value);
+                return source.map(RandomSource.class::cast);
             }
         }
 
@@ -98,12 +98,18 @@ public final class WindowsTrueRngRandomSource extends RandomSource {
         }
 
         String normalized = trimmed.replace("/", "\\");
-        if (normalized.startsWith("\\\\.\\")) {
-            normalized = normalized.substring(4);
-        } else if (normalized.startsWith("\\\\?\\")) {
-            normalized = normalized.substring(4);
-        }
+        normalized = stripWindowsPortPrefix(normalized);
         return normalized.trim();
+    }
+
+    private static String stripWindowsPortPrefix(String normalized) {
+        if (normalized.startsWith("\\\\.\\")) {
+            return normalized.substring(4);
+        }
+        if (normalized.startsWith("\\\\?\\")) {
+            return normalized.substring(4);
+        }
+        return normalized;
     }
 
     static boolean looksLikeTrueRng(SerialPort port) {
@@ -167,11 +173,7 @@ public final class WindowsTrueRngRandomSource extends RandomSource {
                     buildDescription(port)));
             return Optional.of(source);
         } catch (Exception e) {
-            try {
-                port.closePort();
-            } catch (Exception ignored) {
-                // Ignorado para preservar el error original.
-            }
+            closePortQuietly(port);
             logger.warning(() -> String.format("Windows -hw: no se pudo inicializar el puerto %s: %s",
                     portName,
                     e.getMessage()));
@@ -210,12 +212,16 @@ public final class WindowsTrueRngRandomSource extends RandomSource {
                 inputStream = null;
             }
             if (serialPort.isOpen()) {
-                try {
-                    serialPort.closePort();
-                } catch (Exception ignored) {
-                    // Ignorado para cierre de proceso.
-                }
+                closePortQuietly(serialPort);
             }
+        }
+    }
+
+    private static void closePortQuietly(SerialPort port) {
+        try {
+            port.closePort();
+        } catch (Exception ignored) {
+            // Ignorado para preservar el error original o durante el cierre.
         }
     }
 }

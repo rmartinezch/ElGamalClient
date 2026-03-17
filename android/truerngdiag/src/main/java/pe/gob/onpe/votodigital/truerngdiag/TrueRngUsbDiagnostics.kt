@@ -2,7 +2,9 @@ package pe.gob.onpe.votodigital.truerngdiag
 
 import android.content.Context
 import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbManager
+import android.util.Log
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
@@ -12,6 +14,31 @@ import java.security.MessageDigest
 import kotlin.math.min
 
 class TrueRngUsbDiagnostics(context: Context) {
+
+    private data class OpenPortContext(
+        val driver: UsbSerialDriver,
+        val device: UsbDevice,
+        val connection: UsbDeviceConnection,
+        val port: UsbSerialPort
+    )
+
+    private data class StabilityMetrics(
+        val buckets: LongArray,
+        val digest: MessageDigest,
+        val firstPreview: ByteArrayOutputStream,
+        var totalBytes: Long = 0L,
+        var readOps: Int = 0,
+        var nonZeroReads: Int = 0,
+        var zeroReads: Int = 0,
+        var longestZeroReadRun: Int = 0,
+        var currentZeroReadRun: Int = 0
+    )
+
+    private data class StabilityProbeExecution(
+        val metrics: StabilityMetrics,
+        val elapsedMs: Long,
+        val failure: Throwable?
+    )
 
     data class ScanResult(
         val report: String,
@@ -93,34 +120,16 @@ class TrueRngUsbDiagnostics(context: Context) {
     }
 
     fun readSample(sampleSize: Int = 4096, timeoutMs: Int = 1000, totalWindowMs: Long = 5000L): ReadResult {
-        val driver = firstSupportedDriver()
+        val portContext = openSupportedPort("lectura")
             ?: return ReadResult(
                 report = "No hay driver serial compatible para lectura.",
                 bytesRead = 0,
                 success = false
             )
-        val device = driver.device
-        if (!usbManager.hasPermission(device)) {
-            return ReadResult(
-                report = "Falta permiso USB para ${formatDeviceHeader(device)}.",
-                bytesRead = 0,
-                success = false
-            )
-        }
-
-        val connection = usbManager.openDevice(device)
-            ?: return ReadResult(
-                report = "Android no pudo abrir el dispositivo ${formatDeviceHeader(device)}.",
-                bytesRead = 0,
-                success = false
-            )
-
-        val port = driver.ports.firstOrNull()
-            ?: return ReadResult(
-                report = "El driver serial no expone puertos para ${formatDeviceHeader(device)}.",
-                bytesRead = 0,
-                success = false
-            )
+        val driver = portContext.driver
+        val device = portContext.device
+        val connection = portContext.connection
+        val port = portContext.port
 
         val startedAt = System.nanoTime()
         val output = ByteArrayOutputStream(sampleSize)
@@ -184,14 +193,7 @@ class TrueRngUsbDiagnostics(context: Context) {
                 success = false
             )
         } finally {
-            try {
-                port.close()
-            } catch (_: Throwable) {
-            }
-            try {
-                connection.close()
-            } catch (_: Throwable) {
-            }
+            closePortContext(port, connection)
         }
     }
 
@@ -200,129 +202,50 @@ class TrueRngUsbDiagnostics(context: Context) {
         timeoutMs: Int = 250,
         chunkSize: Int = 512
     ): StabilityResult {
-        val driver = firstSupportedDriver()
+        val portContext = openSupportedPort("prueba de estabilidad")
             ?: return StabilityResult(
                 report = "No hay driver serial compatible para la prueba de estabilidad.",
                 totalBytes = 0,
                 success = false
             )
-        val device = driver.device
-        if (!usbManager.hasPermission(device)) {
-            return StabilityResult(
-                report = "Falta permiso USB para ${formatDeviceHeader(device)}.",
-                totalBytes = 0,
-                success = false
-            )
-        }
-
-        val connection = usbManager.openDevice(device)
-            ?: return StabilityResult(
-                report = "Android no pudo abrir el dispositivo ${formatDeviceHeader(device)}.",
-                totalBytes = 0,
-                success = false
-            )
-
-        val port = driver.ports.firstOrNull()
-            ?: return StabilityResult(
-                report = "El driver serial no expone puertos para ${formatDeviceHeader(device)}.",
-                totalBytes = 0,
-                success = false
-            )
-
-        val buckets = LongArray(durationSeconds.coerceAtLeast(1))
-        val digest = MessageDigest.getInstance("SHA-256")
-        val firstPreview = ByteArrayOutputStream(64)
-        var setupNotes = "sin_notas"
-        var totalBytes = 0L
-        var readOps = 0
-        var nonZeroReads = 0
-        var zeroReads = 0
-        var longestZeroReadRun = 0
-        var currentZeroReadRun = 0
-        var failure: Throwable? = null
-        val scratch = ByteArray(chunkSize.coerceAtLeast(64))
-        val startedAt = System.nanoTime()
-
-        try {
-            port.open(connection)
-            setupNotes = configurePort(port)
-            val deadlineMs = durationSeconds.coerceAtLeast(1) * 1000L
-            while (true) {
-                val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000L
-                if (elapsedMs >= deadlineMs) {
-                    break
-                }
-                val bucketIndex = (elapsedMs / 1000L).toInt().coerceIn(0, buckets.lastIndex)
-                val readCount = try {
-                    port.read(scratch, timeoutMs)
-                } catch (_: SerialTimeoutException) {
-                    0
-                }
-                readOps += 1
-                if (readCount > 0) {
-                    nonZeroReads += 1
-                    currentZeroReadRun = 0
-                    totalBytes += readCount
-                    buckets[bucketIndex] += readCount.toLong()
-                    digest.update(scratch, 0, readCount)
-                    if (firstPreview.size() < 64) {
-                        val remaining = 64 - firstPreview.size()
-                        firstPreview.write(scratch, 0, min(remaining, readCount))
-                    }
-                } else {
-                    zeroReads += 1
-                    currentZeroReadRun += 1
-                    if (currentZeroReadRun > longestZeroReadRun) {
-                        longestZeroReadRun = currentZeroReadRun
-                    }
-                }
-            }
-        } catch (t: Throwable) {
-            failure = t
-        } finally {
-            try {
-                port.close()
-            } catch (_: Throwable) {
-            }
-            try {
-                connection.close()
-            } catch (_: Throwable) {
-            }
-        }
-
-        val elapsedMs = ((System.nanoTime() - startedAt) / 1_000_000L).coerceAtLeast(1L)
-        val activeSeconds = buckets.count { it > 0L }
-        val zeroByteSeconds = buckets.size - activeSeconds
-        val longestZeroByteRun = longestZeroByteRun(buckets)
-        val minNonZeroSecond = buckets.filter { it > 0L }.minOrNull() ?: 0L
-        val maxSecond = buckets.maxOrNull() ?: 0L
-        val success = failure == null && totalBytes > 0L
+        val execution = executeStabilityProbe(portContext, durationSeconds, timeoutMs, chunkSize)
+        val metrics = execution.metrics
+        val activeSeconds = metrics.buckets.count { it > 0L }
+        val zeroByteSeconds = metrics.buckets.size - activeSeconds
+        val longestZeroByteRun = longestZeroByteRun(metrics.buckets)
+        val minNonZeroSecond = metrics.buckets.filter { it > 0L }.minOrNull() ?: 0L
+        val maxSecond = metrics.buckets.maxOrNull() ?: 0L
+        val success = execution.failure == null && metrics.totalBytes > 0L
 
         val report = buildString {
             appendLine("Prueba de estabilidad USB serial")
-            appendLine("device=${formatDeviceHeader(device)}")
-            appendLine("driver=${driver.javaClass.simpleName}")
-            appendLine("port=${port.javaClass.simpleName}")
-            appendLine("setup=$setupNotes")
+            appendLine("device=${formatDeviceHeader(portContext.device)}")
+            appendLine("driver=${portContext.driver.javaClass.simpleName}")
+            appendLine("port=${portContext.port.javaClass.simpleName}")
+            appendLine("setup=${configurePortDescription(portContext.port)}")
             appendLine("duration_seconds=${durationSeconds.coerceAtLeast(1)}")
-            appendLine("elapsed_ms=$elapsedMs")
-            appendLine("total_bytes=$totalBytes")
-            appendLine("average_bps=${totalBytes * 1000L / elapsedMs}")
-            appendLine("read_ops=$readOps")
-            appendLine("non_zero_reads=$nonZeroReads")
-            appendLine("zero_reads=$zeroReads")
-            appendLine("longest_zero_read_run=$longestZeroReadRun")
+            appendLine("elapsed_ms=${execution.elapsedMs}")
+            appendLine("total_bytes=${metrics.totalBytes}")
+            appendLine("average_bps=${metrics.totalBytes * 1000L / execution.elapsedMs}")
+            appendLine("read_ops=${metrics.readOps}")
+            appendLine("non_zero_reads=${metrics.nonZeroReads}")
+            appendLine("zero_reads=${metrics.zeroReads}")
+            appendLine("longest_zero_read_run=${metrics.longestZeroReadRun}")
             appendLine("active_seconds=$activeSeconds")
             appendLine("zero_byte_seconds=$zeroByteSeconds")
             appendLine("longest_zero_byte_run=$longestZeroByteRun")
             appendLine("min_non_zero_second_bytes=$minNonZeroSecond")
             appendLine("max_second_bytes=$maxSecond")
-            appendLine("first_preview_hex=${firstPreview.toByteArray().joinToString(separator = "") { "%02x".format(it) }}")
-            appendLine("sha256=${digest.digest().joinToString(separator = "") { "%02x".format(it) }}")
-            appendLine("bytes_per_second=${buckets.joinToString(separator = ",")}")
-            if (failure == null) {
+            appendLine(
+                "first_preview_hex=${
+                    metrics.firstPreview.toByteArray().joinToString(separator = "") { "%02x".format(it) }
+                }"
+            )
+            appendLine("sha256=${metrics.digest.digest().joinToString(separator = "") { "%02x".format(it) }}")
+            appendLine("bytes_per_second=${metrics.buckets.joinToString(separator = ",")}")
+            if (execution.failure == null) {
                 appendLine(
-                    if (totalBytes > 0L) {
+                    if (metrics.totalBytes > 0L) {
                         "Resultado: lectura sostenida completada sin errores fatales."
                     } else {
                         "Resultado: la prueba termino sin excepcion, pero no se recibieron bytes."
@@ -330,13 +253,16 @@ class TrueRngUsbDiagnostics(context: Context) {
                 )
             } else {
                 appendLine("Resultado: fallo durante la lectura sostenida.")
-                appendLine("error=${failure.javaClass.simpleName}: ${failure.message ?: "sin_detalle"}")
+                appendLine(
+                    "error=${execution.failure.javaClass.simpleName}: "
+                            + "${execution.failure.message ?: "sin_detalle"}"
+                )
             }
         }.trimEnd()
 
         return StabilityResult(
             report = report,
-            totalBytes = totalBytes,
+            totalBytes = metrics.totalBytes,
             success = success
         )
     }
@@ -344,6 +270,117 @@ class TrueRngUsbDiagnostics(context: Context) {
     private fun firstSupportedDriver(): UsbSerialDriver? {
         return prober.findAllDrivers(usbManager).sortedBy { it.device.deviceName }.firstOrNull()
     }
+
+    private fun openSupportedPort(operation: String): OpenPortContext? {
+        val driver = firstSupportedDriver() ?: return null
+        val device = driver.device
+        check(usbManager.hasPermission(device)) {
+            "Falta permiso USB para ${formatDeviceHeader(device)}."
+        }
+        val connection = usbManager.openDevice(device)
+            ?: throw IllegalStateException(
+                "Android no pudo abrir el dispositivo ${formatDeviceHeader(device)} para $operation."
+            )
+        val port = driver.ports.firstOrNull()
+            ?: throw IllegalStateException(
+                "El driver serial no expone puertos para ${formatDeviceHeader(device)}."
+            )
+        return OpenPortContext(driver, device, connection, port)
+    }
+
+    private fun executeStabilityProbe(
+        portContext: OpenPortContext,
+        durationSeconds: Int,
+        timeoutMs: Int,
+        chunkSize: Int
+    ): StabilityProbeExecution {
+        val metrics = StabilityMetrics(
+            buckets = LongArray(durationSeconds.coerceAtLeast(1)),
+            digest = MessageDigest.getInstance("SHA-256"),
+            firstPreview = ByteArrayOutputStream(64)
+        )
+        val scratch = ByteArray(chunkSize.coerceAtLeast(64))
+        val startedAt = System.nanoTime()
+        val deadlineMs = durationSeconds.coerceAtLeast(1) * 1000L
+        var failure: Throwable? = null
+
+        try {
+            portContext.port.open(portContext.connection)
+            configurePort(portContext.port)
+            while (true) {
+                val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000L
+                if (elapsedMs >= deadlineMs) {
+                    break
+                }
+                val bucketIndex = (elapsedMs / 1000L).toInt().coerceIn(0, metrics.buckets.lastIndex)
+                val readCount = readSerialChunk(portContext.port, scratch, timeoutMs)
+                updateStabilityMetrics(metrics, scratch, readCount, bucketIndex)
+            }
+        } catch (t: Throwable) {
+            failure = t
+        } finally {
+            closePortContext(portContext.port, portContext.connection)
+        }
+
+        val elapsedMs = ((System.nanoTime() - startedAt) / 1_000_000L).coerceAtLeast(1L)
+        return StabilityProbeExecution(metrics, elapsedMs, failure)
+    }
+
+    private fun updateStabilityMetrics(
+        metrics: StabilityMetrics,
+        scratch: ByteArray,
+        readCount: Int,
+        bucketIndex: Int
+    ) {
+        metrics.readOps += 1
+        if (readCount > 0) {
+            metrics.nonZeroReads += 1
+            metrics.currentZeroReadRun = 0
+            metrics.totalBytes += readCount
+            metrics.buckets[bucketIndex] += readCount.toLong()
+            metrics.digest.update(scratch, 0, readCount)
+            if (metrics.firstPreview.size() < 64) {
+                val remaining = 64 - metrics.firstPreview.size()
+                metrics.firstPreview.write(scratch, 0, min(remaining, readCount))
+            }
+            return
+        }
+
+        metrics.zeroReads += 1
+        metrics.currentZeroReadRun += 1
+        if (metrics.currentZeroReadRun > metrics.longestZeroReadRun) {
+            metrics.longestZeroReadRun = metrics.currentZeroReadRun
+        }
+    }
+
+    private fun readSerialChunk(port: UsbSerialPort, scratch: ByteArray, timeoutMs: Int): Int {
+        return try {
+            port.read(scratch, timeoutMs)
+        } catch (_: SerialTimeoutException) {
+            0
+        }
+    }
+
+    private fun closePortContext(port: UsbSerialPort, connection: UsbDeviceConnection) {
+        try {
+            port.close()
+        } catch (t: Throwable) {
+            Log.w(TAG, "No se pudo cerrar el puerto USB serial; se intentará limpiar buffers.", t)
+            runCatching { port.purgeHwBuffers(true, true) }
+        }
+        try {
+            connection.close()
+        } catch (t: Throwable) {
+            Log.w(TAG, "No se pudo cerrar la conexion USB serial.", t)
+        }
+    }
+
+    private fun configurePortDescription(port: UsbSerialPort): String {
+        return "baud=115200,dtr=${booleanFlag(runCatching { port.dtr }.getOrDefault(false))}," +
+                "rts=${booleanFlag(runCatching { port.rts }.getOrDefault(false))}"
+    }
+
+    private fun booleanFlag(value: Boolean): Int = if (value) 1 else 0
 
     private fun configurePort(port: UsbSerialPort): String {
         val notes = mutableListOf<String>()
@@ -415,5 +452,9 @@ class TrueRngUsbDiagnostics(context: Context) {
             }
         }
         return longest
+    }
+
+    companion object {
+        private const val TAG = "TrueRngUsbDiagnostics"
     }
 }

@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 class PlatformRandomSourceTest {
 
     private static final String RNG_DEVICE_PROPERTY = "elgamal.rng.device";
+    private static final String X86_64_ARCH = "x86_64";
 
     @AfterEach
     void cleanup() {
@@ -45,7 +46,7 @@ class PlatformRandomSourceTest {
     @Test
     void softwareFactoryUsesPortableRandomSourceOutsideUbuntu() {
         RuntimePlatform platform = RuntimePlatform.forTesting(
-                RuntimePlatform.OperatingSystem.WINDOWS, "x86_64");
+                RuntimePlatform.OperatingSystem.WINDOWS, X86_64_ARCH);
         RandomSource source = RandomSourceFactory.create(false, Logger.getAnonymousLogger(), platform);
 
         assertInstanceOf(PlatformRandomSource.class, source);
@@ -54,7 +55,7 @@ class PlatformRandomSourceTest {
     @Test
     void hardwareFactoryUsesPortableRandomSourceOutsideUbuntu() {
         RuntimePlatform platform = RuntimePlatform.forTesting(
-                RuntimePlatform.OperatingSystem.WINDOWS, "x86_64");
+                RuntimePlatform.OperatingSystem.WINDOWS, X86_64_ARCH);
         RandomSource source = RandomSourceFactory.create(
                 true,
                 Logger.getAnonymousLogger(),
@@ -68,7 +69,7 @@ class PlatformRandomSourceTest {
     @Test
     void windowsHardwareFactoryUsesTrueRngProviderWhenAvailable() {
         RuntimePlatform platform = RuntimePlatform.forTesting(
-                RuntimePlatform.OperatingSystem.WINDOWS, "x86_64");
+                RuntimePlatform.OperatingSystem.WINDOWS, X86_64_ARCH);
         RandomSource hardwareSource = new PlatformRandomSource();
 
         RandomSource source = RandomSourceFactory.create(
@@ -84,7 +85,7 @@ class PlatformRandomSourceTest {
     @Test
     void ubuntuSoftwareFactoryUsesRandomDeviceUrandom() {
         RuntimePlatform platform = RuntimePlatform.forTesting(
-                RuntimePlatform.OperatingSystem.UBUNTU, "x86_64");
+                RuntimePlatform.OperatingSystem.UBUNTU, X86_64_ARCH);
         RandomSource ubuntuSoftwareSource = new PlatformRandomSource();
         RandomSource source = RandomSourceFactory.create(
                 false,
@@ -103,7 +104,7 @@ class PlatformRandomSourceTest {
     @Test
     void ubuntuHardwareFactoryFallsBackToUrandomWhenTrueRngIsMissing() {
         RuntimePlatform platform = RuntimePlatform.forTesting(
-                RuntimePlatform.OperatingSystem.UBUNTU, "x86_64");
+                RuntimePlatform.OperatingSystem.UBUNTU, X86_64_ARCH);
         Path missingDevice = Path.of("target", "missing-true-rng-device");
         if (Files.exists(missingDevice)) {
             throw new IllegalStateException("La ruta usada para la prueba debe no existir: " + missingDevice);

@@ -16,6 +16,7 @@ public final class RandomSourceFactory {
     private static final String HARDWARE_DEVICE_PROPERTY = "elgamal.rng.device";
     private static final String HARDWARE_DEVICE_ENV = "ELGAMAL_RNG_DEVICE";
     private static final String DEFAULT_UBUNTU_HARDWARE_DEVICE = "/dev/TrueRNG0";
+    private static final String PORTABLE_RANDOM_SOURCE_MESSAGE = "Se usará SecureRandom portable.";
 
     @FunctionalInterface
     interface WindowsHardwareRandomSourceProvider {
@@ -97,7 +98,7 @@ public final class RandomSourceFactory {
         }
 
         logger.warning(() -> "Windows -hw: no se pudo usar el TrueRNG. "
-                + "Se usará SecureRandom portable.");
+                + PORTABLE_RANDOM_SOURCE_MESSAGE);
         return new PlatformRandomSource();
     }
 
@@ -120,11 +121,11 @@ public final class RandomSourceFactory {
             }
 
             logger.warning(() -> "Windows -hw: el proveedor TrueRNG devolvió un tipo inesperado. "
-                    + "Se usará SecureRandom portable.");
+                    + PORTABLE_RANDOM_SOURCE_MESSAGE);
             return Optional.empty();
         } catch (ClassNotFoundException e) {
             logger.warning(() -> "Windows -hw: el proveedor TrueRNG de Windows no está disponible en este runtime. "
-                    + "Se usará SecureRandom portable.");
+                    + PORTABLE_RANDOM_SOURCE_MESSAGE);
             return Optional.empty();
         } catch (ReflectiveOperationException e) {
             logger.warning(() -> "Windows -hw: no se pudo inicializar el proveedor TrueRNG de Windows: "

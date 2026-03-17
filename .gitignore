@@ -57,3 +57,6 @@ android/.cxx/
 
 # Scannerwork
 .scannerwork/
+
+# SonarQube for IDE local state
+.sonarlint/

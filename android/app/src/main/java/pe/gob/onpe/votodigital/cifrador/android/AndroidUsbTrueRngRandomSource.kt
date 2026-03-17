@@ -34,10 +34,8 @@ class AndroidUsbTrueRngRandomSource private constructor(
                 } catch (e: Throwable) {
                     throw IllegalStateException("No se pudo leer del TrueRNG USB en Android.", e)
                 }
-                if (readCount <= 0) {
-                    throw IllegalStateException(
-                        "El TrueRNG USB no produjo datos en Android dentro del timeout de lectura."
-                    )
+                check(readCount > 0) {
+                    "El TrueRNG USB no produjo datos en Android dentro del timeout de lectura."
                 }
                 val copyCount = min(readCount, array.size - offset)
                 System.arraycopy(scratch, 0, array, offset, copyCount)
@@ -58,14 +56,20 @@ class AndroidUsbTrueRngRandomSource private constructor(
         synchronized(this) {
             try {
                 port.close()
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
+                logCleanupFailure("cerrar puerto TrueRNG USB", t)
             }
             try {
                 connection.close()
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
+                logCleanupFailure("cerrar conexion TrueRNG USB", t)
             }
             logger.info("Android -hw: puerto TrueRNG USB cerrado.")
         }
+    }
+
+    private fun logCleanupFailure(action: String, error: Throwable) {
+        logger.fine("$action: ${error.javaClass.simpleName}: ${error.message}")
     }
 
     companion object {
@@ -89,11 +93,19 @@ class AndroidUsbTrueRngRandomSource private constructor(
             } catch (t: Throwable) {
                 try {
                     port.close()
-                } catch (_: Throwable) {
+                } catch (closeError: Throwable) {
+                    logger.fine(
+                        "No se pudo cerrar el puerto tras un fallo de inicializacion: "
+                                + "${closeError.javaClass.simpleName}: ${closeError.message}"
+                    )
                 }
                 try {
                     connection.close()
-                } catch (_: Throwable) {
+                } catch (closeError: Throwable) {
+                    logger.fine(
+                        "No se pudo cerrar la conexion tras un fallo de inicializacion: "
+                                + "${closeError.javaClass.simpleName}: ${closeError.message}"
+                    )
                 }
                 throw IllegalStateException("No se pudo inicializar el TrueRNG USB en Android.", t)
             }

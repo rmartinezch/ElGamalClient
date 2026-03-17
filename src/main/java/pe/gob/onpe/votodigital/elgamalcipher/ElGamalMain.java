@@ -1,7 +1,6 @@
 package pe.gob.onpe.votodigital.elgamalcipher;
 
 import java.io.File;
-import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 

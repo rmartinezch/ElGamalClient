@@ -134,7 +134,8 @@ class AndroidCipherRunner(private val context: Context) {
             if (hardwareSource is AutoCloseable) {
                 try {
                     hardwareSource.close()
-                } catch (_: Throwable) {
+                } catch (t: Throwable) {
+                    logger.log(Level.FINE, "No se pudo cerrar el TrueRNG Android tras el cifrado.", t)
                 }
             }
         }
