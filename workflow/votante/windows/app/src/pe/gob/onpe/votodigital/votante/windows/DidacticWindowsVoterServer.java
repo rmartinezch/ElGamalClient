@@ -1,0 +1,847 @@
+package pe.gob.onpe.votodigital.votante.windows;
+
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.net.ConnectException;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public final class DidacticWindowsVoterServer {
+
+    private static final String SCHEMA_VERSION = "1.0.0-test";
+    private static final int VERIFICATUM_WIDTH = 1;
+    private static final String DEFAULT_SERVICE_BASE_URL = "http://wsantivanez-hm:7040";
+    private static final Pattern JSON_STRING_FIELD =
+            Pattern.compile("\"([^\"]+)\"\\s*:\\s*(null|\"([^\"]*)\")");
+    private static final Pattern JSON_BOOLEAN_FIELD =
+            Pattern.compile("\"([^\"]+)\"\\s*:\\s*(true|false)");
+
+    private DidacticWindowsVoterServer() {
+    }
+
+    public static void main(String[] args) throws Exception {
+        AppConfig config = loadConfig(
+                readStringProperty("votante.windows.bindHost", "127.0.0.1"),
+                Integer.parseInt(readStringProperty("votante.windows.port", "8788")),
+                readStringProperty("votante.windows.serviceBaseUrl", DEFAULT_SERVICE_BASE_URL),
+                readStringProperty("votante.windows.auxsid", "")
+        );
+
+        HttpServer server = HttpServer.create(new InetSocketAddress(config.bindHost, config.port), 0);
+        ExecutorService executor = Executors.newCachedThreadPool();
+        server.setExecutor(executor);
+        registerContexts(server, config);
+        server.start();
+
+        System.out.println("WindowsVoterServer escuchando en http://"
+                + config.bindHost + ":" + config.port);
+        System.out.println("Cifrador desacoplado del .exe usando " + config.javaExePath());
+        System.out.println("Servicio objetivo: " + config.serviceBaseUrl);
+    }
+
+    static AppConfig loadConfig(String bindHost, int port, String serviceBaseUrl, String defaultAuxsid)
+            throws java.io.IOException {
+        Path rootDir = resolveRootDir();
+        Path appDir = rootDir.resolve("workflow").resolve("votante").resolve("windows").resolve("app");
+        Path publicDir = appDir.resolve("public");
+        Path runtimeDir = rootDir.resolve("workflow").resolve("votante").resolve("windows").resolve("runtime");
+        Path submissionsDir = runtimeDir.resolve("submissions");
+        Path catalogPath = rootDir.resolve("workflow").resolve("votante")
+                .resolve("shared").resolve("catalogo-opciones.json");
+        Path schemaPath = rootDir.resolve("workflow").resolve("votante")
+                .resolve("shared").resolve("vote-schema.md");
+        Path cifradorDir = rootDir.resolve("dist").resolve("windows").resolve("image").resolve("Cifrador");
+        Files.createDirectories(submissionsDir);
+        return new AppConfig(
+                rootDir,
+                publicDir,
+                runtimeDir,
+                submissionsDir,
+                catalogPath,
+                schemaPath,
+                cifradorDir,
+                bindHost,
+                port,
+                trimTrailingSlash(serviceBaseUrl),
+                defaultAuxsid,
+                VoterProfile.demo()
+        );
+    }
+
+    static void registerContexts(HttpServer server, AppConfig config) {
+        HttpClient httpClient = HttpClient.newBuilder().build();
+
+        server.createContext("/favicon.ico", exchange -> {
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+        });
+
+        server.createContext("/api/health", exchange -> json(exchange, () -> Map.of(
+                "status", "UP",
+                "serverTime", Instant.now().toString()
+        )));
+
+        server.createContext("/api/config", exchange -> json(exchange, () -> {
+            HttpUtil.ensureMethod(exchange, "GET");
+            return configPayload(config);
+        }));
+
+        server.createContext("/api/bootstrap", exchange -> json(exchange, () -> {
+            Map<String, Object> payload = new LinkedHashMap<>(configPayload(config));
+            HttpUtil.ensureMethod(exchange, "GET");
+            try {
+                PublicKeyPayload publicKey = fetchPublicKeyPayload(httpClient, config, "native");
+                payload.put("publicKeyOk", publicKey.hasKeyMaterial());
+                payload.put("serviceSessionId", publicKey.sessionId);
+                payload.put("serviceSessionName", publicKey.sessionName);
+                payload.put("serviceSessionLabel", publicKey.sessionLabel);
+                payload.put("serviceElectionName", firstNonBlank(publicKey.electionName, "Elecciones Generales 2026"));
+                payload.put("publicKeyBytes", publicKey.contentBytes.length);
+            } catch (Exception ex) {
+                payload.put("publicKeyOk", false);
+                payload.put("serviceSessionId", "");
+                payload.put("serviceSessionName", "");
+                payload.put("serviceSessionLabel", "");
+                payload.put("serviceElectionName", "Elecciones Generales 2026");
+                payload.put("publicKeyBytes", 0);
+                payload.put("publicKeyError", ex.getMessage());
+            }
+            try {
+                String stateRaw = fetchStateRaw(httpClient, config);
+                payload.put("serviceStateRaw", stateRaw);
+                payload.put("serviceStateOk", true);
+                payload.put("serviceActiveSession", resolveServiceSession(stateRaw));
+            } catch (Exception ex) {
+                payload.put("serviceStateRaw", "");
+                payload.put("serviceStateOk", false);
+                payload.put("serviceActiveSession", "");
+                payload.put("serviceStateError", ex.getMessage());
+            }
+            try {
+                String auxsidsRaw = fetchAuxsidsRaw(httpClient, config);
+                payload.put("serviceAuxsidsRaw", auxsidsRaw);
+                payload.put("resolvedAuxsid", resolveAuxsid(config.defaultAuxsid, auxsidsRaw));
+                payload.put("serviceOk", extractJsonBoolean(auxsidsRaw, "ok"));
+                payload.put("suggestedAuxsid", extractJsonString(auxsidsRaw, "suggested_auxsid"));
+            } catch (Exception ex) {
+                payload.put("serviceAuxsidsRaw", "");
+                payload.put("resolvedAuxsid", firstNonBlank(config.defaultAuxsid, "default"));
+                payload.put("serviceOk", false);
+                payload.put("suggestedAuxsid", "");
+                payload.put("serviceError", ex.getMessage());
+            }
+            boolean serviceMixActive = Boolean.TRUE.equals(payload.get("serviceStateOk"))
+                    && Boolean.TRUE.equals(payload.get("serviceOk"))
+                    && Boolean.TRUE.equals(payload.get("publicKeyOk"))
+                    && !firstNonBlank(stringValue(payload.get("serviceSessionId")),
+                    firstNonBlank(stringValue(payload.get("serviceSessionName")),
+                            firstNonBlank(stringValue(payload.get("serviceSessionLabel")),
+                                    stringValue(payload.get("serviceActiveSession"))))).isBlank();
+            payload.put("serviceMixActive", serviceMixActive);
+            payload.put("serviceInactiveReason", serviceMixActive ? "" : resolveInactiveReason(payload));
+            return payload;
+        }));
+
+        server.createContext("/api/service/auxsids", exchange -> proxyServiceJson(exchange, httpClient,
+                config.serviceBaseUrl + "/api/auxsids"));
+        server.createContext("/api/service/state", exchange -> proxyServiceJson(exchange, httpClient,
+                config.serviceBaseUrl + "/api/state"));
+
+        server.createContext("/api/service/public-key", exchange -> {
+            try {
+                HttpUtil.ensureMethod(exchange, "GET");
+                byte[] payload = fetchPublicKey(httpClient, config, "native");
+                HttpUtil.sendBytes(exchange, 200, "application/octet-stream", payload);
+            } catch (Exception ex) {
+                HttpUtil.sendError(exchange, 500, ex);
+            }
+        });
+
+        server.createContext("/api/catalog", exchange -> {
+            try {
+                HttpUtil.ensureMethod(exchange, "GET");
+                HttpUtil.sendBytes(exchange, 200, "application/json; charset=utf-8",
+                        Files.readAllBytes(config.catalogPath));
+            } catch (Exception ex) {
+                HttpUtil.sendError(exchange, 500, ex);
+            }
+        });
+
+        server.createContext("/api/ballot/preview", exchange -> json(exchange, () -> {
+            HttpUtil.ensureMethod(exchange, "POST");
+            Map<String, String> form = HttpUtil.parseForm(HttpUtil.readRequestBody(exchange));
+            return buildBundle(form).toMap();
+        }));
+
+        server.createContext("/api/ballot/submit", exchange -> json(exchange, () -> {
+            HttpUtil.ensureMethod(exchange, "POST");
+            Map<String, String> form = HttpUtil.parseForm(HttpUtil.readRequestBody(exchange));
+            BallotBundle bundle = buildBundle(form);
+            String preferredAuxsid = firstNonBlank(form.get("auxsid"), config.defaultAuxsid);
+            return submitBundle(config, httpClient, bundle, preferredAuxsid).toMap();
+        }));
+
+        server.createContext("/", new StaticFileHandler(config.publicDir));
+    }
+
+    private static Map<String, Object> configPayload(AppConfig config) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("bindHost", config.bindHost);
+        payload.put("port", config.port);
+        payload.put("serviceBaseUrl", config.serviceBaseUrl);
+        payload.put("defaultAuxsid", config.defaultAuxsid);
+        payload.put("catalogPath", config.catalogPath.toString());
+        payload.put("schemaPath", config.schemaPath.toString());
+        payload.put("cifradorDir", config.cifradorDir.toString());
+        payload.put("javaExe", config.javaExePath().toString());
+        payload.put("jarPath", config.jarPath().toString());
+        payload.put("usesExe", false);
+        payload.put("electionName", "Elecciones Generales 2026");
+        payload.put("voterProfile", config.voterProfile.toMap());
+        return payload;
+    }
+
+    static SubmissionResult submitBundle(AppConfig config, HttpClient httpClient,
+                                         BallotBundle bundle,
+                                         String preferredAuxsid) throws Exception {
+        String runId = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").format(LocalDateTime.now())
+                + "-" + UUID.randomUUID().toString().substring(0, 8);
+        Path submissionDir = config.submissionsDir.resolve(runId);
+        Files.createDirectories(submissionDir);
+
+        ArrayList<String> events = new ArrayList<>();
+        events.add(event("Inicio de emision. runId=" + runId));
+
+        String auxsidsRaw = fetchAuxsidsRaw(httpClient, config);
+        String resolvedAuxsid = resolveAuxsid(preferredAuxsid, auxsidsRaw);
+        events.add(event("Auxsid operativo resuelto: " + resolvedAuxsid));
+
+        PublicKeyPayload publicKey = fetchPublicKeyPayload(httpClient, config, "native");
+        if (!publicKey.hasActiveSession()) {
+            throw new IllegalStateException("La mezcladora no reporta una sesion activa para recibir votos.");
+        }
+        byte[] publicKeyBytes = publicKey.contentBytes;
+        events.add(event("Llave publica nativa descargada. bytes=" + publicKeyBytes.length));
+        events.add(event("Sesion remota => id=" + firstNonBlank(publicKey.sessionId, "n/d")
+                + " name=" + firstNonBlank(publicKey.sessionName, "n/d")
+                + " label=" + firstNonBlank(publicKey.sessionLabel, "n/d")));
+
+        Path publicKeyPath = submissionDir.resolve("publicKey");
+        Path plainVotesPath = submissionDir.resolve("plain_votes.txt");
+        Path ciphertextsPath = submissionDir.resolve("ciphertexts_ext");
+        Path stdoutPath = submissionDir.resolve("cifrador.stdout.log");
+        Path stderrPath = submissionDir.resolve("cifrador.stderr.log");
+
+        Files.write(publicKeyPath, publicKeyBytes);
+        Files.writeString(plainVotesPath, bundle.bundleText(), StandardCharsets.UTF_8);
+        events.add(event("Cedula canonica validada y serializada en plain_votes.txt"));
+
+        ProcessBuilder pb = new ProcessBuilder(
+                config.javaExePath().toString(),
+                "-jar",
+                config.jarPath().toString(),
+                publicKeyPath.toString(),
+                plainVotesPath.toString(),
+                ciphertextsPath.toString(),
+                "-sw"
+        );
+        pb.directory(config.cifradorDir.toFile());
+        pb.redirectErrorStream(true);
+        events.add(event("Invocando cifrador desacoplado del ejecutable."));
+
+        Process process = pb.start();
+        String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        String stderr = "";
+        int exitCode = process.waitFor();
+
+        Files.writeString(stdoutPath, stdout, StandardCharsets.UTF_8);
+        Files.writeString(stderrPath, stderr, StandardCharsets.UTF_8);
+        events.add(event("Proceso de cifrado finalizado. exitCode=" + exitCode));
+
+        if (exitCode != 0) {
+            throw new IllegalStateException("El cifrador retorno exitCode=" + exitCode
+                    + ". runId=" + runId
+                    + ". stdoutTail=" + tail(stdout));
+        }
+        if (!Files.exists(ciphertextsPath) || Files.size(ciphertextsPath) == 0L) {
+            throw new IllegalStateException("No se genero ciphertexts_ext."
+                    + " runId=" + runId
+                    + " submissionDir=" + submissionDir
+                    + " stdoutTail=" + tail(stdout));
+        }
+
+        String ciphertextsExt = Files.readString(ciphertextsPath, StandardCharsets.UTF_8);
+        int ciphertextCount = countNonBlankLines(ciphertextsExt);
+        events.add(event("Voto cifrado generado. registros=" + ciphertextCount));
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("auxsid", resolvedAuxsid);
+        payload.put("format", "native");
+        if (!publicKey.sessionId.isBlank()) {
+            payload.put("session_id", publicKey.sessionId);
+        }
+        if (!publicKey.sessionName.isBlank()) {
+            payload.put("session_name", publicKey.sessionName);
+        }
+        payload.put("ciphertexts_ext", ciphertextsExt);
+        payload.put("width", VERIFICATUM_WIDTH);
+        events.add(event("POST " + config.serviceBaseUrl + "/api/ciphertexts"));
+        events.add(event("curl -X POST \"" + config.serviceBaseUrl + "/api/ciphertexts\" "
+                + "-H \"Content-Type: application/json\" "
+                + "-d '{\"auxsid\":\"" + resolvedAuxsid
+                + "\",\"format\":\"native\""
+                + (!publicKey.sessionId.isBlank() ? ",\"session_id\":\"" + publicKey.sessionId + "\"" : "")
+                + (!publicKey.sessionName.isBlank() ? ",\"session_name\":\"" + publicKey.sessionName + "\"" : "")
+                + ",\"width\":" + VERIFICATUM_WIDTH
+                + ",\"ciphertexts_ext\":\"" + summarizeCiphertexts(ciphertextsExt) + "\"}'"));
+        events.add(event("Payload => {\"auxsid\":\"" + resolvedAuxsid
+                + "\",\"format\":\"native\""
+                + (!publicKey.sessionId.isBlank() ? ",\"session_id\":\"" + publicKey.sessionId + "\"" : "")
+                + (!publicKey.sessionName.isBlank() ? ",\"session_name\":\"" + publicKey.sessionName + "\"" : "")
+                + ",\"width\":" + VERIFICATUM_WIDTH
+                + ",\"ciphertexts_ext_lines\":" + ciphertextCount
+                + ",\"ciphertexts_ext_bytes\":" + ciphertextsExt.getBytes(StandardCharsets.UTF_8).length
+                + ",\"ciphertexts_ext_head\":\"" + summarizeCiphertexts(ciphertextsExt) + "\"}"));
+        events.add(event("Remitiendo ciphertexts_ext al servicio remoto con format=native."));
+
+        String receiptRaw = postJson(httpClient,
+                URI.create(config.serviceBaseUrl + "/api/ciphertexts"),
+                JsonUtil.toJson(payload));
+        boolean receiptAccepted = extractJsonBoolean(receiptRaw, "ok");
+        String serviceResolvedAuxsid = firstNonBlank(extractJsonString(receiptRaw, "resolved_auxsid"), resolvedAuxsid);
+        events.add(event("Respuesta API => validated=" + extractJsonBoolean(receiptRaw, "validated")
+                + " format_resolved=" + firstNonBlank(extractJsonString(receiptRaw, "format_resolved"), "native")
+                + " party_validated=" + firstNonBlank(extractJsonString(receiptRaw, "party_validated"), "party01")
+                + " accumulated=" + extractJsonBoolean(receiptRaw, "accumulated")
+                + " session=" + firstNonBlank(extractJsonString(receiptRaw, "session"), "no-informada")));
+        events.add(event("Servicio remoto respondio ok=" + receiptAccepted
+                + " auxsid=" + serviceResolvedAuxsid));
+
+        return new SubmissionResult(
+                runId,
+                resolvedAuxsid,
+                serviceResolvedAuxsid,
+                receiptAccepted,
+                bundle,
+                submissionDir,
+                publicKeyPath,
+                plainVotesPath,
+                ciphertextsPath,
+                stdoutPath,
+                stderrPath,
+                stdout,
+                stderr,
+                auxsidsRaw,
+                receiptRaw,
+                events
+        );
+    }
+
+    static BallotBundle buildBundle(Map<String, String> form) {
+        String districtCode = normalizeRequiredCode("districtCode", form.get("districtCode"));
+        String presidentialParty = normalizeRequiredCode("presidentialParty", form.get("presidentialParty"));
+        String senatorsNationalParty = normalizeRequiredCode("senatorsNationalParty", form.get("senatorsNationalParty"));
+        String senatorsNationalPv1 = normalizeOptionalCode(form.get("senatorsNationalPv1"));
+        String senatorsNationalPv2 = normalizeOptionalCode(form.get("senatorsNationalPv2"));
+        String senatorsRegionalParty = normalizeRequiredCode("senatorsRegionalParty", form.get("senatorsRegionalParty"));
+        String senatorsRegionalPv1 = normalizeOptionalCode(form.get("senatorsRegionalPv1"));
+        String deputiesParty = normalizeRequiredCode("deputiesParty", form.get("deputiesParty"));
+        String deputiesPv1 = normalizeOptionalCode(form.get("deputiesPv1"));
+        String deputiesPv2 = normalizeOptionalCode(form.get("deputiesPv2"));
+        String andeanParty = normalizeRequiredCode("andeanParty", form.get("andeanParty"));
+        String andeanPv1 = normalizeOptionalCode(form.get("andeanPv1"));
+        String andeanPv2 = normalizeOptionalCode(form.get("andeanPv2"));
+
+        String[] senatorsNationalPreferentials =
+                normalizeDistinctPreferentials("senadores_nacionales", senatorsNationalPv1, senatorsNationalPv2);
+        String[] deputiesPreferentials =
+                normalizeDistinctPreferentials("diputados_regionales", deputiesPv1, deputiesPv2);
+        String[] andeanPreferentials =
+                normalizeDistinctPreferentials("parlamento_andino", andeanPv1, andeanPv2);
+        senatorsNationalPv1 = senatorsNationalPreferentials[0];
+        senatorsNationalPv2 = senatorsNationalPreferentials[1];
+        deputiesPv1 = deputiesPreferentials[0];
+        deputiesPv2 = deputiesPreferentials[1];
+        andeanPv1 = andeanPreferentials[0];
+        andeanPv2 = andeanPreferentials[1];
+
+        ArrayList<String> lines = new ArrayList<>();
+        lines.add("0100" + presidentialParty + "0000");
+        lines.add("0200" + senatorsNationalParty + senatorsNationalPv1 + senatorsNationalPv2);
+        lines.add("03" + districtCode + senatorsRegionalParty + senatorsRegionalPv1 + "00");
+        lines.add("04" + districtCode + deputiesParty + deputiesPv1 + deputiesPv2);
+        lines.add("0500" + andeanParty + andeanPv1 + andeanPv2);
+        return new BallotBundle(districtCode, lines);
+    }
+
+    private static void proxyServiceJson(HttpExchange exchange, HttpClient httpClient, String url)
+            throws java.io.IOException {
+        try {
+            HttpUtil.ensureMethod(exchange, "GET");
+            HttpRequest request = HttpRequest.newBuilder(URI.create(url)).GET().build();
+            HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            ensureHttpOk(response.statusCode(), "No se pudo consultar el servicio externo.");
+            HttpUtil.sendBytes(exchange, 200, "application/json; charset=utf-8", response.body());
+        } catch (ConnectException ex) {
+            HttpUtil.sendError(exchange, 502,
+                    new IllegalStateException("No se pudo conectar con el servicio remoto en " + url, ex));
+        } catch (Exception ex) {
+            HttpUtil.sendError(exchange, 500, ex);
+        }
+    }
+
+    private static byte[] fetchPublicKey(HttpClient httpClient, AppConfig config, String format) throws Exception {
+        return fetchPublicKeyPayload(httpClient, config, format).contentBytes;
+    }
+
+    private static PublicKeyPayload fetchPublicKeyPayload(HttpClient httpClient, AppConfig config, String format)
+            throws Exception {
+        String normalizedFormat = firstNonBlank(format, "native");
+        String url = config.serviceBaseUrl + "/api/public-key";
+        if (!"native".equalsIgnoreCase(normalizedFormat)) {
+            url += "?format=" + HttpUtil.urlEncode(normalizedFormat);
+        }
+        HttpRequest publicKeyRequest = HttpRequest.newBuilder(URI.create(url)).GET().build();
+        HttpResponse<String> response = httpClient.send(publicKeyRequest,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        ensureHttpOk(response.statusCode(), "No se pudo obtener la llave publica.");
+        String body = response.body();
+        String contentHex = extractJsonString(body, "content");
+        if (!contentHex.isBlank()) {
+            return new PublicKeyPayload(
+                    decodeHex(contentHex),
+                    extractJsonString(body, "session_id"),
+                    extractJsonString(body, "session_name"),
+                    extractJsonString(body, "session_label"),
+                    extractJsonString(body, "election_name"),
+                    body
+            );
+        }
+        return new PublicKeyPayload(
+                body.getBytes(StandardCharsets.UTF_8),
+                extractJsonString(body, "session_id"),
+                extractJsonString(body, "session_name"),
+                extractJsonString(body, "session_label"),
+                extractJsonString(body, "election_name"),
+                body
+        );
+    }
+
+    private static String fetchAuxsidsRaw(HttpClient httpClient, AppConfig config) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create(config.serviceBaseUrl + "/api/auxsids"))
+                .GET()
+                .build();
+        HttpResponse<String> response = httpClient.send(request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        ensureHttpOk(response.statusCode(), "No se pudo consultar auxsids.");
+        return response.body();
+    }
+
+    private static String fetchStateRaw(HttpClient httpClient, AppConfig config) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create(config.serviceBaseUrl + "/api/state"))
+                .GET()
+                .build();
+        HttpResponse<String> response = httpClient.send(request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        ensureHttpOk(response.statusCode(), "No se pudo consultar el estado de la GUI Verificatum.");
+        return response.body();
+    }
+
+    private static String postJson(HttpClient httpClient, URI uri, String jsonPayload) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(uri)
+                .header("Content-Type", "application/json; charset=utf-8")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
+                .build();
+        HttpResponse<String> response = httpClient.send(request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        ensureHttpOk(response.statusCode(), "No se pudo enviar ciphertexts_ext.");
+        return response.body();
+    }
+
+    private static void ensureHttpOk(int statusCode, String message) {
+        if (statusCode < 200 || statusCode >= 300) {
+            throw new IllegalStateException(message + " HTTP " + statusCode);
+        }
+    }
+
+    private static String resolveAuxsid(String preferredAuxsid, String auxsidsRaw) {
+        String candidate = normalizeAuxsid(preferredAuxsid);
+        if (!candidate.isBlank()) {
+            return candidate;
+        }
+        candidate = normalizeAuxsid(extractJsonString(auxsidsRaw, "suggested_auxsid"));
+        if (!candidate.isBlank()) {
+            return candidate;
+        }
+        candidate = normalizeAuxsid(extractJsonString(auxsidsRaw, "next_shuffle"));
+        if (!candidate.isBlank()) {
+            return candidate;
+        }
+        return "default";
+    }
+
+    private static String resolveServiceSession(String stateRaw) {
+        String[] candidateKeys = new String[]{
+                "session",
+                "session_id",
+                "session_name",
+                "active_session",
+                "activeSession",
+                "current_session",
+                "currentSession"
+        };
+        for (String key : candidateKeys) {
+            String value = extractJsonString(stateRaw, key);
+            if (!value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
+    }
+
+    private static String resolveInactiveReason(Map<String, Object> payload) {
+        if (!Boolean.TRUE.equals(payload.get("serviceStateOk"))) {
+            return "la GUI de mezcladora no responde.";
+        }
+        if (!Boolean.TRUE.equals(payload.get("serviceOk"))) {
+            return "no se pudo resolver auxsid operativo.";
+        }
+        if (!Boolean.TRUE.equals(payload.get("publicKeyOk"))) {
+            return "no se pudo obtener la llave publica activa.";
+        }
+        return "la mezcladora no reporta una sesion activa.";
+    }
+
+    private static String extractJsonString(String json, String key) {
+        Matcher matcher = JSON_STRING_FIELD.matcher(json == null ? "" : json);
+        while (matcher.find()) {
+            String currentKey = matcher.group(1);
+            String rawValue = matcher.group(2);
+            if (!key.equals(currentKey) || rawValue == null || "null".equals(rawValue)) {
+                continue;
+            }
+            return matcher.group(3);
+        }
+        return "";
+    }
+
+    private static boolean extractJsonBoolean(String json, String key) {
+        Matcher matcher = JSON_BOOLEAN_FIELD.matcher(json == null ? "" : json);
+        while (matcher.find()) {
+            if (key.equals(matcher.group(1))) {
+                return Boolean.parseBoolean(matcher.group(2));
+            }
+        }
+        return false;
+    }
+
+    private static String normalizeAuxsid(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if (trimmed.isBlank()) {
+            return "";
+        }
+        if (!trimmed.matches("[A-Za-z0-9._-]+")) {
+            throw new IllegalArgumentException("auxsid invalido: " + trimmed);
+        }
+        return trimmed;
+    }
+
+    private static byte[] decodeHex(String value) {
+        String hex = value == null ? "" : value.trim();
+        if (hex.isBlank()) {
+            return new byte[0];
+        }
+        if ((hex.length() % 2) != 0) {
+            throw new IllegalArgumentException("Hex invalido para la llave publica.");
+        }
+        byte[] decoded = new byte[hex.length() / 2];
+        for (int i = 0; i < hex.length(); i += 2) {
+            int high = Character.digit(hex.charAt(i), 16);
+            int low = Character.digit(hex.charAt(i + 1), 16);
+            if (high < 0 || low < 0) {
+                throw new IllegalArgumentException("Hex invalido para la llave publica.");
+            }
+            decoded[i / 2] = (byte) ((high << 4) + low);
+        }
+        return decoded;
+    }
+
+    private static String trimTrailingSlash(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
+    }
+
+    private static String[] normalizeDistinctPreferentials(String electionCode, String pv1, String pv2) {
+        if (!"00".equals(pv1) && pv1.equals(pv2)) {
+            return new String[]{pv1, "00"};
+        }
+        return new String[]{pv1, pv2};
+    }
+
+    private static String normalizeRequiredCode(String field, String value) {
+        String normalized = normalizeOptionalCode(value);
+        if ("00".equals(normalized)) {
+            throw new IllegalArgumentException("Campo obligatorio faltante: " + field);
+        }
+        return normalized;
+    }
+
+    private static String normalizeOptionalCode(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if (trimmed.isBlank()) {
+            return "00";
+        }
+        if (!trimmed.matches("\\d{2}")) {
+            throw new IllegalArgumentException("Codigo invalido, se esperaban 2 digitos: " + trimmed);
+        }
+        return trimmed;
+    }
+
+    private static int countNonBlankLines(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        int count = 0;
+        for (String line : value.replace("\r", "").split("\n")) {
+            if (!line.isBlank()) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    private static String event(String message) {
+        return Instant.now().toString() + " | " + message;
+    }
+
+    private static String summarizeCiphertexts(String ciphertextsExt) {
+        if (ciphertextsExt == null || ciphertextsExt.isBlank()) {
+            return "";
+        }
+        String compact = ciphertextsExt.replace("\r", "").replace("\n", "");
+        int maxLength = Math.min(96, compact.length());
+        return compact.substring(0, maxLength) + (compact.length() > maxLength ? "..." : "");
+    }
+
+    static String firstNonBlank(String preferred, String fallback) {
+        if (preferred != null && !preferred.isBlank()) {
+            return preferred.trim();
+        }
+        if (fallback != null && !fallback.isBlank()) {
+            return fallback.trim();
+        }
+        return "";
+    }
+
+    private static String stringValue(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private static void json(HttpExchange exchange, JsonSupplier supplier)
+            throws java.io.IOException {
+        try {
+            HttpUtil.sendJson(exchange, 200, supplier.get());
+        } catch (ConnectException ex) {
+            HttpUtil.sendError(exchange, 502,
+                    new IllegalStateException("No se pudo conectar con el servicio remoto en " + DEFAULT_SERVICE_BASE_URL, ex));
+        } catch (IllegalArgumentException ex) {
+            HttpUtil.sendError(exchange, 400, ex);
+        } catch (Exception ex) {
+            HttpUtil.sendError(exchange, 500, ex);
+        }
+    }
+
+    private static String readStringProperty(String name, String fallback) {
+        String value = System.getProperty(name);
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        return value.trim();
+    }
+
+    static Path resolveRootDir() {
+        String configured = System.getProperty("votante.windows.root");
+        if (configured != null && !configured.isBlank()) {
+            return Path.of(configured).toAbsolutePath().normalize();
+        }
+        return Path.of("").toAbsolutePath().normalize();
+    }
+
+    private static String tail(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String normalized = text.replace("\r", "");
+        String[] lines = normalized.split("\n");
+        int from = Math.max(0, lines.length - 10);
+        return String.join("\n", List.of(lines).subList(from, lines.length));
+    }
+
+    private interface JsonSupplier {
+        Object get() throws Exception;
+    }
+
+    static record AppConfig(
+            Path rootDir,
+            Path publicDir,
+            Path runtimeDir,
+            Path submissionsDir,
+            Path catalogPath,
+            Path schemaPath,
+            Path cifradorDir,
+            String bindHost,
+            int port,
+            String serviceBaseUrl,
+            String defaultAuxsid,
+            VoterProfile voterProfile
+    ) {
+        Path javaExePath() {
+            return cifradorDir.resolve("runtime").resolve("bin").resolve("java.exe");
+        }
+
+        Path jarPath() {
+            return cifradorDir.resolve("app").resolve("ElGamalCipher-1.1.0.jar");
+        }
+    }
+
+    static record VoterProfile(
+            String fullName,
+            String dni,
+            String electoralDistrict,
+            String districtCode,
+            String local,
+            String mesa,
+            String order,
+            String ubigeo,
+            String condition,
+            String emissionWindow
+    ) {
+        static VoterProfile demo() {
+            return new VoterProfile(
+                    "Electo Votario Sufraguez Urnález",
+                    "42777333",
+                    "LIMA METROPOLITANA",
+                    "02",
+                    "I.E. 7086 LOS JARDINES",
+                    "047612",
+                    "218",
+                    "150101",
+                    "HABIL PARA SUFRAGAR",
+                    "08:00 - 16:00"
+            );
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("fullName", fullName);
+            payload.put("dni", dni);
+            payload.put("electoralDistrict", electoralDistrict);
+            payload.put("districtCode", districtCode);
+            payload.put("local", local);
+            payload.put("mesa", mesa);
+            payload.put("order", order);
+            payload.put("ubigeo", ubigeo);
+            payload.put("condition", condition);
+            payload.put("emissionWindow", emissionWindow);
+            return payload;
+        }
+    }
+
+    static record PublicKeyPayload(
+            byte[] contentBytes,
+            String sessionId,
+            String sessionName,
+            String sessionLabel,
+            String electionName,
+            String rawJson
+    ) {
+        boolean hasKeyMaterial() {
+            return contentBytes != null && contentBytes.length > 0;
+        }
+
+        boolean hasActiveSession() {
+            return !firstNonBlank(sessionId, firstNonBlank(sessionName, sessionLabel)).isBlank();
+        }
+    }
+
+    static record BallotBundle(String districtCode, List<String> lines) {
+        String bundleText() {
+            return String.join("\n", lines) + "\n";
+        }
+
+        Map<String, Object> toMap() {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("districtCode", districtCode);
+            payload.put("lineCount", lines.size());
+            payload.put("lines", lines);
+            payload.put("bundleText", bundleText());
+            return payload;
+        }
+    }
+
+    static record SubmissionResult(
+            String runId,
+            String auxsid,
+            String serviceResolvedAuxsid,
+            boolean receiptAccepted,
+            BallotBundle bundle,
+            Path submissionDir,
+            Path publicKeyPath,
+            Path plainVotesPath,
+            Path ciphertextsPath,
+            Path stdoutPath,
+            Path stderrPath,
+            String stdout,
+            String stderr,
+            String auxsidsRaw,
+            String receiptRaw,
+            List<String> events
+    ) {
+        Map<String, Object> toMap() {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("runId", runId);
+            payload.put("auxsid", auxsid);
+            payload.put("serviceResolvedAuxsid", serviceResolvedAuxsid);
+            payload.put("receiptAccepted", receiptAccepted);
+            payload.put("bundle", bundle.toMap());
+            payload.put("submissionDir", submissionDir.toString());
+            payload.put("publicKeyPath", publicKeyPath.toString());
+            payload.put("plainVotesPath", plainVotesPath.toString());
+            payload.put("ciphertextsPath", ciphertextsPath.toString());
+            payload.put("stdoutPath", stdoutPath.toString());
+            payload.put("stderrPath", stderrPath.toString());
+            payload.put("stdoutTail", tail(stdout));
+            payload.put("stderrTail", tail(stderr));
+            payload.put("auxsidsRaw", auxsidsRaw);
+            payload.put("receiptRaw", receiptRaw);
+            payload.put("events", events);
+            payload.put("monitorText", String.join("\n", events));
+            payload.put("width", VERIFICATUM_WIDTH);
+            payload.put("publicKeyFormat", "native");
+            payload.put("ciphertextsFormat", "native");
+            payload.put("voteSchemaVersion", SCHEMA_VERSION);
+            return payload;
+        }
+    }
+}

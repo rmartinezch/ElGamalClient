@@ -19,6 +19,7 @@ buildNumber.properties
 .mvn/wrapper/maven-wrapper.jar
 .mvn/local-repo/
 .build/
+.tools/
 
 # Gradle project files
 .gradle/
@@ -60,3 +61,8 @@ android/.cxx/
 
 # SonarQube for IDE local state
 .sonarlint/
+
+# Workflow runtime and local artifacts
+workflow/votante/windows/runtime/
+workflow/votante/windows/remote-publicKey.bin
+workflow/votante/windows/tmp-ciphertexts-ext.txt

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Padron Electoral 2026</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="masthead">
+      <div class="masthead-copy">
+        <p class="eyebrow">Padron Electoral Digital</p>
+        <h1>Cabina de emision de voto</h1>
+        <p class="lede">Registro de sufragio para la jornada general 2026. La llave publica se obtiene en linea y la remision del voto cifrado se ejecuta de forma automatica al confirmar la cedula.</p>
+      </div>
+      <div class="service-card">
+        <p class="service-title">Estado operativo</p>
+        <div class="service-grid">
+          <div>
+            <span class="service-label">Mezcladora</span>
+            <div class="service-status-row">
+              <span id="serviceMixLamp" class="status-lamp status-unknown" aria-hidden="true"></span>
+              <strong id="serviceMixState" data-testid="service-mix-state">Verificando...</strong>
+            </div>
+          </div>
+          <div>
+            <span class="service-label">Servicio</span>
+            <strong id="serviceEndpoint" data-testid="service-endpoint">Conectando...</strong>
+          </div>
+          <div>
+            <span class="service-label">Eleccion</span>
+            <strong id="serviceElectionName" data-testid="service-election-name">Pendiente</strong>
+          </div>
+          <div>
+            <span class="service-label">Sesion activa</span>
+            <strong id="serviceSession" data-testid="service-session">Pendiente</strong>
+          </div>
+          <div>
+            <span class="service-label">Auxsid</span>
+            <strong id="serviceAuxsid" data-testid="service-auxsid">Pendiente</strong>
+          </div>
+          <div>
+            <span class="service-label">Llave</span>
+            <div class="service-status-row">
+              <span id="serviceKeyLamp" class="status-lamp status-unknown" aria-hidden="true"></span>
+              <strong id="serviceKeyState">Pendiente</strong>
+            </div>
+          </div>
+          <div>
+            <span class="service-label">Validacion</span>
+            <div class="service-status-row">
+              <span id="serviceValidatedLamp" class="status-lamp status-unknown" aria-hidden="true"></span>
+              <strong id="serviceValidatedParty">Pendiente</strong>
+            </div>
+          </div>
+          <div>
+            <span class="service-label">Envio</span>
+            <div class="service-status-row">
+              <span id="serviceSendLamp" class="status-lamp status-unknown" aria-hidden="true"></span>
+              <strong id="serviceSendState">Pendiente</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <section class="panel identity-panel">
+        <div class="panel-head">
+          <p class="panel-kicker">Padron del elector</p>
+          <span id="conditionBadge" class="condition-badge">HABIL</span>
+        </div>
+        <div class="identity-grid">
+          <div class="identity-field identity-field-wide">
+            <span>Apellidos y nombres</span>
+            <strong id="profileFullName" data-testid="profile-full-name">-</strong>
+          </div>
+          <div class="identity-field">
+            <span>DNI</span>
+            <strong id="profileDni" data-testid="profile-dni">-</strong>
+          </div>
+          <div class="identity-field">
+            <span>Distrito electoral</span>
+            <strong id="profileDistrict">-</strong>
+          </div>
+          <div class="identity-field">
+            <span>Local de votacion</span>
+            <strong id="profileLocal">-</strong>
+          </div>
+          <div class="identity-field">
+            <span>Mesa</span>
+            <strong id="profileMesa">-</strong>
+          </div>
+          <div class="identity-field">
+            <span>Orden</span>
+            <strong id="profileOrder">-</strong>
+          </div>
+          <div class="identity-field">
+            <span>Ubigeo</span>
+            <strong id="profileUbigeo">-</strong>
+          </div>
+          <div class="identity-field">
+            <span>Horario habilitado</span>
+            <strong id="profileWindow">-</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel ballot-panel">
+        <div class="panel-head">
+          <p class="panel-kicker">Cedula de votacion</p>
+          <span class="panel-note">Seleccione una organizacion politica y los votos preferenciales que correspondan.</span>
+        </div>
+
+        <form id="ballotForm">
+          <input id="districtCode" name="districtCode" type="hidden">
+          <input id="auxsid" name="auxsid" type="hidden">
+
+          <article class="ballot-block">
+            <div class="ballot-heading">
+              <span class="ballot-code">01</span>
+              <div>
+                <h2>Formula presidencial</h2>
+                <p>Eleccion nacional. Seleccione una sola organizacion politica.</p>
+              </div>
+            </div>
+            <label>
+              <span>Organizacion politica</span>
+              <select id="presidentialParty" name="presidentialParty" data-testid="presidential-party"></select>
+            </label>
+          </article>
+
+          <article class="ballot-block">
+            <div class="ballot-heading">
+              <span class="ballot-code">02</span>
+              <div>
+                <h2>Senadores nacionales</h2>
+                <p>Puede registrar hasta dos votos preferenciales.</p>
+              </div>
+            </div>
+            <div class="field-grid field-grid-3">
+              <label>
+                <span>Organizacion politica</span>
+                <select id="senatorsNationalParty" name="senatorsNationalParty"></select>
+              </label>
+              <label>
+                <span>Voto preferencial 1</span>
+                <select id="senatorsNationalPv1" name="senatorsNationalPv1"></select>
+              </label>
+              <label>
+                <span>Voto preferencial 2</span>
+                <select id="senatorsNationalPv2" name="senatorsNationalPv2"></select>
+              </label>
+            </div>
+          </article>
+
+          <article class="ballot-block">
+            <div class="ballot-heading">
+              <span class="ballot-code">03</span>
+              <div>
+                <h2>Senadores regionales</h2>
+                <p>Seleccion asociado al distrito electoral del padron.</p>
+              </div>
+            </div>
+            <div class="field-grid">
+              <label>
+                <span>Organizacion politica</span>
+                <select id="senatorsRegionalParty" name="senatorsRegionalParty"></select>
+              </label>
+              <label>
+                <span>Voto preferencial 1</span>
+                <select id="senatorsRegionalPv1" name="senatorsRegionalPv1"></select>
+              </label>
+            </div>
+          </article>
+
+          <article class="ballot-block">
+            <div class="ballot-heading">
+              <span class="ballot-code">04</span>
+              <div>
+                <h2>Diputados regionales</h2>
+                <p>Puede registrar hasta dos votos preferenciales.</p>
+              </div>
+            </div>
+            <div class="field-grid field-grid-3">
+              <label>
+                <span>Organizacion politica</span>
+                <select id="deputiesParty" name="deputiesParty"></select>
+              </label>
+              <label>
+                <span>Voto preferencial 1</span>
+                <select id="deputiesPv1" name="deputiesPv1"></select>
+              </label>
+              <label>
+                <span>Voto preferencial 2</span>
+                <select id="deputiesPv2" name="deputiesPv2"></select>
+              </label>
+            </div>
+          </article>
+
+          <article class="ballot-block">
+            <div class="ballot-heading">
+              <span class="ballot-code">05</span>
+              <div>
+                <h2>Parlamento Andino</h2>
+                <p>Puede registrar hasta dos votos preferenciales.</p>
+              </div>
+            </div>
+            <div class="field-grid field-grid-3">
+              <label>
+                <span>Organizacion politica</span>
+                <select id="andeanParty" name="andeanParty"></select>
+              </label>
+              <label>
+                <span>Voto preferencial 1</span>
+                <select id="andeanPv1" name="andeanPv1"></select>
+              </label>
+              <label>
+                <span>Voto preferencial 2</span>
+                <select id="andeanPv2" name="andeanPv2"></select>
+              </label>
+            </div>
+          </article>
+
+          <div class="actions">
+            <button id="previewButton" type="button" class="secondary" data-testid="preview-button">Revisar cedula</button>
+            <button id="submitButton" type="submit" data-testid="submit-button" disabled>Emitir voto cifrado</button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="panel summary-panel">
+        <div class="panel-head">
+          <p class="panel-kicker">Resumen operativo</p>
+          <span class="panel-note">Se actualiza automaticamente al confirmar el envio.</span>
+        </div>
+        <section class="summary-block">
+          <h3>Constancia de recepcion</h3>
+          <div id="receiptSummary" class="receipt-card" data-testid="receipt-summary">
+            Aun no se ha emitido un voto en esta estacion.
+          </div>
+        </section>
+      </aside>
+    </section>
+
+    <section class="panel monitor-panel">
+        <div class="panel-head">
+          <p class="panel-kicker">Monitor de eventos</p>
+          <span class="panel-note">Trazabilidad local de llave, cifrado, llamada API y respuesta de la GUI Verificatum.</span>
+        </div>
+      <pre id="eventMonitor" class="event-monitor" data-testid="event-monitor">Inicializando estacion de voto...</pre>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
