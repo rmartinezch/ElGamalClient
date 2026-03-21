@@ -1,0 +1,7 @@
+/.gradle/
+/build/
+/local.properties
+/app/build/
+/app/libs/
+/app/src/main/assets/cifrador/
+/app/src/main/jniLibs/

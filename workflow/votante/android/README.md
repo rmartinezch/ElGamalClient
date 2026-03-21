@@ -43,4 +43,42 @@ Ese catálogo replica los nombres ficticios de organizaciones políticas y candi
 
 ## Verificacion
 
-La integración quedó implementada, pero en este entorno no se pudo ejecutar `assembleDebug` porque falta configurar el Android SDK local (`local.properties` o `ANDROID_HOME`).
+En este entorno ya se validó la compilación del módulo aislado y se generó un APK portable en `dist/android/VotanteAndroid-portable.apk`.
+
+## Build portable
+
+El módulo ahora puede compilarse como APK autocontenido con:
+
+```bash
+./build-votante-portable-apk.sh
+```
+
+Ese script:
+
+- recompila `ElGamalCipher-1.1.0.jar` para Android en Java 17
+- copia el `jar` al módulo Android y también lo empaqueta como `asset`
+- sincroniza `libvecj-2.2.0.so` y `libvmgj-1.3.0.so` para `arm64-v8a` y `x86_64`
+- compila el APK del votante con el wrapper Gradle existente en `android/`
+- deja el artefacto final en `dist/android/VotanteAndroid-portable.apk`
+
+## Waydroid + Weston
+
+Para instalar y abrir la estación del votante en Waydroid sobre Weston:
+
+```bash
+./run-votante-waydroid-weston.sh
+```
+
+Ese script:
+
+- reutiliza `dist/android/VotanteAndroid-portable.apk`
+- por defecto limpia instancias previas de Waydroid y Weston antes de arrancar
+- instala o reinstala la app en Waydroid
+- abre `waydroid show-full-ui`
+- lanza `pe.gob.onpe.votodigital.votante.android`
+
+Variables útiles:
+
+- `REINSTALL_APP=0` evita reinstalar si la app ya está visible en Waydroid
+- `CLEAN_START=0` reutiliza una sesión sana ya levantada
+- `SHOW_UI=0` no abre la ventana de `waydroid show-full-ui`
