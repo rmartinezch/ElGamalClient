@@ -43,10 +43,26 @@ Puertos locales usados:
 
 ## 4. Paso 1: validar el servicio externo
 
-Consultar `auxsid`:
+Consultar `discovery`:
 
 ```powershell
-Invoke-RestMethod -Uri 'http://wsantivanez-hm:7040/api/auxsids'
+Invoke-RestMethod -Uri 'http://wsantivanez-hm:7040/api/discovery'
+```
+
+Registrar `handshake`:
+
+```powershell
+$payload = @{
+  station_id = 'mesa-047612'
+  session_id = 'servidor-1-20260320-092533'
+  session_name = 'Servidor 1'
+  auxsid = 'default'
+} | ConvertTo-Json -Depth 3
+
+Invoke-RestMethod -Method POST `
+  -Uri 'http://wsantivanez-hm:7040/api/handshake' `
+  -ContentType 'application/json; charset=utf-8' `
+  -Body $payload
 ```
 
 Consultar llave publica nativa:
@@ -142,18 +158,19 @@ Bundle esperado:
 
 La interfaz:
 
-1. consulta `GET /api/auxsids`
-2. descarga `publicKey` desde `GET /api/public-key`
+1. descubre una mezcladora activa con `GET /api/discovery`
+2. registra `handshake` y obtiene `station_id + lease_id`
+3. descarga `publicKey` desde `GET /api/public-key`
    y decodifica `content` hexadecimal a bytes
-3. ejecuta:
+4. ejecuta:
 
 ```text
 dist/windows/image/Cifrador/runtime/bin/java.exe
 dist/windows/image/Cifrador/app/ElGamalCipher-1.1.0.jar
 ```
 
-4. genera `ciphertexts_ext`
-5. envia el lote a:
+5. genera `ciphertexts_ext`
+6. envia el lote a:
 
 ```text
 POST http://wsantivanez-hm:7040/api/ciphertexts
@@ -163,7 +180,12 @@ Payload:
 
 ```json
 {
+  "station_id": "mesa_047612",
+  "lease_id": "<lease_id>",
+  "session_id": "<session_id>",
+  "session_name": "<session_name>",
   "auxsid": "default",
+  "format": "native",
   "ciphertexts_ext": "<contenido del archivo>",
   "width": 1
 }
@@ -183,7 +205,12 @@ Si desea omitir la UI y probar solo el servicio:
 $ciphertextsExt = Get-Content -Raw '.\workflow\votante\windows\runtime\submissions\<runId>\ciphertexts_ext'
 
 $payload = @{
+  station_id = 'mesa_047612'
+  lease_id = '<lease_id>'
+  session_id = '<session_id>'
+  session_name = '<session_name>'
   auxsid = 'default'
+  format = 'native'
   ciphertexts_ext = $ciphertextsExt
   width = 1
 } | ConvertTo-Json -Depth 3

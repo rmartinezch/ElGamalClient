@@ -31,12 +31,17 @@ function appendEvent(message) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, options);
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(text || response.statusText);
+  const method = options.method || "GET";
+  const body = options.body || "";
+  if (!window.AndroidBridge || !window.AndroidBridge.callApi) {
+    throw new Error("AndroidBridge no disponible.");
   }
-  return text ? JSON.parse(text) : {};
+  const raw = window.AndroidBridge.callApi(path, method, body);
+  const data = raw ? JSON.parse(raw) : {};
+  if (!data || (typeof data.status === "number" && data.status >= 400)) {
+    throw new Error(data?.message || data?.error || "Fallo de API local.");
+  }
+  return data;
 }
 
 function pad2(value) {
@@ -125,13 +130,13 @@ function text(id, value) {
   document.getElementById(id).textContent = value;
 }
 
-function setLamp(id, state) {
+function setLamp(id, stateValue) {
   const lamp = document.getElementById(id);
   if (!lamp) {
     return;
   }
   lamp.classList.remove("status-on", "status-off", "status-unknown");
-  lamp.classList.add(state || "status-unknown");
+  lamp.classList.add(stateValue || "status-unknown");
 }
 
 function setBadgeState(receiptAccepted, lampState = "") {
@@ -141,11 +146,7 @@ function setBadgeState(receiptAccepted, lampState = "") {
 
 function setVotingAvailability(serviceMixActive, reason = "") {
   submitButton.disabled = !serviceMixActive;
-  if (serviceMixActive) {
-    submitButton.title = "";
-    return;
-  }
-  submitButton.title = reason || "La mezcladora no esta activa.";
+  submitButton.title = serviceMixActive ? "" : (reason || "La mezcladora no esta activa.");
 }
 
 function tryParseJson(value) {
@@ -258,7 +259,6 @@ async function previewBallot(logSuccess = true) {
   normalizePreferentialSelections();
   const data = await api("/api/ballot/preview", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded; charset=utf-8" },
     body: serializeForm()
   });
   if (logSuccess) {
@@ -308,7 +308,6 @@ form.addEventListener("submit", async (event) => {
     appendEvent("Recuperando llave publica y ejecutando cifrado.");
     const data = await api("/api/ballot/submit", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded; charset=utf-8" },
       body: serializeForm()
     });
     const receipt = tryParseJson(data.receiptRaw) || {};

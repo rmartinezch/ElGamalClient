@@ -43,9 +43,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\workflow\votante\windows\r
 La ruta `POST /api/ballot/submit`:
 
 1. construye el `BallotBundle`
-2. consulta `GET /api/auxsids`
-3. obtiene la llave nativa en `GET /api/public-key`
+2. descubre mezcladoras candidatas con `GET /api/discovery`
+3. solicita `handshake` y conserva `station_id + lease_id`
+4. obtiene la llave nativa en `GET /api/public-key`
    y decodifica el campo JSON `content` desde hexadecimal a bytes
-4. ejecuta el cifrador con `java.exe -jar ... -sw`
-5. envia `ciphertexts_ext` en `POST /api/ciphertexts`
-   con `{"auxsid","ciphertexts_ext","width":1}`
+5. ejecuta el cifrador con `java.exe -jar ... -sw`
+6. envia `ciphertexts_ext` en `POST /api/ciphertexts`
+   con `{"station_id","lease_id","session_id","session_name","auxsid","format","ciphertexts_ext","width":1}`

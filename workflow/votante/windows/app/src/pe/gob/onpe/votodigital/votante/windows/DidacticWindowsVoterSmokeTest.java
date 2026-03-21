@@ -21,7 +21,7 @@ final class DidacticWindowsVoterSmokeTest {
         DidacticWindowsVoterServer.AppConfig config = DidacticWindowsVoterServer.loadConfig(
                 "127.0.0.1",
                 Integer.parseInt(System.getProperty("votante.windows.smokePort", "8790")),
-                System.getProperty("votante.windows.serviceBaseUrl", "http://wsantivanez-hm:7040"),
+                System.getProperty("votante.windows.serviceBaseUrl", ""),
                 auxsid
         );
 

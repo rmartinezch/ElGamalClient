@@ -28,7 +28,7 @@ public final class DidacticWindowsVoterServer {
 
     private static final String SCHEMA_VERSION = "1.0.0-test";
     private static final int VERIFICATUM_WIDTH = 1;
-    private static final String DEFAULT_SERVICE_BASE_URL = "http://wsantivanez-hm:7040";
+    private static final String DEFAULT_SERVICE_BASE_URL = "";
     private static final Pattern JSON_STRING_FIELD =
             Pattern.compile("\"([^\"]+)\"\\s*:\\s*(null|\"([^\"]*)\")");
     private static final Pattern JSON_BOOLEAN_FIELD =
@@ -54,7 +54,11 @@ public final class DidacticWindowsVoterServer {
         System.out.println("WindowsVoterServer escuchando en http://"
                 + config.bindHost + ":" + config.port);
         System.out.println("Cifrador desacoplado del .exe usando " + config.javaExePath());
-        System.out.println("Servicio objetivo: " + config.serviceBaseUrl);
+        if (config.serviceBaseUrl != null && !config.serviceBaseUrl.isBlank()) {
+            System.out.println("Semilla de descubrimiento configurada: " + config.serviceBaseUrl);
+        } else {
+            System.out.println("Descubrimiento de mezcladora: red local");
+        }
     }
 
     static AppConfig loadConfig(String bindHost, int port, String serviceBaseUrl, String defaultAuxsid)
@@ -82,7 +86,11 @@ public final class DidacticWindowsVoterServer {
                 port,
                 trimTrailingSlash(serviceBaseUrl),
                 defaultAuxsid,
-                VoterProfile.demo()
+                VoterProfile.demo(),
+                new MixerDiscoveryCoordinator(
+                        trimTrailingSlash(serviceBaseUrl),
+                        "mesa-" + VoterProfile.demo().mesa()
+                )
         );
     }
 
@@ -107,68 +115,42 @@ public final class DidacticWindowsVoterServer {
         server.createContext("/api/bootstrap", exchange -> json(exchange, () -> {
             Map<String, Object> payload = new LinkedHashMap<>(configPayload(config));
             HttpUtil.ensureMethod(exchange, "GET");
-            try {
-                PublicKeyPayload publicKey = fetchPublicKeyPayload(httpClient, config, "native");
-                payload.put("publicKeyOk", publicKey.hasKeyMaterial());
-                payload.put("serviceSessionId", publicKey.sessionId);
-                payload.put("serviceSessionName", publicKey.sessionName);
-                payload.put("serviceSessionLabel", publicKey.sessionLabel);
-                payload.put("serviceElectionName", firstNonBlank(publicKey.electionName, "Elecciones Generales 2026"));
-                payload.put("publicKeyBytes", publicKey.contentBytes.length);
-            } catch (Exception ex) {
-                payload.put("publicKeyOk", false);
-                payload.put("serviceSessionId", "");
-                payload.put("serviceSessionName", "");
-                payload.put("serviceSessionLabel", "");
-                payload.put("serviceElectionName", "Elecciones Generales 2026");
-                payload.put("publicKeyBytes", 0);
-                payload.put("publicKeyError", ex.getMessage());
-            }
-            try {
-                String stateRaw = fetchStateRaw(httpClient, config);
-                payload.put("serviceStateRaw", stateRaw);
-                payload.put("serviceStateOk", true);
-                payload.put("serviceActiveSession", resolveServiceSession(stateRaw));
-            } catch (Exception ex) {
-                payload.put("serviceStateRaw", "");
-                payload.put("serviceStateOk", false);
-                payload.put("serviceActiveSession", "");
-                payload.put("serviceStateError", ex.getMessage());
-            }
-            try {
-                String auxsidsRaw = fetchAuxsidsRaw(httpClient, config);
-                payload.put("serviceAuxsidsRaw", auxsidsRaw);
-                payload.put("resolvedAuxsid", resolveAuxsid(config.defaultAuxsid, auxsidsRaw));
-                payload.put("serviceOk", extractJsonBoolean(auxsidsRaw, "ok"));
-                payload.put("suggestedAuxsid", extractJsonString(auxsidsRaw, "suggested_auxsid"));
-            } catch (Exception ex) {
-                payload.put("serviceAuxsidsRaw", "");
-                payload.put("resolvedAuxsid", firstNonBlank(config.defaultAuxsid, "default"));
-                payload.put("serviceOk", false);
-                payload.put("suggestedAuxsid", "");
-                payload.put("serviceError", ex.getMessage());
-            }
-            boolean serviceMixActive = Boolean.TRUE.equals(payload.get("serviceStateOk"))
-                    && Boolean.TRUE.equals(payload.get("serviceOk"))
-                    && Boolean.TRUE.equals(payload.get("publicKeyOk"))
-                    && !firstNonBlank(stringValue(payload.get("serviceSessionId")),
-                    firstNonBlank(stringValue(payload.get("serviceSessionName")),
-                            firstNonBlank(stringValue(payload.get("serviceSessionLabel")),
-                                    stringValue(payload.get("serviceActiveSession"))))).isBlank();
-            payload.put("serviceMixActive", serviceMixActive);
-            payload.put("serviceInactiveReason", serviceMixActive ? "" : resolveInactiveReason(payload));
+            MixerDiscoveryCoordinator.BootstrapSnapshot snapshot =
+                    config.mixerCoordinator.bootstrap(httpClient, config.defaultAuxsid);
+            payload.put("serviceBaseUrl", snapshot.serviceBaseUrl());
+            payload.put("resolvedAuxsid", snapshot.resolvedAuxsid());
+            payload.put("serviceMixActive", snapshot.serviceMixActive());
+            payload.put("serviceInactiveReason", snapshot.serviceInactiveReason());
+            payload.put("publicKeyOk", snapshot.publicKeyOk());
+            payload.put("publicKeyBytes", snapshot.publicKeyBytes());
+            payload.put("serviceSessionId", snapshot.serviceSessionId());
+            payload.put("serviceSessionName", snapshot.serviceSessionName());
+            payload.put("serviceSessionLabel", snapshot.serviceSessionLabel());
+            payload.put("serviceElectionName", firstNonBlank(snapshot.serviceElectionName(), "Elecciones Generales 2026"));
+            payload.put("serviceActiveSession", firstNonBlank(snapshot.serviceSessionLabel(),
+                    firstNonBlank(snapshot.serviceSessionName(), snapshot.serviceSessionId())));
+            payload.put("serviceStateOk", snapshot.serviceMixActive());
+            payload.put("serviceOk", snapshot.serviceMixActive());
+            payload.put("suggestedAuxsid", snapshot.resolvedAuxsid());
+            payload.put("leaseId", snapshot.leaseId());
+            payload.put("leaseExpiresAt", snapshot.expiresAt());
+            payload.put("stationId", snapshot.stationId());
+            payload.put("serviceBusy", snapshot.serviceBusy());
+            payload.put("serviceCurrentOperation", snapshot.serviceCurrentOperation());
+            payload.put("serviceStateRaw", "");
+            payload.put("serviceAuxsidsRaw", "");
             return payload;
         }));
 
         server.createContext("/api/service/auxsids", exchange -> proxyServiceJson(exchange, httpClient,
-                config.serviceBaseUrl + "/api/auxsids"));
+                activeServiceBaseUrl(config) + "/api/auxsids"));
         server.createContext("/api/service/state", exchange -> proxyServiceJson(exchange, httpClient,
-                config.serviceBaseUrl + "/api/state"));
+                activeServiceBaseUrl(config) + "/api/state"));
 
         server.createContext("/api/service/public-key", exchange -> {
             try {
                 HttpUtil.ensureMethod(exchange, "GET");
-                byte[] payload = fetchPublicKey(httpClient, config, "native");
+                byte[] payload = fetchPublicKey(httpClient, activeServiceBaseUrl(config), "native");
                 HttpUtil.sendBytes(exchange, 200, "application/octet-stream", payload);
             } catch (Exception ex) {
                 HttpUtil.sendError(exchange, 500, ex);
@@ -206,8 +188,9 @@ public final class DidacticWindowsVoterServer {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("bindHost", config.bindHost);
         payload.put("port", config.port);
-        payload.put("serviceBaseUrl", config.serviceBaseUrl);
+        payload.put("serviceBaseUrl", activeServiceBaseUrl(config));
         payload.put("defaultAuxsid", config.defaultAuxsid);
+        payload.put("stationId", "mesa-" + config.voterProfile.mesa());
         payload.put("catalogPath", config.catalogPath.toString());
         payload.put("schemaPath", config.schemaPath.toString());
         payload.put("cifradorDir", config.cifradorDir.toString());
@@ -230,11 +213,16 @@ public final class DidacticWindowsVoterServer {
         ArrayList<String> events = new ArrayList<>();
         events.add(event("Inicio de emision. runId=" + runId));
 
-        String auxsidsRaw = fetchAuxsidsRaw(httpClient, config);
-        String resolvedAuxsid = resolveAuxsid(preferredAuxsid, auxsidsRaw);
+        MixerDiscoveryCoordinator.LeaseContext lease = config.mixerCoordinator.ensureLease(httpClient, preferredAuxsid);
+        String resolvedAuxsid = lease.auxsid();
+        String serviceBaseUrl = lease.baseUrl();
+        events.add(event("Mezcladora seleccionada: " + serviceBaseUrl));
+        events.add(event("Handshake activo => station_id=" + lease.stationId()
+                + " lease_id=" + lease.leaseId()
+                + " expires_at=" + lease.expiresAt()));
         events.add(event("Auxsid operativo resuelto: " + resolvedAuxsid));
 
-        PublicKeyPayload publicKey = fetchPublicKeyPayload(httpClient, config, "native");
+        PublicKeyPayload publicKey = fetchPublicKeyPayload(httpClient, serviceBaseUrl, "native");
         if (!publicKey.hasActiveSession()) {
             throw new IllegalStateException("La mezcladora no reporta una sesion activa para recibir votos.");
         }
@@ -256,6 +244,7 @@ public final class DidacticWindowsVoterServer {
 
         ProcessBuilder pb = new ProcessBuilder(
                 config.javaExePath().toString(),
+                "-Djava.library.path=" + config.nativeLibDirPath(),
                 "-jar",
                 config.jarPath().toString(),
                 publicKeyPath.toString(),
@@ -293,6 +282,8 @@ public final class DidacticWindowsVoterServer {
         events.add(event("Voto cifrado generado. registros=" + ciphertextCount));
 
         Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("station_id", lease.stationId());
+        payload.put("lease_id", lease.leaseId());
         payload.put("auxsid", resolvedAuxsid);
         payload.put("format", "native");
         if (!publicKey.sessionId.isBlank()) {
@@ -303,16 +294,20 @@ public final class DidacticWindowsVoterServer {
         }
         payload.put("ciphertexts_ext", ciphertextsExt);
         payload.put("width", VERIFICATUM_WIDTH);
-        events.add(event("POST " + config.serviceBaseUrl + "/api/ciphertexts"));
-        events.add(event("curl -X POST \"" + config.serviceBaseUrl + "/api/ciphertexts\" "
+        events.add(event("POST " + serviceBaseUrl + "/api/ciphertexts"));
+        events.add(event("curl -X POST \"" + serviceBaseUrl + "/api/ciphertexts\" "
                 + "-H \"Content-Type: application/json\" "
-                + "-d '{\"auxsid\":\"" + resolvedAuxsid
+                + "-d '{\"station_id\":\"" + lease.stationId()
+                + "\",\"lease_id\":\"" + lease.leaseId()
+                + "\",\"auxsid\":\"" + resolvedAuxsid
                 + "\",\"format\":\"native\""
                 + (!publicKey.sessionId.isBlank() ? ",\"session_id\":\"" + publicKey.sessionId + "\"" : "")
                 + (!publicKey.sessionName.isBlank() ? ",\"session_name\":\"" + publicKey.sessionName + "\"" : "")
                 + ",\"width\":" + VERIFICATUM_WIDTH
                 + ",\"ciphertexts_ext\":\"" + summarizeCiphertexts(ciphertextsExt) + "\"}'"));
-        events.add(event("Payload => {\"auxsid\":\"" + resolvedAuxsid
+        events.add(event("Payload => {\"station_id\":\"" + lease.stationId()
+                + "\",\"lease_id\":\"" + lease.leaseId()
+                + "\",\"auxsid\":\"" + resolvedAuxsid
                 + "\",\"format\":\"native\""
                 + (!publicKey.sessionId.isBlank() ? ",\"session_id\":\"" + publicKey.sessionId + "\"" : "")
                 + (!publicKey.sessionName.isBlank() ? ",\"session_name\":\"" + publicKey.sessionName + "\"" : "")
@@ -323,11 +318,12 @@ public final class DidacticWindowsVoterServer {
         events.add(event("Remitiendo ciphertexts_ext al servicio remoto con format=native."));
 
         String receiptRaw = postJson(httpClient,
-                URI.create(config.serviceBaseUrl + "/api/ciphertexts"),
+                URI.create(serviceBaseUrl + "/api/ciphertexts"),
                 JsonUtil.toJson(payload));
         boolean receiptAccepted = extractJsonBoolean(receiptRaw, "ok");
         String serviceResolvedAuxsid = firstNonBlank(extractJsonString(receiptRaw, "resolved_auxsid"), resolvedAuxsid);
         events.add(event("Respuesta API => validated=" + extractJsonBoolean(receiptRaw, "validated")
+                + " handshake_validated=" + extractJsonBoolean(receiptRaw, "handshake_validated")
                 + " format_resolved=" + firstNonBlank(extractJsonString(receiptRaw, "format_resolved"), "native")
                 + " party_validated=" + firstNonBlank(extractJsonString(receiptRaw, "party_validated"), "party01")
                 + " accumulated=" + extractJsonBoolean(receiptRaw, "accumulated")
@@ -349,7 +345,7 @@ public final class DidacticWindowsVoterServer {
                 stderrPath,
                 stdout,
                 stderr,
-                auxsidsRaw,
+                "",
                 receiptRaw,
                 events
         );
@@ -408,14 +404,18 @@ public final class DidacticWindowsVoterServer {
         }
     }
 
-    private static byte[] fetchPublicKey(HttpClient httpClient, AppConfig config, String format) throws Exception {
-        return fetchPublicKeyPayload(httpClient, config, format).contentBytes;
+    private static String activeServiceBaseUrl(AppConfig config) {
+        return firstNonBlank(config.mixerCoordinator.activeBaseUrl(), config.serviceBaseUrl);
     }
 
-    private static PublicKeyPayload fetchPublicKeyPayload(HttpClient httpClient, AppConfig config, String format)
+    private static byte[] fetchPublicKey(HttpClient httpClient, String serviceBaseUrl, String format) throws Exception {
+        return fetchPublicKeyPayload(httpClient, serviceBaseUrl, format).contentBytes;
+    }
+
+    private static PublicKeyPayload fetchPublicKeyPayload(HttpClient httpClient, String serviceBaseUrl, String format)
             throws Exception {
         String normalizedFormat = firstNonBlank(format, "native");
-        String url = config.serviceBaseUrl + "/api/public-key";
+        String url = serviceBaseUrl + "/api/public-key";
         if (!"native".equalsIgnoreCase(normalizedFormat)) {
             url += "?format=" + HttpUtil.urlEncode(normalizedFormat);
         }
@@ -714,10 +714,15 @@ public final class DidacticWindowsVoterServer {
             int port,
             String serviceBaseUrl,
             String defaultAuxsid,
-            VoterProfile voterProfile
+            VoterProfile voterProfile,
+            MixerDiscoveryCoordinator mixerCoordinator
     ) {
         Path javaExePath() {
             return cifradorDir.resolve("runtime").resolve("bin").resolve("java.exe");
+        }
+
+        Path nativeLibDirPath() {
+            return cifradorDir.resolve("libs").resolve("windows-x64");
         }
 
         Path jarPath() {

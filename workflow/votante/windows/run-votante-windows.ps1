@@ -1,7 +1,7 @@
 param(
     [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot/../../..").Path,
     [int]$Port = 8788,
-    [Alias("MixBaseUrl")][string]$ServiceBaseUrl = "http://wsantivanez-hm:7040",
+    [Alias("MixBaseUrl")][string]$ServiceBaseUrl = "",
     [string]$Auxsid = "",
     [string]$SessionId = ""
 )
@@ -56,12 +56,19 @@ if (-not (Test-PortAvailable -PortNumber $Port)) {
 }
 
 Write-Host "[votante-windows] Iniciando servidor en http://127.0.0.1:$Port"
-Write-Host "[votante-windows] Servicio objetivo: $ServiceBaseUrl"
+if ($ServiceBaseUrl) {
+    Write-Host "[votante-windows] Semilla de descubrimiento configurada: $ServiceBaseUrl"
+}
+else {
+    Write-Host "[votante-windows] Descubrimiento de mezcladora: red local"
+}
 $javaArgs = @(
     "-Dvotante.windows.root=$ProjectRoot",
-    "-Dvotante.windows.port=$Port",
-    "-Dvotante.windows.serviceBaseUrl=$ServiceBaseUrl"
+    "-Dvotante.windows.port=$Port"
 )
+if ($ServiceBaseUrl) {
+    $javaArgs += "-Dvotante.windows.serviceBaseUrl=$ServiceBaseUrl"
+}
 if ($Auxsid) {
     $javaArgs += "-Dvotante.windows.auxsid=$Auxsid"
 }

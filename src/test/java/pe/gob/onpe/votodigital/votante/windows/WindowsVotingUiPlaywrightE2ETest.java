@@ -42,6 +42,7 @@ class WindowsVotingUiPlaywrightE2ETest {
     private static HttpServer mockService;
     private static String auxsid;
     private static volatile String lastCiphertextsBody;
+    private static volatile String lastHandshakeBody;
 
     @BeforeAll
     static void startServer() throws Exception {
@@ -152,8 +153,14 @@ class WindowsVotingUiPlaywrightE2ETest {
                 "La API simulada debe recibir session_id.");
         assertTrue(lastCiphertextsBody != null && lastCiphertextsBody.contains("\"session_name\":\"servidor-e2e-20260320\""),
                 "La API simulada debe recibir session_name.");
+        assertTrue(lastCiphertextsBody != null && lastCiphertextsBody.contains("\"station_id\":\"mesa_047612\""),
+                "La API simulada debe recibir station_id saneado.");
+        assertTrue(lastCiphertextsBody != null && lastCiphertextsBody.contains("\"lease_id\":\"mock-e2e-instance:mesa_047612\""),
+                "La API simulada debe recibir lease_id.");
         assertTrue(lastCiphertextsBody != null && lastCiphertextsBody.contains("\"ciphertexts_ext\":"),
                 "La API simulada debe recibir ciphertexts_ext.");
+        assertTrue(lastHandshakeBody != null && lastHandshakeBody.contains("\"station_id\":\"mesa-047612\""),
+                "La GUI debe solicitar handshake con la estacion.");
     }
 
     private static void compileWindowsServerSources() throws Exception {
@@ -214,6 +221,37 @@ class WindowsVotingUiPlaywrightE2ETest {
         String publicKeyHex = toHex(publicKeyBytes);
 
         mockService = HttpServer.create(new InetSocketAddress("127.0.0.1", SERVICE_PORT), 0);
+        mockService.createContext("/api/discovery", exchange -> sendJson(exchange, 200,
+                "{\"ok\":true,\"server\":{\"instance_id\":\"mock-e2e-instance\",\"hostname\":\"127.0.0.1\","
+                        + "\"public_host\":\"127.0.0.1\",\"base_ui_port\":" + SERVICE_PORT + ","
+                        + "\"ui_url\":\"http://127.0.0.1:" + SERVICE_PORT + "/\","
+                        + "\"api_url\":\"http://127.0.0.1:" + SERVICE_PORT + "\","
+                        + "\"discovery_url\":\"http://127.0.0.1:" + SERVICE_PORT + "/api/discovery\","
+                        + "\"handshake_url\":\"http://127.0.0.1:" + SERVICE_PORT + "/api/handshake\","
+                        + "\"public_key_url\":\"http://127.0.0.1:" + SERVICE_PORT + "/api/public-key\","
+                        + "\"ciphertexts_url\":\"http://127.0.0.1:" + SERVICE_PORT + "/api/ciphertexts\","
+                        + "\"has_active_session\":true,\"keygen_ready\":true,\"accepting_votes\":true,"
+                        + "\"current_operation\":null,\"handshake_ttl_seconds\":90,\"registered_station_count\":0},"
+                        + "\"session\":{\"session_id\":\"srv-e2e-001\",\"session_name\":\"servidor-e2e-20260320\","
+                        + "\"session_label\":\"Servidor E2E 20260320\","
+                        + "\"election_name\":\"Elecciones Generales 2026\",\"sid\":\"ONPE\"}}"));
+        mockService.createContext("/api/handshake", exchange -> {
+            byte[] body = exchange.getRequestBody().readAllBytes();
+            lastHandshakeBody = new String(body, StandardCharsets.UTF_8);
+            sendJson(exchange, 200,
+                    "{\"ok\":true,\"accepted\":true,\"reason\":\"ok\",\"station_id\":\"mesa_047612\","
+                            + "\"requested_auxsid\":\"" + auxsid + "\","
+                            + "\"lease_id\":\"mock-e2e-instance:mesa_047612\","
+                            + "\"expires_at\":\"2026-03-20T13:18:04-05:00\","
+                            + "\"server\":{\"instance_id\":\"mock-e2e-instance\"},"
+                            + "\"session\":{\"session_id\":\"srv-e2e-001\","
+                            + "\"session_name\":\"servidor-e2e-20260320\","
+                            + "\"session_label\":\"Servidor E2E 20260320\","
+                            + "\"election_name\":\"Elecciones Generales 2026\",\"sid\":\"ONPE\"},"
+                            + "\"session_id\":\"srv-e2e-001\",\"session_name\":\"servidor-e2e-20260320\","
+                            + "\"session_label\":\"Servidor E2E 20260320\","
+                            + "\"election_name\":\"Elecciones Generales 2026\"}");
+        });
         mockService.createContext("/api/state", exchange -> sendJson(exchange, 200,
                 "{\"ok\":true,\"session\":\"servidor-e2e-20260320\",\"parties\":[\"party01\",\"party02\",\"party03\"],\"phase\":\"keygen_completed\"}"));
         mockService.createContext("/api/auxsids", exchange -> sendJson(exchange, 200,
@@ -230,7 +268,8 @@ class WindowsVotingUiPlaywrightE2ETest {
             sendJson(exchange, 200,
                     "{\"ok\":true,\"validated\":true,\"format_received\":\"native\",\"format_resolved\":\"native\","
                             + "\"input_fields\":[\"ciphertexts_ext\"],\"resolved_auxsid\":\"" + auxsid + "\","
-                            + "\"auxsid_changed\":false,\"accumulated\":true,"
+                            + "\"auxsid_changed\":false,\"accumulated\":true,\"handshake_validated\":true,"
+                            + "\"station_id\":\"mesa_047612\",\"lease_id\":\"mock-e2e-instance:mesa_047612\","
                             + "\"session_id\":\"srv-e2e-001\",\"session_name\":\"servidor-e2e-20260320\","
                             + "\"session_label\":\"Servidor E2E 20260320\",\"election_name\":\"Elecciones Generales 2026\","
                             + "\"party_validated\":\"party01\",\"width\":1,"
