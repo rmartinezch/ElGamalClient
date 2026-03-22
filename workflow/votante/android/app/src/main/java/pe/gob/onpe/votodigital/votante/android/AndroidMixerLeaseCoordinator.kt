@@ -5,6 +5,7 @@ import java.net.HttpURLConnection
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.URL
+import java.net.MalformedURLException
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -27,31 +28,37 @@ class AndroidMixerLeaseCoordinator(
     @Synchronized
     fun bootstrap(preferredAuxsid: String): BootstrapSnapshot {
         return try {
+            val requestedAuxsid = sanitizeRequestedAuxsid(preferredAuxsid)
             val expectedSessionId = currentLease?.sessionId.orEmpty()
             val discovery = findBestDiscovery(expectedSessionId)
                 ?: return BootstrapSnapshot.inactive(
                     activeBaseUrl().ifBlank { configuredBaseUrl },
-                    normalizedAuxsid(preferredAuxsid),
+                    "",
                     "No se encontro una mezcladora activa con sesion compatible en la red local."
                 )
-            val emissionContext = fetchEmissionContext(discovery, preferredAuxsid)
-            val suggestedAuxsid = emissionContext.resolvedAuxsid.ifBlank {
-                emissionContext.auxsid.ifBlank { normalizedAuxsid(preferredAuxsid) }
+            val emissionContext = fetchEmissionContext(discovery, requestedAuxsid)
+            if (!emissionContext.hasContext()) {
+                return BootstrapSnapshot.inactive(
+                    discovery.baseUrl,
+                    "",
+                    "La mezcladora no confirmo el contexto de emision por /api/emission-context."
+                )
             }
+            val resolvedAuxsid = resolvedOperationalAuxsid(emissionContext)
             val reusableLease = currentLease?.takeIf {
                 it.baseUrl == discovery.baseUrl && it.sessionId == discovery.sessionId && !it.isExpired()
             }
-            val acceptingVotes = if (emissionContext.hasContext()) emissionContext.acceptingVotes else discovery.acceptingVotes
+            val acceptingVotes = emissionContext.acceptingVotes
             if (!acceptingVotes) {
-                BootstrapSnapshot.busy(discovery, reusableLease, suggestedAuxsid, emissionContext)
+                BootstrapSnapshot.busy(discovery, reusableLease, resolvedAuxsid, emissionContext)
             } else {
                 val publicKey = fetchPublicKeyInfo(discovery.baseUrl, "native")
-                BootstrapSnapshot.active(discovery, reusableLease, publicKey, suggestedAuxsid, emissionContext)
+                BootstrapSnapshot.active(discovery, reusableLease, publicKey, resolvedAuxsid, emissionContext)
             }
         } catch (ex: Exception) {
             BootstrapSnapshot.inactive(
                 activeBaseUrl().ifBlank { configuredBaseUrl },
-                normalizedAuxsid(preferredAuxsid),
+                "",
                 ex.message ?: "No se encontro una mezcladora activa con sesion compatible en la red local."
             )
         }
@@ -65,7 +72,7 @@ class AndroidMixerLeaseCoordinator(
     fun activeBaseUrl(): String = currentLease?.baseUrl.orEmpty()
 
     private fun selectLease(preferredAuxsid: String, forceRenew: Boolean): LeaseContext {
-        val normalizedAuxsid = normalizedAuxsid(preferredAuxsid)
+        val requestedAuxsid = sanitizeRequestedAuxsid(preferredAuxsid)
         val existing = currentLease
         if (existing != null) {
             val currentDiscovery = tryDiscovery(existing.baseUrl, existing.sessionId)
@@ -77,9 +84,10 @@ class AndroidMixerLeaseCoordinator(
                     )
                     return currentLease!!
                 }
-                val renewal = tryHandshake(currentDiscovery, normalizedAuxsid)
+                val renewal = tryHandshake(currentDiscovery, requestedAuxsid)
                 if (renewal != null && renewal.accepted) {
-                    currentLease = LeaseContext.from(currentDiscovery, renewal, normalizedAuxsid)
+                    val emissionContext = fetchConfirmedEmissionContext(currentDiscovery, renewal.requestedAuxsid)
+                    currentLease = LeaseContext.from(currentDiscovery, renewal, emissionContext)
                     rememberCandidate(currentDiscovery.baseUrl)
                     return currentLease!!
                 }
@@ -90,18 +98,20 @@ class AndroidMixerLeaseCoordinator(
         val expectedSessionId = existing?.sessionId.orEmpty()
         for (candidate in prioritizedCandidates()) {
             val discovery = tryDiscovery(candidate, expectedSessionId) ?: continue
-            val handshake = tryHandshake(discovery, normalizedAuxsid) ?: continue
+            val handshake = tryHandshake(discovery, requestedAuxsid) ?: continue
             if (handshake.accepted) {
-                currentLease = LeaseContext.from(discovery, handshake, normalizedAuxsid)
+                val emissionContext = fetchConfirmedEmissionContext(discovery, handshake.requestedAuxsid)
+                currentLease = LeaseContext.from(discovery, handshake, emissionContext)
                 rememberCandidate(discovery.baseUrl)
                 return currentLease!!
             }
         }
 
         for (discovery in sweepLocalNetwork(expectedSessionId)) {
-            val handshake = tryHandshake(discovery, normalizedAuxsid) ?: continue
+            val handshake = tryHandshake(discovery, requestedAuxsid) ?: continue
             if (handshake.accepted) {
-                currentLease = LeaseContext.from(discovery, handshake, normalizedAuxsid)
+                val emissionContext = fetchConfirmedEmissionContext(discovery, handshake.requestedAuxsid)
+                currentLease = LeaseContext.from(discovery, handshake, emissionContext)
                 rememberCandidate(discovery.baseUrl)
                 return currentLease!!
             }
@@ -148,7 +158,7 @@ class AndroidMixerLeaseCoordinator(
     }
 
     private fun fetchEmissionContext(discovery: DiscoveryInfo, preferredAuxsid: String): EmissionContextInfo {
-        val query = normalizedAuxsid(preferredAuxsid)
+        val query = sanitizeRequestedAuxsid(preferredAuxsid)
         val url = buildString {
             append(discovery.emissionContextUrl)
             if (query.isNotBlank()) {
@@ -174,7 +184,6 @@ class AndroidMixerLeaseCoordinator(
                 acceptingVotes = response.optBoolean("accepting_votes", discovery.acceptingVotes)
             )
         } catch (_: Exception) {
-            val suggested = fetchSuggestedAuxsid(discovery.baseUrl)
             EmissionContextInfo(
                 ok = false,
                 sessionId = discovery.sessionId,
@@ -183,8 +192,8 @@ class AndroidMixerLeaseCoordinator(
                 electionName = discovery.electionName,
                 sid = discovery.sid,
                 requestedAuxsid = query,
-                resolvedAuxsid = suggested,
-                auxsid = suggested.ifBlank { query },
+                resolvedAuxsid = "",
+                auxsid = "",
                 auxsidChanged = false,
                 accumulated = false,
                 accumulatedFromAuxsid = "",
@@ -193,15 +202,18 @@ class AndroidMixerLeaseCoordinator(
         }
     }
 
-    private fun fetchSuggestedAuxsid(baseUrl: String): String {
-        return try {
-            val response = JSONObject(httpGet("${trimTrailingSlash(baseUrl)}/api/auxsids", DISCOVERY_TIMEOUT_MS))
-            response.optString("suggested_auxsid", "").ifBlank {
-                response.optString("next_shuffle", "")
-            }
-        } catch (_: Exception) {
-            ""
+    private fun fetchConfirmedEmissionContext(discovery: DiscoveryInfo, preferredAuxsid: String): EmissionContextInfo {
+        val emissionContext = fetchEmissionContext(discovery, preferredAuxsid)
+        if (!emissionContext.hasContext()) {
+            throw IllegalStateException("La mezcladora no confirmo el contexto de emision por /api/emission-context.")
         }
+        if (resolvedOperationalAuxsid(emissionContext).isBlank()) {
+            throw IllegalStateException("La mezcladora no devolvio un auxsid operativo valido por /api/emission-context.")
+        }
+        if (!emissionContext.acceptingVotes) {
+            throw IllegalStateException("La mezcladora no esta aceptando votos en este momento.")
+        }
+        return emissionContext
     }
 
     private fun prioritizedCandidates(): List<String> {
@@ -263,14 +275,14 @@ class AndroidMixerLeaseCoordinator(
                 return null
             }
             DiscoveryInfo(
-                baseUrl = trimTrailingSlash(server.optString("api_url", baseUrl)),
+                baseUrl = canonicalBaseUrl(baseUrl, server.optString("api_url", "")),
                 instanceId = server.optString("instance_id", ""),
                 hostname = server.optString("hostname", ""),
                 publicHost = server.optString("public_host", ""),
-                handshakeUrl = server.optString("handshake_url", "${trimTrailingSlash(baseUrl)}/api/handshake"),
-                publicKeyUrl = server.optString("public_key_url", "${trimTrailingSlash(baseUrl)}/api/public-key"),
-                ciphertextsUrl = server.optString("ciphertexts_url", "${trimTrailingSlash(baseUrl)}/api/ciphertexts"),
-                emissionContextUrl = server.optString("emission_context_url", "${trimTrailingSlash(baseUrl)}/api/emission-context"),
+                handshakeUrl = canonicalEndpointUrl(baseUrl, server.optString("handshake_url", ""), "/api/handshake"),
+                publicKeyUrl = canonicalEndpointUrl(baseUrl, server.optString("public_key_url", ""), "/api/public-key"),
+                ciphertextsUrl = canonicalEndpointUrl(baseUrl, server.optString("ciphertexts_url", ""), "/api/ciphertexts"),
+                emissionContextUrl = canonicalEndpointUrl(baseUrl, server.optString("emission_context_url", ""), "/api/emission-context"),
                 handshakeTtlSeconds = server.optInt("handshake_ttl_seconds", 90),
                 sessionId = sessionId,
                 sessionName = session.optString("session_name", ""),
@@ -287,18 +299,21 @@ class AndroidMixerLeaseCoordinator(
 
     private fun tryHandshake(discovery: DiscoveryInfo, preferredAuxsid: String): HandshakeInfo? {
         return try {
+            val requestedAuxsid = sanitizeRequestedAuxsid(preferredAuxsid)
             val payload = JSONObject()
                 .put("station_id", stationId)
                 .put("session_id", discovery.sessionId)
                 .put("session_name", discovery.sessionName)
-                .put("auxsid", preferredAuxsid)
+            if (requestedAuxsid.isNotBlank()) {
+                payload.put("auxsid", requestedAuxsid)
+            }
             val response = JSONObject(httpPostJson(discovery.handshakeUrl, payload.toString(), TIMEOUT_MS))
             HandshakeInfo(
                 ok = response.optBoolean("ok", false),
                 accepted = response.optBoolean("accepted", false),
                 reason = response.optString("reason", ""),
                 stationId = response.optString("station_id", stationId),
-                requestedAuxsid = response.optString("requested_auxsid", preferredAuxsid),
+                requestedAuxsid = response.optString("requested_auxsid", requestedAuxsid),
                 leaseId = response.optString("lease_id", ""),
                 expiresAt = parseInstant(response.optString("expires_at", "")),
                 sessionId = response.optString("session_id", discovery.sessionId),
@@ -433,10 +448,19 @@ class AndroidMixerLeaseCoordinator(
         }
     }
 
-    private fun normalizedAuxsid(value: String?): String {
-        val candidate = value?.trim().takeUnless { it.isNullOrBlank() } ?: "default"
+    internal fun sanitizeRequestedAuxsid(value: String?): String {
+        val candidate = value?.trim().orEmpty()
+        if (candidate.isBlank()) {
+            return ""
+        }
         require(candidate.matches(Regex("[A-Za-z0-9._-]+"))) { "auxsid invalido: $candidate" }
         return candidate
+    }
+
+    internal fun resolvedOperationalAuxsid(emissionContext: EmissionContextInfo): String {
+        return sanitizeRequestedAuxsid(
+            emissionContext.resolvedAuxsid.ifBlank { emissionContext.auxsid }
+        )
     }
 
     private fun trimTrailingSlash(value: String): String {
@@ -445,6 +469,58 @@ class AndroidMixerLeaseCoordinator(
             current = current.dropLast(1)
         }
         return current
+    }
+
+    internal fun canonicalBaseUrl(sourceBaseUrl: String, announcedBaseUrl: String): String {
+        val fallback = trimTrailingSlash(sourceBaseUrl)
+        if (announcedBaseUrl.isBlank()) {
+            return fallback
+        }
+        val source = parseUrlOrNull(fallback) ?: return trimTrailingSlash(announcedBaseUrl)
+        val announced = parseUrlOrNull(trimTrailingSlash(announcedBaseUrl)) ?: return trimTrailingSlash(announcedBaseUrl)
+        if (sameAuthority(source, announced)) {
+            return trimTrailingSlash(announced.toString())
+        }
+        return trimTrailingSlash(rewriteUrlAuthority(source, announced.path.ifBlank { source.path }, announced.query))
+    }
+
+    internal fun canonicalEndpointUrl(sourceBaseUrl: String, announcedUrl: String, defaultPath: String): String {
+        val fallback = "${trimTrailingSlash(sourceBaseUrl)}$defaultPath"
+        if (announcedUrl.isBlank()) {
+            return fallback
+        }
+        val source = parseUrlOrNull(trimTrailingSlash(sourceBaseUrl)) ?: return announcedUrl
+        val announced = parseUrlOrNull(announcedUrl) ?: return announcedUrl
+        if (sameAuthority(source, announced)) {
+            return announced.toString()
+        }
+        return rewriteUrlAuthority(source, announced.path.ifBlank { defaultPath }, announced.query)
+    }
+
+    private fun parseUrlOrNull(value: String): URL? {
+        return try {
+            URL(value)
+        } catch (_: MalformedURLException) {
+            null
+        }
+    }
+
+    private fun sameAuthority(left: URL, right: URL): Boolean {
+        return left.protocol.equals(right.protocol, ignoreCase = true)
+            && left.host.equals(right.host, ignoreCase = true)
+            && effectivePort(left) == effectivePort(right)
+    }
+
+    private fun effectivePort(url: URL): Int {
+        return if (url.port >= 0) url.port else url.defaultPort
+    }
+
+    private fun rewriteUrlAuthority(source: URL, path: String, query: String?): String {
+        val port = effectivePort(source)
+        val portSuffix = if (port > 0 && port != source.defaultPort) ":$port" else ""
+        val querySuffix = if (query.isNullOrBlank()) "" else "?$query"
+        val normalizedPath = if (path.startsWith("/")) path else "/$path"
+        return "${source.protocol}://${source.host}$portSuffix$normalizedPath$querySuffix"
     }
 
     data class DiscoveryInfo(
@@ -506,7 +582,7 @@ class AndroidMixerLeaseCoordinator(
         val accumulatedFromAuxsid: String,
         val acceptingVotes: Boolean
     ) {
-        fun hasContext(): Boolean = ok || resolvedAuxsid.isNotBlank() || auxsid.isNotBlank()
+        fun hasContext(): Boolean = resolvedAuxsid.isNotBlank() || auxsid.isNotBlank()
     }
 
     data class LeaseContext(
@@ -519,13 +595,21 @@ class AndroidMixerLeaseCoordinator(
         val sessionName: String,
         val sessionLabel: String,
         val electionName: String,
-        val auxsid: String
+        val auxsid: String,
+        val requestedAuxsid: String,
+        val auxsidChanged: Boolean,
+        val accumulated: Boolean,
+        val accumulatedFromAuxsid: String
     ) {
         fun isExpiringSoon(): Boolean = expiresAt == Instant.EPOCH || expiresAt.minusSeconds(LEASE_RENEW_MARGIN_SECONDS).isBefore(Instant.now())
         fun isExpired(): Boolean = expiresAt == Instant.EPOCH || expiresAt.isBefore(Instant.now())
 
         companion object {
-            fun from(discovery: DiscoveryInfo, handshake: HandshakeInfo, auxsid: String): LeaseContext {
+            fun from(
+                discovery: DiscoveryInfo,
+                handshake: HandshakeInfo,
+                emissionContext: EmissionContextInfo
+            ): LeaseContext {
                 return LeaseContext(
                     baseUrl = discovery.baseUrl,
                     instanceId = discovery.instanceId,
@@ -536,7 +620,11 @@ class AndroidMixerLeaseCoordinator(
                     sessionName = handshake.sessionName,
                     sessionLabel = handshake.sessionLabel,
                     electionName = handshake.electionName,
-                    auxsid = handshake.requestedAuxsid.ifBlank { auxsid }
+                    auxsid = emissionContext.resolvedAuxsid.ifBlank { emissionContext.auxsid },
+                    requestedAuxsid = emissionContext.requestedAuxsid.ifBlank { handshake.requestedAuxsid },
+                    auxsidChanged = emissionContext.auxsidChanged,
+                    accumulated = emissionContext.accumulated,
+                    accumulatedFromAuxsid = emissionContext.accumulatedFromAuxsid
                 )
             }
         }
@@ -570,7 +658,7 @@ class AndroidMixerLeaseCoordinator(
                 return BootstrapSnapshot(
                     serviceMixActive = true,
                     serviceBaseUrl = discovery.baseUrl,
-                    resolvedAuxsid = lease?.auxsid?.ifBlank { resolvedAuxsid } ?: resolvedAuxsid,
+                    resolvedAuxsid = resolvedAuxsid,
                     stationId = lease?.stationId.orEmpty(),
                     leaseId = lease?.leaseId.orEmpty(),
                     expiresAt = lease?.expiresAt?.toString().orEmpty(),
@@ -616,7 +704,7 @@ class AndroidMixerLeaseCoordinator(
                 return BootstrapSnapshot(
                     serviceMixActive = false,
                     serviceBaseUrl = discovery.baseUrl,
-                    resolvedAuxsid = lease?.auxsid?.ifBlank { resolvedAuxsid } ?: resolvedAuxsid,
+                    resolvedAuxsid = resolvedAuxsid,
                     stationId = lease?.stationId.orEmpty(),
                     leaseId = lease?.leaseId.orEmpty(),
                     expiresAt = lease?.expiresAt?.toString().orEmpty(),

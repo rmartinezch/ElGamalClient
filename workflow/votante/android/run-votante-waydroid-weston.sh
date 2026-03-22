@@ -12,6 +12,7 @@ REBUILD_APK="${REBUILD_APK:-0}"
 REINSTALL_APP="${REINSTALL_APP:-1}"
 START_TIMEOUT="${START_TIMEOUT:-120}"
 CLEAN_START="${CLEAN_START:-1}"
+ADB_CONNECT_TIMEOUT="${ADB_CONNECT_TIMEOUT:-30}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -44,17 +45,15 @@ waydroid_app_list() {
   waydroid app list 2>&1 || true
 }
 
-session_running_flag() {
-  local status
-  status="$(waydroid_status)"
-  [[ "$status" == *$'Session:\tRUNNING'* && "$status" == *$'Container:\tRUNNING'* ]]
+waydroid_ip() {
+  waydroid_status | sed -n 's/^IP address:[[:space:]]*//p' | head -n 1
 }
 
-session_ready() {
-  local app_list
-
-  if ! session_running_flag; then
-    return 1
+session_running_flag() {
+  local status app_list
+  status="$(waydroid_status)"
+  if [[ "$status" == *$'Session:\tRUNNING'* && "$status" == *$'Container:\tRUNNING'* ]]; then
+    return 0
   fi
 
   app_list="$(waydroid_app_list)"
@@ -63,6 +62,26 @@ session_ready() {
   fi
 
   printf '%s\n' "$app_list" | match_line '^packageName:|^Name:'
+}
+
+container_frozen() {
+  waydroid_status | grep -q $'^Container:\tFROZEN$'
+}
+
+session_ready() {
+  local app_list status
+
+  app_list="$(waydroid_app_list)"
+  if printf '%s\n' "$app_list" | match_line 'WayDroid session is stopped|Failed to get service waydroidplatform'; then
+    return 1
+  fi
+
+  if printf '%s\n' "$app_list" | match_line '^packageName:|^Name:'; then
+    return 0
+  fi
+
+  status="$(waydroid_status)"
+  [[ "$status" == *$'Session:\tRUNNING'* && "$status" == *$'Container:\tRUNNING'* ]]
 }
 
 wait_for_session() {
@@ -80,6 +99,15 @@ wait_for_session() {
   echo "[votante-waydroid] Sonda app list:" >&2
   waydroid_app_list >&2 || true
   exit 1
+}
+
+ensure_unfrozen() {
+  if ! container_frozen; then
+    return 0
+  fi
+
+  echo "[votante-waydroid] Contenedor Waydroid congelado; reanudando..."
+  pkexec bash -lc 'waydroid container unfreeze >/dev/null 2>&1 || true'
 }
 
 package_installed() {
@@ -120,10 +148,42 @@ ensure_waydroid_weston() {
   fi
   mkdir -p "$PROJECT_ROOT/.build/waydroid-weston"
   setsid bash -lc \
-    "env SHOW_UI=0 WAYDROID_SHOW_UI=0 \"$PROJECT_ROOT/scripts/android/start-waydroid-weston.sh\"" \
+    "env SHOW_UI=0 WAYDROID_SHOW_UI=\"$SHOW_UI\" \"$PROJECT_ROOT/scripts/android/start-waydroid-weston.sh\"" \
     >>"$PROJECT_ROOT/.build/waydroid-weston/votante-launch-bootstrap.log" 2>&1 </dev/null &
 
   wait_for_session
+  ensure_unfrozen
+}
+
+ensure_waydroid_adb() {
+  local ip adb_target end devices adb_state
+
+  ip="$(waydroid_ip)"
+  if [[ -z "$ip" || "$ip" == "UNKNOWN" ]]; then
+    return 0
+  fi
+
+  adb_target="${ip}:5555"
+  echo "[votante-waydroid] Conectando ADB a $adb_target..."
+  adb disconnect "$adb_target" >/dev/null 2>&1 || true
+  waydroid adb connect >/dev/null 2>&1 || true
+
+  end=$((SECONDS + ADB_CONNECT_TIMEOUT))
+  while (( SECONDS < end )); do
+    devices="$(adb devices 2>/dev/null || true)"
+    adb_state="$(printf '%s\n' "$devices" | sed -n "s/^${ip}:5555[[:space:]]\\+\\([^[:space:]]\\+\\).*$/\\1/p" | head -n 1)"
+    if [[ "$adb_state" == "device" ]]; then
+      echo "[votante-waydroid] ADB conectado a $adb_target."
+      return 0
+    fi
+    if [[ "$adb_state" == "unauthorized" || "$adb_state" == "offline" ]]; then
+      echo "[votante-waydroid] Advertencia: ADB de Waydroid quedo en estado $adb_state; se continua sin depender de ADB." >&2
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "[votante-waydroid] Advertencia: ADB de Waydroid no quedo listo en ${ADB_CONNECT_TIMEOUT}s." >&2
 }
 
 install_app() {
@@ -156,9 +216,12 @@ launch_app() {
 require_cmd waydroid
 require_cmd nohup
 require_cmd setsid
+require_cmd adb
+require_cmd pkexec
 
 ensure_apk
 ensure_waydroid_weston
+ensure_waydroid_adb
 install_app
 show_ui
 launch_app

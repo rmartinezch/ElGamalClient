@@ -181,7 +181,7 @@ function applyBootstrap(data) {
   text("conditionBadge", profile.condition || "HABIL");
 
   document.getElementById("districtCode").value = profile.districtCode || "02";
-  document.getElementById("auxsid").value = data.resolvedAuxsid || data.defaultAuxsid || "default";
+  document.getElementById("auxsid").value = data.resolvedAuxsid || "";
 
   const serviceMode = data.serviceMixActive ? "active" : (data.serviceBusy ? "busy" : "inactive");
   text("serviceMixState", serviceMode === "active" ? "Activa" : (serviceMode === "busy" ? "Ocupada" : "Inactiva"));
@@ -224,6 +224,7 @@ function renderReceiptSummary(submitResult) {
     `<div class="receipt-row"><span>Formato</span><strong>${receipt?.format_resolved || submitResult.ciphertextsFormat || "native"}</strong></div>`,
     `<div class="receipt-row"><span>Auxsid renombrado</span><strong>${receipt?.auxsid_changed ? "Si" : "No"}</strong></div>`,
     `<div class="receipt-row"><span>Acumulado</span><strong>${receipt?.accumulated ? "Si" : "No"}</strong></div>`,
+    `<div class="receipt-row"><span>Acumulado desde</span><strong>${receipt?.accumulated_from_auxsid || submitResult.serviceAccumulatedFromAuxsid || "No aplica"}</strong></div>`,
     `<div class="receipt-row"><span>Replicado a</span><strong>${replicatedTo}</strong></div>`,
     `<div class="receipt-row"><span>Archivos escritos</span><strong>${writtenFiles}</strong></div>`,
     `<div class="receipt-row"><span>Carpeta local</span><strong>${submitResult.submissionDir}</strong></div>`
@@ -317,6 +318,7 @@ form.addEventListener("submit", async (event) => {
     state.lastValidatedParty = receipt.party_validated || "party01";
     text("serviceSession", receipt.session_label || receipt.session_name || receipt.session_id || receipt.session || resolveSessionDisplay(state.bootstrap || {}));
     text("serviceAuxsid", data.serviceResolvedAuxsid || data.auxsid);
+    document.getElementById("auxsid").value = data.serviceResolvedAuxsid || data.auxsid || "";
     text("serviceKeyState", "Aplicada");
     setLamp("serviceKeyLamp", "status-on");
     text("serviceValidatedParty", state.lastValidatedParty);
@@ -359,6 +361,11 @@ async function refreshOperationalState(logChanges = false) {
       if (currentMode === "active" && currentSession !== previousSession && currentSession !== "Sin sesion activa") {
         appendEvent(`Sesion activa detectada: ${currentSession}.`);
       }
+      const previousAuxsid = previous.resolvedAuxsid || "";
+      const currentAuxsid = data.resolvedAuxsid || "";
+      if (currentAuxsid && currentAuxsid !== previousAuxsid) {
+        appendEvent(`Auxsid operativo actualizado: ${currentAuxsid}.`);
+      }
     }
     return data;
   })();
@@ -379,16 +386,20 @@ async function bootstrap() {
     appendEvent(`Conexion establecida con ${data.serviceBaseUrl}.`);
     appendEvent(`Sesion activa detectada: ${resolveSessionDisplay(data)}.`);
     appendEvent(`Eleccion activa: ${data.serviceElectionName || data.electionName || "No informada"}.`);
-    appendEvent(`Auxsid asignado automaticamente: ${data.resolvedAuxsid}.`);
+    appendEvent(`Auxsid operativo publicado: ${data.resolvedAuxsid}.`);
     appendEvent("Llave publica disponible para la emision.");
   } else if (data.serviceBusy) {
     appendEvent(`Mezcladora ocupada: ${data.serviceBaseUrl}.`);
     appendEvent(`Motivo: ${data.serviceInactiveReason || "operacion en curso."}`);
-    appendEvent(`Auxsid reservado: ${data.resolvedAuxsid}.`);
+    appendEvent(data.resolvedAuxsid
+      ? `Auxsid operativo actual: ${data.resolvedAuxsid}.`
+      : "Auxsid operativo pendiente de confirmacion por la mezcladora.");
   } else {
     appendEvent(`Mezcladora inactiva o no disponible: ${data.serviceBaseUrl}.`);
     appendEvent(`Motivo: ${data.serviceInactiveReason || "sin sesion activa."}`);
-    appendEvent(`Auxsid local reservado: ${data.resolvedAuxsid}.`);
+    appendEvent(data.resolvedAuxsid
+      ? `Auxsid operativo reportado: ${data.resolvedAuxsid}.`
+      : "Auxsid operativo pendiente de confirmacion por la mezcladora.");
     if (data.serviceError) {
       appendEvent(`Detalle de conectividad: ${data.serviceError}`);
     }

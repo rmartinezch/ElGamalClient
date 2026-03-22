@@ -7,6 +7,7 @@ WORKFLOW_DIR="$PROJECT_ROOT/workflow/votante/android"
 APP_DIR="$WORKFLOW_DIR/app"
 APP_LIBS_DIR="$APP_DIR/libs"
 APP_ASSETS_DIR="$APP_DIR/src/main/assets/cifrador"
+APP_GENERATED_ASSETS_DIR="$APP_DIR/src/generated/assets/votante"
 APP_JNILIBS_DIR="$APP_DIR/src/main/jniLibs"
 BASE_ANDROID_DIR="$PROJECT_ROOT/android"
 BASE_JNILIBS_DIR="$BASE_ANDROID_DIR/app/src/main/jniLibs"
@@ -18,8 +19,10 @@ GRADLEW_PATH="$BASE_ANDROID_DIR/gradlew"
 JAR_TARGET_NAME="${JAR_TARGET_NAME:-ElGamalCipher-android.jar}"
 JAR_APP_PATH="$APP_LIBS_DIR/$JAR_TARGET_NAME"
 JAR_ASSET_PATH="$APP_ASSETS_DIR/$JAR_TARGET_NAME"
+RUNTIME_CONFIG_PATH="$APP_GENERATED_ASSETS_DIR/runtime-config.json"
 ABI_LIST=("arm64-v8a" "x86_64")
 JNI_LIBS=("libvecj-2.2.0.so" "libvmgj-1.3.0.so")
+SERVICE_BASE_URL="${VOTANTE_ANDROID_SERVICE_BASE_URL:-}"
 
 source "$PROJECT_ROOT/scripts/android/lib-android-env.sh"
 
@@ -71,8 +74,14 @@ main() {
   apk_source="$APP_DIR/build/outputs/apk/debug/app-debug.apk"
   sdk_root="$(resolve_android_sdk_root "$PROJECT_ROOT")"
 
-  mkdir -p "$APP_LIBS_DIR" "$APP_ASSETS_DIR" "$DIST_DIR"
+  mkdir -p "$APP_LIBS_DIR" "$APP_ASSETS_DIR" "$APP_GENERATED_ASSETS_DIR" "$DIST_DIR"
   printf 'sdk.dir=%s\n' "$sdk_root" > "$WORKFLOW_DIR/local.properties"
+
+  cat > "$RUNTIME_CONFIG_PATH" <<CONFIG
+{
+  "serviceBaseUrl": "${SERVICE_BASE_URL}"
+}
+CONFIG
 
   echo "[votante-android] Recompilando jar portable para Android (Java 17)..."
   (
@@ -105,6 +114,7 @@ main() {
 
   printf '\n[votante-android] APK generado en: %s\n' "$OUTPUT_APK_PATH"
   printf '[votante-android] SHA-256: %s\n' "$OUTPUT_SHA_PATH"
+  printf '[votante-android] serviceBaseUrl: %s\n' "${SERVICE_BASE_URL:-<descubrimiento-local>}"
 }
 
 main "$@"

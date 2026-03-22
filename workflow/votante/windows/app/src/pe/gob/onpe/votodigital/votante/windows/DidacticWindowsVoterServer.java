@@ -144,6 +144,8 @@ public final class DidacticWindowsVoterServer {
 
         server.createContext("/api/service/auxsids", exchange -> proxyServiceJson(exchange, httpClient,
                 activeServiceBaseUrl(config) + "/api/auxsids"));
+        server.createContext("/api/service/emission-context", exchange -> proxyServiceJson(exchange, httpClient,
+                activeServiceBaseUrl(config) + "/api/emission-context"));
         server.createContext("/api/service/state", exchange -> proxyServiceJson(exchange, httpClient,
                 activeServiceBaseUrl(config) + "/api/state"));
 
@@ -221,16 +223,24 @@ public final class DidacticWindowsVoterServer {
                 + " lease_id=" + lease.leaseId()
                 + " expires_at=" + lease.expiresAt()));
         events.add(event("Auxsid operativo resuelto: " + resolvedAuxsid));
+        events.add(event("Contexto de emision => requested_auxsid="
+                + firstNonBlank(lease.requestedAuxsid(), "(vacio)")
+                + " auxsid_changed=" + lease.auxsidChanged()
+                + " accumulated=" + lease.accumulated()
+                + " accumulated_from_auxsid=" + firstNonBlank(lease.accumulatedFromAuxsid(), "ninguno")));
 
         PublicKeyPayload publicKey = fetchPublicKeyPayload(httpClient, serviceBaseUrl, "native");
         if (!publicKey.hasActiveSession()) {
             throw new IllegalStateException("La mezcladora no reporta una sesion activa para recibir votos.");
         }
         byte[] publicKeyBytes = publicKey.contentBytes;
+        String serviceSessionId = firstNonBlank(publicKey.sessionId, lease.sessionId());
+        String serviceSessionName = firstNonBlank(publicKey.sessionName, lease.sessionName());
+        String serviceSessionLabel = firstNonBlank(publicKey.sessionLabel, lease.sessionLabel());
         events.add(event("Llave publica nativa descargada. bytes=" + publicKeyBytes.length));
-        events.add(event("Sesion remota => id=" + firstNonBlank(publicKey.sessionId, "n/d")
-                + " name=" + firstNonBlank(publicKey.sessionName, "n/d")
-                + " label=" + firstNonBlank(publicKey.sessionLabel, "n/d")));
+        events.add(event("Sesion remota => id=" + firstNonBlank(serviceSessionId, "n/d")
+                + " name=" + firstNonBlank(serviceSessionName, "n/d")
+                + " label=" + firstNonBlank(serviceSessionLabel, "n/d")));
 
         Path publicKeyPath = submissionDir.resolve("publicKey");
         Path plainVotesPath = submissionDir.resolve("plain_votes.txt");
@@ -286,11 +296,11 @@ public final class DidacticWindowsVoterServer {
         payload.put("lease_id", lease.leaseId());
         payload.put("auxsid", resolvedAuxsid);
         payload.put("format", "native");
-        if (!publicKey.sessionId.isBlank()) {
-            payload.put("session_id", publicKey.sessionId);
+        if (!serviceSessionId.isBlank()) {
+            payload.put("session_id", serviceSessionId);
         }
-        if (!publicKey.sessionName.isBlank()) {
-            payload.put("session_name", publicKey.sessionName);
+        if (!serviceSessionName.isBlank()) {
+            payload.put("session_name", serviceSessionName);
         }
         payload.put("ciphertexts_ext", ciphertextsExt);
         payload.put("width", VERIFICATUM_WIDTH);
@@ -301,16 +311,16 @@ public final class DidacticWindowsVoterServer {
                 + "\",\"lease_id\":\"" + lease.leaseId()
                 + "\",\"auxsid\":\"" + resolvedAuxsid
                 + "\",\"format\":\"native\""
-                + (!publicKey.sessionId.isBlank() ? ",\"session_id\":\"" + publicKey.sessionId + "\"" : "")
-                + (!publicKey.sessionName.isBlank() ? ",\"session_name\":\"" + publicKey.sessionName + "\"" : "")
+                + (!serviceSessionId.isBlank() ? ",\"session_id\":\"" + serviceSessionId + "\"" : "")
+                + (!serviceSessionName.isBlank() ? ",\"session_name\":\"" + serviceSessionName + "\"" : "")
                 + ",\"width\":" + VERIFICATUM_WIDTH
                 + ",\"ciphertexts_ext\":\"" + summarizeCiphertexts(ciphertextsExt) + "\"}'"));
         events.add(event("Payload => {\"station_id\":\"" + lease.stationId()
                 + "\",\"lease_id\":\"" + lease.leaseId()
                 + "\",\"auxsid\":\"" + resolvedAuxsid
                 + "\",\"format\":\"native\""
-                + (!publicKey.sessionId.isBlank() ? ",\"session_id\":\"" + publicKey.sessionId + "\"" : "")
-                + (!publicKey.sessionName.isBlank() ? ",\"session_name\":\"" + publicKey.sessionName + "\"" : "")
+                + (!serviceSessionId.isBlank() ? ",\"session_id\":\"" + serviceSessionId + "\"" : "")
+                + (!serviceSessionName.isBlank() ? ",\"session_name\":\"" + serviceSessionName + "\"" : "")
                 + ",\"width\":" + VERIFICATUM_WIDTH
                 + ",\"ciphertexts_ext_lines\":" + ciphertextCount
                 + ",\"ciphertexts_ext_bytes\":" + ciphertextsExt.getBytes(StandardCharsets.UTF_8).length
@@ -331,10 +341,32 @@ public final class DidacticWindowsVoterServer {
         events.add(event("Servicio remoto respondio ok=" + receiptAccepted
                 + " auxsid=" + serviceResolvedAuxsid));
 
+        Map<String, Object> emissionContext = new LinkedHashMap<>();
+        emissionContext.put("service_base_url", serviceBaseUrl);
+        emissionContext.put("session_id", serviceSessionId);
+        emissionContext.put("session_name", serviceSessionName);
+        emissionContext.put("session_label", serviceSessionLabel);
+        emissionContext.put("requested_auxsid", lease.requestedAuxsid());
+        emissionContext.put("resolved_auxsid", resolvedAuxsid);
+        emissionContext.put("auxsid_changed", lease.auxsidChanged());
+        emissionContext.put("accumulated", lease.accumulated());
+        emissionContext.put("accumulated_from_auxsid", lease.accumulatedFromAuxsid());
+        emissionContext.put("lease_id", lease.leaseId());
+        emissionContext.put("station_id", lease.stationId());
+        Files.writeString(submissionDir.resolve("emission-context.json"),
+                JsonUtil.toJson(emissionContext), StandardCharsets.UTF_8);
+        Files.writeString(submissionDir.resolve("receipt.json"), receiptRaw, StandardCharsets.UTF_8);
+
         return new SubmissionResult(
                 runId,
                 resolvedAuxsid,
                 serviceResolvedAuxsid,
+                serviceSessionId,
+                serviceSessionName,
+                serviceSessionLabel,
+                extractJsonBoolean(receiptRaw, "accumulated"),
+                firstNonBlank(extractJsonString(receiptRaw, "accumulated_from_auxsid"),
+                        lease.accumulatedFromAuxsid()),
                 receiptAccepted,
                 bundle,
                 submissionDir,
@@ -809,6 +841,11 @@ public final class DidacticWindowsVoterServer {
             String runId,
             String auxsid,
             String serviceResolvedAuxsid,
+            String serviceSessionId,
+            String serviceSessionName,
+            String serviceSessionLabel,
+            boolean serviceAccumulated,
+            String serviceAccumulatedFromAuxsid,
             boolean receiptAccepted,
             BallotBundle bundle,
             Path submissionDir,
@@ -828,6 +865,11 @@ public final class DidacticWindowsVoterServer {
             payload.put("runId", runId);
             payload.put("auxsid", auxsid);
             payload.put("serviceResolvedAuxsid", serviceResolvedAuxsid);
+            payload.put("serviceSessionId", serviceSessionId);
+            payload.put("serviceSessionName", serviceSessionName);
+            payload.put("serviceSessionLabel", serviceSessionLabel);
+            payload.put("serviceAccumulated", serviceAccumulated);
+            payload.put("serviceAccumulatedFromAuxsid", serviceAccumulatedFromAuxsid);
             payload.put("receiptAccepted", receiptAccepted);
             payload.put("bundle", bundle.toMap());
             payload.put("submissionDir", submissionDir.toString());

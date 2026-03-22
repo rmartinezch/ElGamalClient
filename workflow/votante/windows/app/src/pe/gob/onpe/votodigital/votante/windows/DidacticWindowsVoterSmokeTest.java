@@ -52,13 +52,13 @@ final class DidacticWindowsVoterSmokeTest {
 
             String baseUrl = "http://127.0.0.1:" + config.port();
             String health = send(httpClient, baseUrl + "/api/health", "GET", null);
-            String auxsids = send(httpClient, baseUrl + "/api/service/auxsids", "GET", null);
+            String emissionContext = send(httpClient, baseUrl + "/api/service/emission-context", "GET", null);
             String preview = send(httpClient, baseUrl + "/api/ballot/preview", "POST", body);
             String submit = send(httpClient, baseUrl + "/api/ballot/submit", "POST", body);
 
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("health", health);
-            payload.put("auxsids", auxsids);
+            payload.put("emissionContext", emissionContext);
             payload.put("preview", preview);
             payload.put("submit", submit);
             System.out.println(JsonUtil.toJson(payload));

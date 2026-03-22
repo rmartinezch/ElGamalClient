@@ -13,11 +13,11 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -53,17 +53,25 @@ final class MixerDiscoveryCoordinator {
 
     synchronized BootstrapSnapshot bootstrap(HttpClient httpClient, String preferredAuxsid) {
         try {
+            String requestedAuxsid = sanitizeRequestedAuxsid(preferredAuxsid);
             String expectedSessionId = currentLease == null ? "" : currentLease.sessionId();
             DiscoveryInfo discovery = findBestDiscovery(httpClient, expectedSessionId);
             if (discovery == null) {
                 return BootstrapSnapshot.inactive(
                         firstNonBlank(activeBaseUrl(), configuredBaseUrl),
-                    normalizedAuxsid(preferredAuxsid),
-                    "No se encontro una mezcladora activa con sesion compatible en la red local."
+                        "",
+                        "No se encontro una mezcladora activa con sesion compatible en la red local."
                 );
             }
-            String suggestedAuxsid = firstNonBlank(fetchSuggestedAuxsid(httpClient, discovery.baseUrl()),
-                    normalizedAuxsid(preferredAuxsid));
+            EmissionContextInfo emissionContext = fetchEmissionContext(httpClient, discovery, requestedAuxsid);
+            if (!emissionContext.hasContext()) {
+                return BootstrapSnapshot.inactive(
+                        discovery.baseUrl(),
+                        "",
+                        "La mezcladora no confirmo el contexto de emision por /api/emission-context."
+                );
+            }
+            String resolvedAuxsid = resolvedOperationalAuxsid(emissionContext);
             LeaseContext reusableLease = null;
             if (currentLease != null
                     && discovery.baseUrl().equals(currentLease.baseUrl())
@@ -71,15 +79,15 @@ final class MixerDiscoveryCoordinator {
                     && !currentLease.isExpired()) {
                 reusableLease = currentLease;
             }
-            if (!discovery.acceptingVotes()) {
-                return BootstrapSnapshot.busy(discovery, reusableLease, suggestedAuxsid);
+            if (!emissionContext.acceptingVotes()) {
+                return BootstrapSnapshot.busy(discovery, reusableLease, resolvedAuxsid, emissionContext);
             }
             PublicKeyInfo publicKey = fetchPublicKeyInfo(httpClient, discovery.baseUrl(), "native");
-            return BootstrapSnapshot.active(discovery, reusableLease, publicKey, suggestedAuxsid);
+            return BootstrapSnapshot.active(discovery, reusableLease, publicKey, resolvedAuxsid, emissionContext);
         } catch (Exception ex) {
             return BootstrapSnapshot.inactive(
                     firstNonBlank(activeBaseUrl(), configuredBaseUrl),
-                    normalizedAuxsid(preferredAuxsid),
+                    "",
                     ex.getMessage()
             );
         }
@@ -99,7 +107,7 @@ final class MixerDiscoveryCoordinator {
 
     private LeaseContext selectLease(HttpClient httpClient, String preferredAuxsid, boolean forceRenew)
             throws Exception {
-        String normalizedAuxsid = normalizedAuxsid(preferredAuxsid);
+        String requestedAuxsid = sanitizeRequestedAuxsid(preferredAuxsid);
         LeaseContext lease = currentLease;
         if (lease != null) {
             DiscoveryInfo currentDiscovery = tryDiscovery(httpClient, lease.baseUrl(), lease.sessionId());
@@ -108,9 +116,11 @@ final class MixerDiscoveryCoordinator {
                     currentLease = lease.withDiscovery(currentDiscovery);
                     return currentLease;
                 }
-                HandshakeInfo renewal = tryHandshake(httpClient, currentDiscovery, normalizedAuxsid);
+                HandshakeInfo renewal = tryHandshake(httpClient, currentDiscovery, requestedAuxsid);
                 if (renewal != null && renewal.accepted()) {
-                    currentLease = LeaseContext.from(currentDiscovery, renewal, normalizedAuxsid);
+                    EmissionContextInfo emissionContext =
+                            fetchConfirmedEmissionContext(httpClient, currentDiscovery, renewal.requestedAuxsid());
+                    currentLease = LeaseContext.from(currentDiscovery, renewal, emissionContext);
                     rememberCandidate(currentDiscovery.baseUrl());
                     return currentLease;
                 }
@@ -124,18 +134,22 @@ final class MixerDiscoveryCoordinator {
             if (discovery == null) {
                 continue;
             }
-            HandshakeInfo handshake = tryHandshake(httpClient, discovery, normalizedAuxsid);
+            HandshakeInfo handshake = tryHandshake(httpClient, discovery, requestedAuxsid);
             if (handshake != null && handshake.accepted()) {
-                currentLease = LeaseContext.from(discovery, handshake, normalizedAuxsid);
+                EmissionContextInfo emissionContext =
+                        fetchConfirmedEmissionContext(httpClient, discovery, handshake.requestedAuxsid());
+                currentLease = LeaseContext.from(discovery, handshake, emissionContext);
                 rememberCandidate(discovery.baseUrl());
                 return currentLease;
             }
         }
 
         for (DiscoveryInfo discovery : sweepLocalNetwork(httpClient, expectedSessionId)) {
-            HandshakeInfo handshake = tryHandshake(httpClient, discovery, normalizedAuxsid);
+            HandshakeInfo handshake = tryHandshake(httpClient, discovery, requestedAuxsid);
             if (handshake != null && handshake.accepted()) {
-                currentLease = LeaseContext.from(discovery, handshake, normalizedAuxsid);
+                EmissionContextInfo emissionContext =
+                        fetchConfirmedEmissionContext(httpClient, discovery, handshake.requestedAuxsid());
+                currentLease = LeaseContext.from(discovery, handshake, emissionContext);
                 rememberCandidate(discovery.baseUrl());
                 return currentLease;
             }
@@ -254,16 +268,14 @@ final class MixerDiscoveryCoordinator {
                 return null;
             }
             return new DiscoveryInfo(
-                    trimTrailingSlash(firstNonBlank(extractJsonString(body, "api_url"), baseUrl)),
+                    canonicalBaseUrl(baseUrl, extractJsonString(body, "api_url")),
                     extractJsonString(body, "instance_id"),
                     extractJsonString(body, "hostname"),
                     firstNonBlank(extractJsonString(body, "public_host"), hostFromBaseUrl(baseUrl)),
-                    firstNonBlank(extractJsonString(body, "handshake_url"),
-                            trimTrailingSlash(baseUrl) + "/api/handshake"),
-                    firstNonBlank(extractJsonString(body, "public_key_url"),
-                            trimTrailingSlash(baseUrl) + "/api/public-key"),
-                    firstNonBlank(extractJsonString(body, "ciphertexts_url"),
-                            trimTrailingSlash(baseUrl) + "/api/ciphertexts"),
+                    canonicalEndpointUrl(baseUrl, extractJsonString(body, "handshake_url"), "/api/handshake"),
+                    canonicalEndpointUrl(baseUrl, extractJsonString(body, "public_key_url"), "/api/public-key"),
+                    canonicalEndpointUrl(baseUrl, extractJsonString(body, "ciphertexts_url"), "/api/ciphertexts"),
+                    canonicalEndpointUrl(baseUrl, extractJsonString(body, "emission_context_url"), "/api/emission-context"),
                     extractJsonInt(body, "handshake_ttl_seconds", 90),
                     sessionId,
                     extractJsonString(body, "session_name"),
@@ -280,12 +292,14 @@ final class MixerDiscoveryCoordinator {
 
     private HandshakeInfo tryHandshake(HttpClient httpClient, DiscoveryInfo discovery, String preferredAuxsid) {
         try {
-            Map<String, Object> payload = Map.of(
-                    "station_id", stationId,
-                    "session_id", discovery.sessionId(),
-                    "session_name", discovery.sessionName(),
-                    "auxsid", preferredAuxsid
-            );
+            String requestedAuxsid = sanitizeRequestedAuxsid(preferredAuxsid);
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("station_id", stationId);
+            payload.put("session_id", discovery.sessionId());
+            payload.put("session_name", discovery.sessionName());
+            if (!requestedAuxsid.isBlank()) {
+                payload.put("auxsid", requestedAuxsid);
+            }
             HttpRequest request = HttpRequest.newBuilder(URI.create(discovery.handshakeUrl()))
                     .timeout(HANDSHAKE_TIMEOUT)
                     .header("Content-Type", "application/json; charset=utf-8")
@@ -302,7 +316,7 @@ final class MixerDiscoveryCoordinator {
                     extractJsonBoolean(body, "accepted"),
                     extractJsonString(body, "reason"),
                     firstNonBlank(extractJsonString(body, "station_id"), stationId),
-                    firstNonBlank(extractJsonString(body, "requested_auxsid"), preferredAuxsid),
+                    firstNonBlank(extractJsonString(body, "requested_auxsid"), requestedAuxsid),
                     extractJsonString(body, "lease_id"),
                     parseInstant(extractJsonString(body, "expires_at")),
                     firstNonBlank(extractJsonString(body, "session_id"), discovery.sessionId()),
@@ -313,6 +327,59 @@ final class MixerDiscoveryCoordinator {
         } catch (Exception ex) {
             return null;
         }
+    }
+
+    private EmissionContextInfo fetchEmissionContext(HttpClient httpClient, DiscoveryInfo discovery, String preferredAuxsid) {
+        String requestedAuxsid = sanitizeRequestedAuxsid(preferredAuxsid);
+        try {
+            String url = discovery.emissionContextUrl();
+            if (!requestedAuxsid.isBlank()) {
+                url += "?auxsid=" + requestedAuxsid;
+            }
+            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                    .timeout(DISCOVERY_TIMEOUT)
+                    .GET()
+                    .build();
+            HttpResponse<String> response = httpClient.send(request,
+                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                return EmissionContextInfo.empty(discovery, requestedAuxsid);
+            }
+            String body = response.body();
+            return new EmissionContextInfo(
+                    extractJsonBoolean(body, "ok"),
+                    firstNonBlank(extractJsonString(body, "session_id"), discovery.sessionId()),
+                    firstNonBlank(extractJsonString(body, "session_name"), discovery.sessionName()),
+                    firstNonBlank(extractJsonString(body, "session_label"), discovery.sessionLabel()),
+                    firstNonBlank(extractJsonString(body, "election_name"), discovery.electionName()),
+                    firstNonBlank(extractJsonString(body, "sid"), discovery.sid()),
+                    firstNonBlank(extractJsonString(body, "requested_auxsid"), requestedAuxsid),
+                    extractJsonString(body, "resolved_auxsid"),
+                    extractJsonString(body, "auxsid"),
+                    extractJsonBoolean(body, "auxsid_changed"),
+                    extractJsonBoolean(body, "accumulated"),
+                    extractJsonString(body, "accumulated_from_auxsid"),
+                    extractJsonBoolean(body, "accepting_votes")
+            );
+        } catch (Exception ex) {
+            return EmissionContextInfo.empty(discovery, requestedAuxsid);
+        }
+    }
+
+    private EmissionContextInfo fetchConfirmedEmissionContext(HttpClient httpClient,
+                                                              DiscoveryInfo discovery,
+                                                              String preferredAuxsid) {
+        EmissionContextInfo emissionContext = fetchEmissionContext(httpClient, discovery, preferredAuxsid);
+        if (!emissionContext.hasContext()) {
+            throw new IllegalStateException("La mezcladora no confirmo el contexto de emision por /api/emission-context.");
+        }
+        if (resolvedOperationalAuxsid(emissionContext).isBlank()) {
+            throw new IllegalStateException("La mezcladora no devolvio un auxsid operativo valido por /api/emission-context.");
+        }
+        if (!emissionContext.acceptingVotes()) {
+            throw new IllegalStateException("La mezcladora no esta aceptando votos en este momento.");
+        }
+        return emissionContext;
     }
 
     private PublicKeyInfo fetchPublicKeyInfo(HttpClient httpClient, String baseUrl, String format) throws Exception {
@@ -339,28 +406,6 @@ final class MixerDiscoveryCoordinator {
                 extractJsonString(body, "election_name"),
                 body
         );
-    }
-
-    private String fetchSuggestedAuxsid(HttpClient httpClient, String baseUrl) {
-        try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(trimTrailingSlash(baseUrl) + "/api/auxsids"))
-                    .timeout(DISCOVERY_TIMEOUT)
-                    .GET()
-                    .build();
-            HttpResponse<String> response = httpClient.send(request,
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                return "";
-            }
-            String body = response.body();
-            String suggested = extractJsonString(body, "suggested_auxsid");
-            if (!suggested.isBlank()) {
-                return suggested;
-            }
-            return extractJsonString(body, "next_shuffle");
-        } catch (Exception ex) {
-            return "";
-        }
     }
 
     private void rememberCandidate(String baseUrl) {
@@ -504,12 +549,19 @@ final class MixerDiscoveryCoordinator {
         }
     }
 
-    private static String normalizedAuxsid(String value) {
-        String candidate = firstNonBlank(value, "default");
+    static String sanitizeRequestedAuxsid(String value) {
+        String candidate = value == null ? "" : value.trim();
+        if (candidate.isBlank()) {
+            return "";
+        }
         if (!candidate.matches("[A-Za-z0-9._-]+")) {
             throw new IllegalArgumentException("auxsid invalido: " + candidate);
         }
         return candidate;
+    }
+
+    static String resolvedOperationalAuxsid(EmissionContextInfo emissionContext) {
+        return sanitizeRequestedAuxsid(firstNonBlank(emissionContext.resolvedAuxsid(), emissionContext.auxsid()));
     }
 
     private static String firstNonBlank(String preferred, String fallback) {
@@ -530,6 +582,72 @@ final class MixerDiscoveryCoordinator {
         return trimmed;
     }
 
+    static String canonicalBaseUrl(String sourceBaseUrl, String announcedBaseUrl) {
+        String fallback = trimTrailingSlash(sourceBaseUrl);
+        if (announcedBaseUrl == null || announcedBaseUrl.isBlank()) {
+            return fallback;
+        }
+        try {
+            URI source = URI.create(fallback);
+            URI announced = URI.create(trimTrailingSlash(announcedBaseUrl));
+            if (sameAuthority(source, announced)) {
+                return trimTrailingSlash(announced.toString());
+            }
+            return trimTrailingSlash(rewriteUriAuthority(source, announced.getPath(), announced.getQuery()));
+        } catch (Exception ex) {
+            return trimTrailingSlash(announcedBaseUrl);
+        }
+    }
+
+    static String canonicalEndpointUrl(String sourceBaseUrl, String announcedUrl, String defaultPath) {
+        String fallback = trimTrailingSlash(sourceBaseUrl) + defaultPath;
+        if (announcedUrl == null || announcedUrl.isBlank()) {
+            return fallback;
+        }
+        try {
+            URI source = URI.create(trimTrailingSlash(sourceBaseUrl));
+            URI announced = URI.create(announcedUrl);
+            if (sameAuthority(source, announced)) {
+                return announced.toString();
+            }
+            String path = announced.getPath() == null || announced.getPath().isBlank() ? defaultPath : announced.getPath();
+            return rewriteUriAuthority(source, path, announced.getQuery());
+        } catch (Exception ex) {
+            return announcedUrl;
+        }
+    }
+
+    private static boolean sameAuthority(URI left, URI right) {
+        return firstNonBlank(left.getScheme(), "").equalsIgnoreCase(firstNonBlank(right.getScheme(), ""))
+                && firstNonBlank(left.getHost(), "").equalsIgnoreCase(firstNonBlank(right.getHost(), ""))
+                && effectivePort(left) == effectivePort(right);
+    }
+
+    private static int effectivePort(URI uri) {
+        int port = uri.getPort();
+        if (port >= 0) {
+            return port;
+        }
+        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+    }
+
+    private static String rewriteUriAuthority(URI source, String path, String query) {
+        String normalizedPath = (path == null || path.isBlank()) ? "/" : (path.startsWith("/") ? path : "/" + path);
+        int port = effectivePort(source);
+        boolean includePort = port > 0 && !(("http".equalsIgnoreCase(source.getScheme()) && port == 80)
+                || ("https".equalsIgnoreCase(source.getScheme()) && port == 443));
+        StringBuilder builder = new StringBuilder();
+        builder.append(source.getScheme()).append("://").append(source.getHost());
+        if (includePort) {
+            builder.append(':').append(port);
+        }
+        builder.append(normalizedPath);
+        if (query != null && !query.isBlank()) {
+            builder.append('?').append(query);
+        }
+        return builder.toString();
+    }
+
     record DiscoveryInfo(
             String baseUrl,
             String instanceId,
@@ -538,6 +656,7 @@ final class MixerDiscoveryCoordinator {
             String handshakeUrl,
             String publicKeyUrl,
             String ciphertextsUrl,
+            String emissionContextUrl,
             int handshakeTtlSeconds,
             String sessionId,
             String sessionName,
@@ -547,6 +666,44 @@ final class MixerDiscoveryCoordinator {
             boolean acceptingVotes,
             String currentOperation
     ) {
+    }
+
+    record EmissionContextInfo(
+            boolean ok,
+            String sessionId,
+            String sessionName,
+            String sessionLabel,
+            String electionName,
+            String sid,
+            String requestedAuxsid,
+            String resolvedAuxsid,
+            String auxsid,
+            boolean auxsidChanged,
+            boolean accumulated,
+            String accumulatedFromAuxsid,
+            boolean acceptingVotes
+    ) {
+        boolean hasContext() {
+            return !firstNonBlank(resolvedAuxsid, auxsid).isBlank();
+        }
+
+        static EmissionContextInfo empty(DiscoveryInfo discovery, String requestedAuxsid) {
+            return new EmissionContextInfo(
+                    false,
+                    discovery.sessionId(),
+                    discovery.sessionName(),
+                    discovery.sessionLabel(),
+                    discovery.electionName(),
+                    discovery.sid(),
+                    requestedAuxsid,
+                    "",
+                    "",
+                    false,
+                    false,
+                    "",
+                    discovery.acceptingVotes()
+            );
+        }
     }
 
     record HandshakeInfo(
@@ -587,9 +744,13 @@ final class MixerDiscoveryCoordinator {
             String sessionName,
             String sessionLabel,
             String electionName,
-            String auxsid
+            String auxsid,
+            String requestedAuxsid,
+            boolean auxsidChanged,
+            boolean accumulated,
+            String accumulatedFromAuxsid
     ) {
-        static LeaseContext from(DiscoveryInfo discovery, HandshakeInfo handshake, String auxsid) {
+        static LeaseContext from(DiscoveryInfo discovery, HandshakeInfo handshake, EmissionContextInfo emissionContext) {
             return new LeaseContext(
                     discovery.baseUrl(),
                     discovery.instanceId(),
@@ -600,7 +761,11 @@ final class MixerDiscoveryCoordinator {
                     handshake.sessionName(),
                     handshake.sessionLabel(),
                     handshake.electionName(),
-                    firstNonBlank(handshake.requestedAuxsid(), auxsid)
+                    resolvedOperationalAuxsid(emissionContext),
+                    firstNonBlank(emissionContext.requestedAuxsid(), handshake.requestedAuxsid()),
+                    emissionContext.auxsidChanged(),
+                    emissionContext.accumulated(),
+                    emissionContext.accumulatedFromAuxsid()
             );
         }
 
@@ -623,7 +788,11 @@ final class MixerDiscoveryCoordinator {
                     sessionName,
                     sessionLabel,
                     electionName,
-                    auxsid
+                    auxsid,
+                    requestedAuxsid,
+                    auxsidChanged,
+                    accumulated,
+                    accumulatedFromAuxsid
             );
         }
     }
@@ -648,18 +817,19 @@ final class MixerDiscoveryCoordinator {
         static BootstrapSnapshot active(DiscoveryInfo discovery,
                                        LeaseContext lease,
                                        PublicKeyInfo publicKey,
-                                       String resolvedAuxsid) {
+                                       String resolvedAuxsid,
+                                       EmissionContextInfo emissionContext) {
             return new BootstrapSnapshot(
                     true,
                     discovery.baseUrl(),
-                    firstNonBlank(lease == null ? "" : lease.auxsid(), resolvedAuxsid),
+                    resolvedAuxsid,
                     lease == null ? "" : lease.stationId(),
                     lease == null ? "" : lease.leaseId(),
                     lease == null || lease.expiresAt() == null ? "" : lease.expiresAt().toString(),
-                    firstNonBlank(publicKey.sessionId(), discovery.sessionId()),
-                    firstNonBlank(publicKey.sessionName(), discovery.sessionName()),
-                    firstNonBlank(publicKey.sessionLabel(), discovery.sessionLabel()),
-                    firstNonBlank(publicKey.electionName(), discovery.electionName()),
+                    firstNonBlank(publicKey.sessionId(), firstNonBlank(emissionContext.sessionId(), discovery.sessionId())),
+                    firstNonBlank(publicKey.sessionName(), firstNonBlank(emissionContext.sessionName(), discovery.sessionName())),
+                    firstNonBlank(publicKey.sessionLabel(), firstNonBlank(emissionContext.sessionLabel(), discovery.sessionLabel())),
+                    firstNonBlank(publicKey.electionName(), firstNonBlank(emissionContext.electionName(), discovery.electionName())),
                     publicKey.hasKeyMaterial(),
                     publicKey.contentBytes() == null ? 0 : publicKey.contentBytes().length,
                     "",
@@ -672,7 +842,7 @@ final class MixerDiscoveryCoordinator {
             return new BootstrapSnapshot(
                     false,
                     firstNonBlank(serviceBaseUrl, ""),
-                    firstNonBlank(resolvedAuxsid, "default"),
+                    firstNonBlank(resolvedAuxsid, ""),
                     "",
                     "",
                     "",
@@ -688,19 +858,22 @@ final class MixerDiscoveryCoordinator {
             );
         }
 
-        static BootstrapSnapshot busy(DiscoveryInfo discovery, LeaseContext lease, String resolvedAuxsid) {
+        static BootstrapSnapshot busy(DiscoveryInfo discovery,
+                                      LeaseContext lease,
+                                      String resolvedAuxsid,
+                                      EmissionContextInfo emissionContext) {
             String operation = firstNonBlank(discovery.currentOperation(), "operacion_en_curso");
             return new BootstrapSnapshot(
                     false,
                     discovery.baseUrl(),
-                    firstNonBlank(lease == null ? "" : lease.auxsid(), resolvedAuxsid),
+                    resolvedAuxsid,
                     lease == null ? "" : lease.stationId(),
                     lease == null ? "" : lease.leaseId(),
                     lease == null || lease.expiresAt() == null ? "" : lease.expiresAt().toString(),
-                    discovery.sessionId(),
-                    discovery.sessionName(),
-                    discovery.sessionLabel(),
-                    discovery.electionName(),
+                    firstNonBlank(emissionContext.sessionId(), discovery.sessionId()),
+                    firstNonBlank(emissionContext.sessionName(), discovery.sessionName()),
+                    firstNonBlank(emissionContext.sessionLabel(), discovery.sessionLabel()),
+                    firstNonBlank(emissionContext.electionName(), discovery.electionName()),
                     false,
                     0,
                     "La mezcladora esta ocupada con " + operation + ".",

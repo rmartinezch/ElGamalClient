@@ -2,6 +2,7 @@ val androidXCoreVersion = "1.13.1"
 val androidXAppCompatVersion = "1.7.0"
 val materialVersion = "1.12.0"
 val usbSerialVersion = "3.9.0"
+val junit4Version = "4.13.2"
 
 plugins {
     id("com.android.application")
@@ -44,6 +45,7 @@ android {
         getByName("main") {
             jniLibs.srcDir("src/main/jniLibs")
             assets.srcDir("src/main/assets")
+            assets.srcDir("src/generated/assets")
         }
     }
 
@@ -67,4 +69,6 @@ dependencies {
     implementation("com.google.android.material:material:$materialVersion")
     implementation("com.github.mik3y:usb-serial-for-android:$usbSerialVersion")
     implementation(files("libs/ElGamalCipher-android.jar"))
+
+    testImplementation("junit:junit:$junit4Version")
 }

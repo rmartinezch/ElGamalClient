@@ -7,7 +7,7 @@ Implementación aislada de la estación de voto Android. No modifica ni reemplaz
 - todo el código de la estación vive bajo `workflow/votante/android`
 - la interfaz del cifrador en `android/` fue dejada intacta y separada
 - la estación Android hospeda la UI del votante en `WebView`
-- descubre mezcladoras en la red local, solicita `handshake`, descarga llave pública y remite `ciphertexts_ext`
+- descubre mezcladoras en la red local, solicita `handshake`, consulta `GET /api/emission-context`, descarga llave pública y remite `ciphertexts_ext`
 - serializa la cédula con el mismo esquema canónico usado en Windows
 - cifra localmente reutilizando clases del core Java del cifrador, pero dentro de esta implementación aislada
 - muestra constancia de recepción y monitor de eventos
@@ -27,11 +27,18 @@ Implementación aislada de la estación de voto Android. No modifica ni reemplaz
 2. La UI llama al bridge `AndroidBridge`.
 3. El bridge descubre mezcladoras activas en la red local.
 4. Al confirmar la cédula:
+   - consulta `GET /api/emission-context` para obtener el `auxsid` operativo real;
    - descarga la llave pública;
    - genera `plain_votes.txt`;
    - ejecuta el cifrador desacoplado;
    - lee `ciphertexts_ext`;
    - envía el voto cifrado al endpoint remoto.
+
+El `auxsid` visible en la estación queda alineado con el backend:
+
+- la UI muestra el `auxsid` publicado por `GET /api/emission-context`
+- después del envío, la estación persiste y refleja el `resolved_auxsid` real devuelto por `POST /api/ciphertexts`
+- `GET /api/auxsids` ya no se usa para decidir el lote operativo
 
 ## Catalogo
 
@@ -57,9 +64,19 @@ Ese script:
 
 - recompila `ElGamalCipher-1.1.0.jar` para Android en Java 17
 - copia el `jar` al módulo Android y también lo empaqueta como `asset`
+- genera `runtime-config.json` para fijar `serviceBaseUrl` cuando se exporta `VOTANTE_ANDROID_SERVICE_BASE_URL`
 - sincroniza `libvecj-2.2.0.so` y `libvmgj-1.3.0.so` para `arm64-v8a` y `x86_64`
 - compila el APK del votante con el wrapper Gradle existente en `android/`
 - deja el artefacto final en `dist/android/VotanteAndroid-portable.apk`
+
+Para priorizar una mezcladora conocida sin desactivar el barrido de red local:
+
+```bash
+VOTANTE_ANDROID_SERVICE_BASE_URL=http://192.168.0.120:7040 ./build-votante-portable-apk.sh
+```
+
+La semilla `serviceBaseUrl` es opcional. Si esa URL no responde o no coincide con la sesión activa,
+la estación sigue intentando descubrir mezcladoras candidatas en la red local.
 
 ## Waydroid + Weston
 
@@ -82,3 +99,4 @@ Variables útiles:
 - `REINSTALL_APP=0` evita reinstalar si la app ya está visible en Waydroid
 - `CLEAN_START=0` reutiliza una sesión sana ya levantada
 - `SHOW_UI=0` no abre la ventana de `waydroid show-full-ui`
+- `REBUILD_APK=1 VOTANTE_ANDROID_SERVICE_BASE_URL=http://192.168.0.120:7040` recompila e instala usando una semilla explícita de mezcladora

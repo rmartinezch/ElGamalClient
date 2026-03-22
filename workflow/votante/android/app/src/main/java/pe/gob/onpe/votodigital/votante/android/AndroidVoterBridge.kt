@@ -19,8 +19,9 @@ class AndroidVoterBridge(
     private val context: Context,
     private val runner: AndroidCipherRunner
 ) {
+    private val runtimeConfig = AndroidRuntimeConfig.load(context)
     private val mixerCoordinator = AndroidMixerLeaseCoordinator(
-        DEFAULT_SERVICE_BASE_URL,
+        runtimeConfig.serviceBaseUrl.ifBlank { DEFAULT_SERVICE_BASE_URL },
         "mesa-047612"
     )
 
@@ -99,16 +100,24 @@ class AndroidVoterBridge(
         events += event("Mezcladora seleccionada: $serviceBaseUrl")
         events += event("Handshake activo => station_id=${lease.stationId} lease_id=${lease.leaseId} expires_at=${lease.expiresAt}")
         events += event("Auxsid operativo resuelto: $resolvedAuxsid")
+        events += event(
+            "Contexto de emision => requested_auxsid=${firstNonBlank(lease.requestedAuxsid, "(vacio)")} " +
+                "auxsid_changed=${lease.auxsidChanged} accumulated=${lease.accumulated} " +
+                "accumulated_from_auxsid=${firstNonBlank(lease.accumulatedFromAuxsid, "ninguno")}"
+        )
 
         val publicKey = fetchPublicKeyPayload(serviceBaseUrl, "native")
         if (!publicKey.hasKeyMaterial()) {
             throw IllegalStateException("La mezcladora no reporta una sesion activa para recibir votos.")
         }
+        val serviceSessionId = firstNonBlank(publicKey.sessionId, lease.sessionId)
+        val serviceSessionName = firstNonBlank(publicKey.sessionName, lease.sessionName)
+        val serviceSessionLabel = firstNonBlank(publicKey.sessionLabel, lease.sessionLabel)
         events += event("Llave publica nativa descargada. bytes=${publicKey.contentBytes.size}")
         events += event(
-            "Sesion remota => id=${firstNonBlank(publicKey.sessionId, "n/d")} " +
-                "name=${firstNonBlank(publicKey.sessionName, "n/d")} " +
-                "label=${firstNonBlank(publicKey.sessionLabel, "n/d")}"
+            "Sesion remota => id=${firstNonBlank(serviceSessionId, "n/d")} " +
+                "name=${firstNonBlank(serviceSessionName, "n/d")} " +
+                "label=${firstNonBlank(serviceSessionLabel, "n/d")}"
         )
 
         val publicKeyWrite = runner.importPublicKeyBytes(publicKey.contentBytes)
@@ -133,11 +142,11 @@ class AndroidVoterBridge(
             .put("format", "native")
             .put("ciphertexts_ext", ciphertextsText)
             .put("width", VERIFICATUM_WIDTH)
-        if (publicKey.sessionId.isNotBlank()) {
-            payload.put("session_id", publicKey.sessionId)
+        if (serviceSessionId.isNotBlank()) {
+            payload.put("session_id", serviceSessionId)
         }
-        if (publicKey.sessionName.isNotBlank()) {
-            payload.put("session_name", publicKey.sessionName)
+        if (serviceSessionName.isNotBlank()) {
+            payload.put("session_name", serviceSessionName)
         }
 
         events += event("POST $serviceBaseUrl/api/ciphertexts")
@@ -145,14 +154,14 @@ class AndroidVoterBridge(
             "curl -X POST \"$serviceBaseUrl/api/ciphertexts\" " +
                 "-H \"Content-Type: application/json\" " +
                 "-d '{\"station_id\":\"${lease.stationId}\",\"lease_id\":\"${lease.leaseId}\",\"auxsid\":\"$resolvedAuxsid\",\"format\":\"native\"" +
-                (if (publicKey.sessionId.isNotBlank()) ",\"session_id\":\"${publicKey.sessionId}\"" else "") +
-                (if (publicKey.sessionName.isNotBlank()) ",\"session_name\":\"${publicKey.sessionName}\"" else "") +
+                (if (serviceSessionId.isNotBlank()) ",\"session_id\":\"$serviceSessionId\"" else "") +
+                (if (serviceSessionName.isNotBlank()) ",\"session_name\":\"$serviceSessionName\"" else "") +
                 ",\"width\":$VERIFICATUM_WIDTH,\"ciphertexts_ext\":\"${summarizeCiphertexts(ciphertextsText)}\"}'"
         )
         events += event(
             "Payload => {\"station_id\":\"${lease.stationId}\",\"lease_id\":\"${lease.leaseId}\",\"auxsid\":\"$resolvedAuxsid\",\"format\":\"native\"" +
-                (if (publicKey.sessionId.isNotBlank()) ",\"session_id\":\"${publicKey.sessionId}\"" else "") +
-                (if (publicKey.sessionName.isNotBlank()) ",\"session_name\":\"${publicKey.sessionName}\"" else "") +
+                (if (serviceSessionId.isNotBlank()) ",\"session_id\":\"$serviceSessionId\"" else "") +
+                (if (serviceSessionName.isNotBlank()) ",\"session_name\":\"$serviceSessionName\"" else "") +
                 ",\"width\":$VERIFICATUM_WIDTH,\"ciphertexts_ext_lines\":$ciphertextCount," +
                 "\"ciphertexts_ext_bytes\":${ciphertextsText.toByteArray(StandardCharsets.UTF_8).size}," +
                 "\"ciphertexts_ext_head\":\"${summarizeCiphertexts(ciphertextsText)}\"}"
@@ -177,11 +186,33 @@ class AndroidVoterBridge(
         copyToSubmission(votesWrite.targetFile, File(submissionDir, "plain_votes.txt"))
         copyToSubmission(runner.currentCiphertextsFile(), File(submissionDir, "ciphertexts_ext"))
         copyToSubmission(runner.currentLogFile(), File(submissionDir, "android-cifrador.log"))
+        File(submissionDir, "emission-context.json").writeText(
+            JSONObject()
+                .put("service_base_url", serviceBaseUrl)
+                .put("session_id", serviceSessionId)
+                .put("session_name", serviceSessionName)
+                .put("session_label", serviceSessionLabel)
+                .put("requested_auxsid", lease.requestedAuxsid)
+                .put("resolved_auxsid", resolvedAuxsid)
+                .put("auxsid_changed", lease.auxsidChanged)
+                .put("accumulated", lease.accumulated)
+                .put("accumulated_from_auxsid", lease.accumulatedFromAuxsid)
+                .put("lease_id", lease.leaseId)
+                .put("station_id", lease.stationId)
+                .toString(2),
+            StandardCharsets.UTF_8
+        )
+        File(submissionDir, "receipt.json").writeText(receipt.toString(2), StandardCharsets.UTF_8)
 
         return JSONObject()
             .put("runId", runId)
             .put("auxsid", resolvedAuxsid)
             .put("serviceResolvedAuxsid", serviceResolvedAuxsid)
+            .put("serviceSessionId", serviceSessionId)
+            .put("serviceSessionName", serviceSessionName)
+            .put("serviceSessionLabel", serviceSessionLabel)
+            .put("serviceAccumulated", receipt.optBoolean("accumulated", lease.accumulated))
+            .put("serviceAccumulatedFromAuxsid", firstNonBlank(receipt.optString("accumulated_from_auxsid"), lease.accumulatedFromAuxsid))
             .put("receiptAccepted", receiptAccepted)
             .put("submissionDir", submissionDir.absolutePath)
             .put("receiptRaw", receiptRaw)
@@ -230,10 +261,14 @@ class AndroidVoterBridge(
             .filter { it.isNotBlank() }
             .associate { pair ->
                 val parts = pair.split("=", limit = 2)
-                val key = URLDecoder.decode(parts[0], StandardCharsets.UTF_8)
-                val value = URLDecoder.decode(parts.getOrElse(1) { "" }, StandardCharsets.UTF_8)
+                val key = decodeFormComponent(parts[0])
+                val value = decodeFormComponent(parts.getOrElse(1) { "" })
                 key to value
             }
+    }
+
+    private fun decodeFormComponent(value: String): String {
+        return URLDecoder.decode(value, StandardCharsets.UTF_8.name())
     }
 
     private fun buildBundle(form: Map<String, String>): BallotBundle {

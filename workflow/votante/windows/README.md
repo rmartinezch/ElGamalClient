@@ -9,6 +9,7 @@ Shell didactica para `Windows` con UI web y bridge local al
 - serializarlo al esquema `CodedVote`
 - invocar directamente `runtime\bin\java.exe + app\ElGamalCipher-1.1.0.jar`
 - no depender de `Cifrador.exe`
+- consultar `GET /api/emission-context` antes de emitir
 - remitir `ciphertexts_ext` al servicio externo en `wsantivanez-hm:7040`
 
 ## Arranque
@@ -45,8 +46,16 @@ La ruta `POST /api/ballot/submit`:
 1. construye el `BallotBundle`
 2. descubre mezcladoras candidatas con `GET /api/discovery`
 3. solicita `handshake` y conserva `station_id + lease_id`
-4. obtiene la llave nativa en `GET /api/public-key`
+4. consulta `GET /api/emission-context` para obtener el `auxsid` operativo real
+5. obtiene la llave nativa en `GET /api/public-key`
    y decodifica el campo JSON `content` desde hexadecimal a bytes
-5. ejecuta el cifrador con `java.exe -jar ... -sw`
-6. envia `ciphertexts_ext` en `POST /api/ciphertexts`
+6. ejecuta el cifrador con `java.exe -jar ... -sw`
+7. envia `ciphertexts_ext` en `POST /api/ciphertexts`
    con `{"station_id","lease_id","session_id","session_name","auxsid","format","ciphertexts_ext","width":1}`
+
+La estación Windows queda alineada al backend:
+
+- el `auxsid` visible sale de `GET /api/emission-context`
+- después del envío se persiste `resolved_auxsid`, `accumulated` y `accumulated_from_auxsid`
+- `GET /api/auxsids` deja de decidir el lote operativo
+- `serviceBaseUrl` puede usarse como semilla opcional, pero la estación sigue barriendo la red local si esa URL no responde o no coincide con la sesión activa
