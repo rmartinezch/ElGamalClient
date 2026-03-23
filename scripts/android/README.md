@@ -15,6 +15,8 @@ Scripts Android organizados por función.
 - `pruebas/`
   - `test-connected.sh`: ejecuta pruebas instrumentadas conectadas
   - `test-hybrid-mix.sh`: cifra en Android y valida mezcla/descifrado en Linux con Verificatum
+- `despliegue/`
+  - `build-and-install-phone.sh`: compila cifrador, `tools/android` y la estación Android, luego instala ambos APK en un teléfono ADB
 - `entorno/`
   - `doctor.sh`: valida prerequisitos base
   - `create-avd.sh`: crea el AVD headless usado en pruebas
@@ -28,3 +30,19 @@ Scripts Android organizados por función.
 
 - usar siempre las rutas categorizadas
 - `build-cifrador.sh` es el punto de entrada de compilación del cifrador Android
+
+## Flujo Teléfono
+
+Para reproducir compilación + despliegue al teléfono en una sola orden:
+
+```bash
+./scripts/android/despliegue/build-and-install-phone.sh
+```
+
+Variables útiles:
+
+- `DEVICE_SERIAL=<serial>`: fija el dispositivo ADB cuando hay más de uno conectado
+- `BUILD_CIFRADOR=0`: reutiliza el `AAR` y las `jniLibs` ya compiladas
+- `BUILD_TOOL_ANDROID=0`: reutiliza `dist/android/TrueRNG-Diagnostico.apk`
+- `BUILD_VOTER_ANDROID=0`: reutiliza `dist/android/VotanteAndroid-portable.apk`
+- `LAUNCH_APPS=1`: lanza ambas apps al final de la instalación

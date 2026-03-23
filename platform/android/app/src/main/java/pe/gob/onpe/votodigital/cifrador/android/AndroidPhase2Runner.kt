@@ -31,7 +31,7 @@ class AndroidPhase2Runner {
         }
 
         try {
-            legendreValue = VMG.legendre(BigInteger.TWO, BigInteger.valueOf(23L))
+            legendreValue = VMG.legendre(BigInteger.valueOf(2L), BigInteger.valueOf(23L))
             hasVmgj = true
         } catch (e: Throwable) {
             failures += "vmgj: ${e.javaClass.simpleName}: ${e.message ?: "sin detalle"}"

@@ -9,6 +9,7 @@ val verificatumVecjVersion = "2.2.0"
 val verificatumVmgjVersion = "1.3.0"
 val debugApkMarker = "20260323"
 val interfaceBuildTimestamp = OffsetDateTime.now().toString()
+val generatedAssetsDir = layout.projectDirectory.dir("src/generated/assets")
 
 plugins {
     id("com.android.application")
@@ -56,6 +57,12 @@ android {
         buildConfig = true
     }
 
+    sourceSets {
+        getByName("main") {
+            assets.srcDir(generatedAssetsDir)
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -74,4 +81,13 @@ dependencies {
     implementation("com.verificatum:verificatum-vcr-vmgj-vecj:$verificatumBundleVersion")
     implementation("com.verificatum:verificatum-vecj:$verificatumVecjVersion")
     implementation("com.verificatum:verificatum-vmgj:$verificatumVmgjVersion")
+}
+
+val syncSampleResources by tasks.registering(Copy::class) {
+    from(layout.projectDirectory.dir("../../../recursos"))
+    into(generatedAssetsDir.dir("recursos"))
+}
+
+tasks.named("preBuild") {
+    dependsOn(syncSampleResources)
 }

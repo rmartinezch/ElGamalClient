@@ -2,4 +2,5 @@
 build/
 app/build/
 truerngdiag/build/
+truerngdiag/src/generated/
 local.properties

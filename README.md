@@ -108,6 +108,189 @@ En Windows, el bootstrap genera e instala en `.mvn/local-repo`:
     compilación del `AAR` Android del cifrador y empaquetado de sus
     prebuilts JNI.
 
+### Integración Externa Como Librería
+
+El cifrador se consume distinto según plataforma:
+
+*   Ubuntu y Windows consumen el `jar` Java compilado más las bibliotecas JNI por sistema operativo.
+*   Android consume el `AAR` compilado.
+*   Ninguna app externa debe depender del código fuente interno del cifrador.
+
+#### Artefactos canónicos
+
+*   Ubuntu y Windows:
+    *   `prebuilt/java/ElGamalCipher-1.1.0.jar`
+    *   `prebuilt/linux-x64/` o `prebuilt/windows-x64/`
+*   Android:
+    *   `prebuilt/android/aar/ElGamalCipher-android-debug.aar`
+    *   `prebuilt/android/jniLibs/arm64-v8a/`
+    *   `prebuilt/android/jniLibs/x86_64/`
+
+#### Cómo producir los artefactos
+
+```bash
+./scripts/ubuntu/compilacion/build-cifrador.sh
+./scripts/android/compilacion/build-cifrador.sh
+```
+
+Si el objetivo es distribuir un bundle portable a otra aplicación o a otro equipo:
+
+```bash
+./scripts/ubuntu/empaquetado/build-cifrador-portable.sh
+./scripts/android/empaquetado/build-cifrador-portable.sh
+```
+
+Y si además se requiere comprimir el bundle final:
+
+```bash
+./scripts/ubuntu/empaquetado/package-cifrador-portable.sh
+./scripts/android/empaquetado/package-cifrador-portable.sh
+```
+
+#### Ubuntu o Java de escritorio
+
+Una app externa en Ubuntu debe enlazar el `jar` y hacer visibles `libvecj` y `libvmgj`.
+
+Opción directa con `java.library.path`:
+
+```bash
+java \
+  -Djava.library.path=/ruta/al/proyecto/prebuilt/linux-x64 \
+  -cp /ruta/al/proyecto/prebuilt/java/ElGamalCipher-1.1.0.jar:mi-app.jar \
+  com.ejemplo.Main
+```
+
+También puede empaquetarse con un layout local que el loader ya reconoce:
+
+```text
+mi-app/
+  app/
+    ElGamalCipher-1.1.0.jar
+    mi-app.jar
+  prebuilt/
+    linux-x64/
+      libvecj-2.2.0.so
+      libvmgj-1.3.0.so
+```
+
+API principal para consumo programático:
+
+*   `pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService`
+*   `pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest`
+*   `pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode`
+*   `pe.gob.onpe.votodigital.elgamalcipher.LogConfig`
+
+Ejemplo mínimo:
+
+```java
+import java.nio.file.Path;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest;
+import pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode;
+import pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService;
+import pe.gob.onpe.votodigital.elgamalcipher.LogConfig;
+
+public final class DemoCifrado {
+    public static void main(String[] args) {
+        Logger logger = LogConfig.getLogger(
+            "./logs/demo-cifrador.log",
+            Level.INFO,
+            true,
+            true,
+            true,
+            true,
+            true
+        );
+
+        CifradorRequest request = new CifradorRequest(
+            Path.of("recursos/publicKey"),
+            Path.of("recursos/shuffled_votes.txt"),
+            Path.of("salida/ciphertexts_ext"),
+            CifradorRngMode.SOFTWARE,
+            false
+        );
+
+        boolean ok = new ElGamalCipherService(logger).encrypt(request);
+        if (!ok) {
+            throw new IllegalStateException("El cifrado no produjo salida.");
+        }
+    }
+}
+```
+
+Funciones principales:
+
+*   `encrypt(request)`: cifra usando `SecureRandom`.
+*   `encrypt(request, hardwareRandomSourceOverride)`: cifra usando un `RandomSource` hardware inyectado por el consumidor.
+*   `CifradorRngMode.SOFTWARE`: modo equivalente a `-sw`.
+*   `CifradorRngMode.HARDWARE`: modo equivalente a `-hw`.
+
+#### Android
+
+Una app Android externa debe consumir el `AAR` compilado, no `platform/android`.
+
+Dependencia Gradle:
+
+```kotlin
+dependencies {
+    implementation(files("/ruta/al/proyecto/prebuilt/android/aar/ElGamalCipher-android-debug.aar"))
+}
+```
+
+El `AAR` ya empaqueta el bridge Android y las `jniLibs` necesarias para:
+
+*   `arm64-v8a`: teléfonos reales
+*   `x86_64`: Waydroid y emuladores Android sobre hosts x86_64
+
+API principal en Android:
+
+*   `pe.gob.onpe.votodigital.cifrador.android.AndroidCipherRunner`
+*   `pe.gob.onpe.votodigital.cifrador.android.AndroidCipherLibraryInfo`
+
+Métodos principales de `AndroidCipherRunner`:
+
+*   `encryptSandboxInputs(CifradorRngMode.SOFTWARE | HARDWARE)`
+*   `importPublicKey(Uri)`
+*   `importVotes(Uri)`
+*   `exportCiphertexts(Uri)`
+*   `currentPublicKeyFile()`
+*   `currentVotesFile()`
+*   `describeTrueRngStatus()`
+
+Ejemplo mínimo:
+
+```kotlin
+import pe.gob.onpe.votodigital.cifrador.android.AndroidCipherRunner
+import pe.gob.onpe.votodigital.cifrador.android.AndroidCipherLibraryInfo
+import pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode
+
+val runner = AndroidCipherRunner(applicationContext)
+
+runner.importPublicKey(publicKeyUri)
+runner.importVotes(votesUri)
+
+val result = runner.encryptSandboxInputs(CifradorRngMode.SOFTWARE)
+check(result.success) { result.message }
+
+println(AndroidCipherLibraryInfo.versionName)
+println(AndroidCipherLibraryInfo.buildTimestamp)
+println(AndroidCipherLibraryInfo.rngSupport)
+```
+
+Flujo esperado:
+
+1.  importar `publicKey`
+2.  importar `shuffled_votes.txt`
+3.  cifrar con `encryptSandboxInputs()`
+4.  exportar `ciphertexts_ext` con `exportCiphertexts()`
+
+Si se usa TrueRNG en Android:
+
+*   usar `CifradorRngMode.HARDWARE`
+*   solicitar permiso USB desde la app consumidora
+*   mantener `x86_64` si el mismo APK debe correr también en Waydroid
+
 ### Compilación
 ```bash
 mvn -q -version

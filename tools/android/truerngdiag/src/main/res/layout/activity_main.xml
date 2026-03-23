@@ -33,6 +33,13 @@
             android:text="Info de build" />
 
         <Button
+            android:id="@+id/runJniCheckButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Ejecutar prueba JNI" />
+
+        <Button
             android:id="@+id/scanUsbButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -52,6 +59,42 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="Leer muestra de 4096 bytes" />
+
+        <TextView
+            android:id="@+id/cipherSectionTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="Prueba de cifrado"
+            android:textAppearance="@style/TextAppearance.AppCompat.Subhead"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/loadSampleResourcesButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Cargar recursos de prueba" />
+
+        <Spinner
+            android:id="@+id/rngModeSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" />
+
+        <Button
+            android:id="@+id/encryptSampleButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Cifrar votos de prueba" />
+
+        <Button
+            android:id="@+id/exportCiphertextsButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Exportar ciphertexts_ext" />
 
         <TextView
             android:id="@+id/stabilityTitleText"
