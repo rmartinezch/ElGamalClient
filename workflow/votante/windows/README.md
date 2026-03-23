@@ -18,7 +18,8 @@ El cifrador Windows queda desacoplado de esta UI:
 
 - puede ser invocado o consumido por cualquier interfaz de votación para Windows
 - la interfaz ubicada en `workflow/votante/windows` es solo un ejemplo de uso dentro de este repositorio
-- el punto estable de integración es el flujo `java.exe + ElGamalCipher-1.1.0.jar + DLL nativas`
+- el punto estable de integración es el flujo compilado `runtime\bin\java.exe + ElGamalCipher-1.1.0.jar + DLL nativas`
+- la estación no consume fuentes del cifrador; consume el portable compilado en `dist/windows/image/Cifrador`
 
 ## Arranque
 
@@ -36,6 +37,12 @@ Si desea fijar un `auxsid` por defecto:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\workflow\votante\windows\run-votante-windows.ps1 -Auxsid default
+```
+
+Antes del arranque, el cifrador Windows debe existir como artefacto compilado:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\build-cifrador-portable.ps1
 ```
 
 ## Rutas relevantes
@@ -67,3 +74,13 @@ La estación Windows queda alineada al backend:
 - después del envío se persiste `resolved_auxsid`, `accumulated` y `accumulated_from_auxsid`
 - `GET /api/auxsids` deja de decidir el lote operativo
 - `serviceBaseUrl` puede usarse como semilla opcional, pero la estación sigue barriendo la red local si esa URL no responde o no coincide con la sesión activa
+
+## Portable del votante
+
+`package-votante-windows-portable.ps1` toma el cifrador ya compilado desde:
+
+- `dist/windows/image/Cifrador/runtime`
+- `dist/windows/image/Cifrador/app/ElGamalCipher-1.1.0.jar`
+- `dist/windows/image/Cifrador/libs/windows-x64`
+
+Si esa imagen no existe, la reconstruye llamando a `scripts/windows/empaquetado/build-cifrador-portable.ps1`.

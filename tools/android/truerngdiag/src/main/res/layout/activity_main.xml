@@ -26,6 +26,13 @@
             android:textAppearance="@style/TextAppearance.AppCompat.Body1" />
 
         <Button
+            android:id="@+id/infoButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Info de build" />
+
+        <Button
             android:id="@+id/scanUsbButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

@@ -8,6 +8,7 @@ APP_DIR="$WORKFLOW_DIR/app"
 APP_GENERATED_ASSETS_DIR="$APP_DIR/src/generated/assets/votante"
 BASE_ANDROID_DIR="$PROJECT_ROOT/platform/android"
 PREBUILT_ANDROID_DIR="$PROJECT_ROOT/prebuilt/android/jniLibs"
+PREBUILT_AAR_PATH="$PROJECT_ROOT/prebuilt/android/aar/ElGamalCipher-android-debug.aar"
 BASE_JNILIBS_DIR="$PREBUILT_ANDROID_DIR"
 DIST_DIR="$PROJECT_ROOT/dist/android"
 OUTPUT_APK_NAME="${OUTPUT_APK_NAME:-VotanteAndroid-portable.apk}"
@@ -68,6 +69,32 @@ sync_jni_libs() {
   done
 }
 
+sync_cifrador_android() {
+  local needs_build=0
+
+  if [[ ! -f "$PREBUILT_AAR_PATH" ]]; then
+    needs_build=1
+  fi
+
+  local abi lib source_path
+  for abi in "${ABI_LIST[@]}"; do
+    for lib in "${JNI_LIBS[@]}"; do
+      source_path="$BASE_JNILIBS_DIR/$abi/$lib"
+      if [[ ! -f "$source_path" ]]; then
+        needs_build=1
+      fi
+    done
+  done
+
+  if [[ "$needs_build" == "1" ]]; then
+    echo "[votante-android] Faltan artefactos compilados del cifrador Android. Compilando AAR + JNI..."
+    "$PROJECT_ROOT/scripts/android/compilacion/build-cifrador.sh"
+  fi
+
+  require_file "$PREBUILT_AAR_PATH"
+  sync_jni_libs
+}
+
 main() {
   local sdk_root apk_source
   apk_source="$APP_DIR/build/outputs/apk/debug/app-debug.apk"
@@ -83,8 +110,8 @@ main() {
 }
 CONFIG
 
-  echo "[votante-android] Sincronizando jniLibs Android..."
-  sync_jni_libs
+  echo "[votante-android] Verificando artefactos compilados del cifrador Android..."
+  sync_cifrador_android
 
   echo "[votante-android] Compilando APK aislado de la estacion del votante..."
   (

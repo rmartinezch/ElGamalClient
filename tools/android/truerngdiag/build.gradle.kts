@@ -1,3 +1,5 @@
+import java.time.OffsetDateTime
+
 val androidXCoreVersion = "1.13.1"
 val androidXAppCompatVersion = "1.7.0"
 val materialVersion = "1.12.0"
@@ -5,6 +7,8 @@ val usbSerialVersion = "3.9.0"
 val verificatumBundleVersion = "3.1.0"
 val verificatumVecjVersion = "2.2.0"
 val verificatumVmgjVersion = "1.3.0"
+val debugApkMarker = "20260323"
+val interfaceBuildTimestamp = OffsetDateTime.now().toString()
 
 plugins {
     id("com.android.application")
@@ -21,9 +25,15 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("String", "INTERFACE_BUILD_TIMESTAMP", "\"$interfaceBuildTimestamp\"")
+        buildConfigField("String", "INTERFACE_DISPLAY_NAME", "\"TrueRNG Diagnostico\"")
     }
 
     buildTypes {
+        debug {
+            versionNameSuffix = "-$debugApkMarker"
+            resValue("string", "app_name", "TrueRNG Diagnostico $debugApkMarker")
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(
@@ -40,6 +50,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     packaging {

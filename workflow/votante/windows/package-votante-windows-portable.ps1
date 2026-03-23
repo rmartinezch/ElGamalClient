@@ -53,13 +53,23 @@ $ZipPath = "$OutputDir.zip"
 $SourceDir = Join-Path $ProjectRoot "workflow\votante\windows\app\src"
 $PublicDir = Join-Path $ProjectRoot "workflow\votante\windows\app\public"
 $SharedDir = Join-Path $ProjectRoot "workflow\votante\shared"
-$RuntimeSourceDir = Join-Path $ProjectRoot "dist\windows\image\Cifrador\runtime"
-$JarSource = Join-Path $ProjectRoot "dist\windows\input\ElGamalCipher-1.1.0.jar"
-$VmgjSource = Join-Path $ProjectRoot "dist\windows\input\libs\windows-x64\vmgj-1.3.0.dll"
-$VecjSource = Join-Path $ProjectRoot "dist\windows\input\libs\windows-x64\vecj-2.2.0.dll"
+$BuildCifradorScript = Join-Path $ProjectRoot "scripts\windows\empaquetado\build-cifrador-portable.ps1"
+$CifradorImageDir = Join-Path $ProjectRoot "dist\windows\image\Cifrador"
+$RuntimeSourceDir = Join-Path $CifradorImageDir "runtime"
+$JarSource = Join-Path $CifradorImageDir "app\ElGamalCipher-1.1.0.jar"
+$VmgjSource = Join-Path $CifradorImageDir "libs\windows-x64\vmgj-1.3.0.dll"
+$VecjSource = Join-Path $CifradorImageDir "libs\windows-x64\vecj-2.2.0.dll"
 $CatalogSource = Join-Path $SharedDir "catalogo-opciones.json"
 $SchemaSource = Join-Path $SharedDir "vote-schema.md"
 $PortableJavac = Join-Path $RuntimeSourceDir "bin\javac.exe"
+
+if (-not (Test-Path $PortableJavac) -or -not (Test-Path $JarSource) -or -not (Test-Path $VmgjSource) -or -not (Test-Path $VecjSource)) {
+    Write-Host "[portable] No se encontro el cifrador Windows portable. Reconstruyendo..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $BuildCifradorScript -ProjectRoot $ProjectRoot
+    if ($LASTEXITCODE -ne 0) {
+        throw "No se pudo preparar el cifrador Windows portable."
+    }
+}
 
 Assert-FileExists $JarSource
 Assert-FileExists $VmgjSource

@@ -1,3 +1,5 @@
+import java.time.OffsetDateTime
+
 val androidXCoreVersion = "1.13.1"
 val androidXAppCompatVersion = "1.7.0"
 val materialVersion = "1.12.0"
@@ -11,6 +13,8 @@ val androidXTestCoreVersion = "1.6.1"
 val androidXTestRunnerVersion = "1.6.2"
 val androidXTestJunitVersion = "1.2.1"
 val androidXEspressoVersion = "3.6.1"
+val cipherLibraryVersion = "1.1.0"
+val cipherLibraryBuildTimestamp = OffsetDateTime.now().toString()
 
 plugins {
     id("com.android.library")
@@ -25,6 +29,10 @@ android {
     defaultConfig {
         minSdk = 26
         targetSdk = 34
+
+        buildConfigField("String", "CIPHER_LIBRARY_VERSION", "\"$cipherLibraryVersion\"")
+        buildConfigField("String", "CIPHER_LIBRARY_BUILD_TIMESTAMP", "\"$cipherLibraryBuildTimestamp\"")
+        buildConfigField("String", "CIPHER_LIBRARY_RNG_SUPPORT", "\"SecureRandom,TrueRNG\"")
 
         ndk {
             abiFilters += listOf("x86_64", "arm64-v8a")
@@ -48,6 +56,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     sourceSets {

@@ -3,17 +3,21 @@ package pe.gob.onpe.votodigital.votante.android
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.os.Bundle
+import android.widget.Button
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import pe.gob.onpe.votodigital.cifrador.android.AndroidCipherLibraryInfo
 import pe.gob.onpe.votodigital.cifrador.android.AndroidCipherRunner
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var infoButton: Button
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -21,6 +25,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         webView = findViewById(R.id.voterWebView)
+        infoButton = findViewById(R.id.infoButton)
         val cipherRunner = AndroidCipherRunner(applicationContext)
         val voterBridge = AndroidVoterBridge(applicationContext, cipherRunner)
 
@@ -46,6 +51,9 @@ class MainActivity : AppCompatActivity() {
                 return false
             }
         }
+        infoButton.setOnClickListener {
+            showBuildInfoDialog()
+        }
         webView.loadUrl(VOTER_APP_URL)
     }
 
@@ -53,6 +61,28 @@ class MainActivity : AppCompatActivity() {
         webView.removeJavascriptInterface("AndroidBridge")
         webView.destroy()
         super.onDestroy()
+    }
+
+    private fun showBuildInfoDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Info de build")
+            .setMessage(buildInfoMessage())
+            .setPositiveButton("Cerrar", null)
+            .show()
+    }
+
+    private fun buildInfoMessage(): String {
+        return buildString {
+            appendLine("Interfaz")
+            appendLine("Nombre: ${BuildConfig.INTERFACE_DISPLAY_NAME}")
+            appendLine("Version: ${BuildConfig.VERSION_NAME}")
+            appendLine("Fecha/Hora build: ${BuildConfig.INTERFACE_BUILD_TIMESTAMP}")
+            appendLine()
+            appendLine("Cifrador Android")
+            appendLine("Version: ${AndroidCipherLibraryInfo.versionName}")
+            appendLine("Fecha/Hora build: ${AndroidCipherLibraryInfo.buildTimestamp}")
+            appendLine("RNG soportado: ${AndroidCipherLibraryInfo.rngSupport}")
+        }.trim()
     }
 
     companion object {

@@ -15,7 +15,9 @@ import android.widget.Button
 import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import pe.gob.onpe.votodigital.cifrador.android.AndroidCipherLibraryInfo
 import pe.gob.onpe.votodigital.cifrador.android.AndroidTrueRngSupport
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -30,6 +32,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var readSampleButton: Button
     private lateinit var runStabilityButton: Button
     private lateinit var exportReportButton: Button
+    private lateinit var infoButton: Button
     private lateinit var stabilityDurationSpinner: Spinner
     private var lastReport: String = "Sin ejecutar"
     private val stabilityOptions = listOf(
@@ -83,6 +86,7 @@ class MainActivity : AppCompatActivity() {
         readSampleButton = findViewById(R.id.readSampleButton)
         runStabilityButton = findViewById(R.id.runStabilityButton)
         exportReportButton = findViewById(R.id.exportReportButton)
+        infoButton = findViewById(R.id.infoButton)
         stabilityDurationSpinner = findViewById(R.id.stabilityDurationSpinner)
 
         stabilityDurationSpinner.adapter = ArrayAdapter(
@@ -148,6 +152,10 @@ class MainActivity : AppCompatActivity() {
         exportReportButton.setOnClickListener {
             createReportDocument.launch(defaultReportFileName())
         }
+
+        infoButton.setOnClickListener {
+            showBuildInfoDialog()
+        }
     }
 
     override fun onDestroy() {
@@ -203,7 +211,30 @@ class MainActivity : AppCompatActivity() {
         readSampleButton.isEnabled = !busy
         runStabilityButton.isEnabled = !busy
         exportReportButton.isEnabled = !busy
+        infoButton.isEnabled = !busy
         stabilityDurationSpinner.isEnabled = !busy
+    }
+
+    private fun showBuildInfoDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("Info de build")
+            .setMessage(buildInfoMessage())
+            .setPositiveButton("Cerrar", null)
+            .show()
+    }
+
+    private fun buildInfoMessage(): String {
+        return buildString {
+            appendLine("Interfaz")
+            appendLine("Nombre: ${BuildConfig.INTERFACE_DISPLAY_NAME}")
+            appendLine("Version: ${BuildConfig.VERSION_NAME}")
+            appendLine("Fecha/Hora build: ${BuildConfig.INTERFACE_BUILD_TIMESTAMP}")
+            appendLine()
+            appendLine("Cifrador Android")
+            appendLine("Version: ${AndroidCipherLibraryInfo.versionName}")
+            appendLine("Fecha/Hora build: ${AndroidCipherLibraryInfo.buildTimestamp}")
+            appendLine("RNG soportado: ${AndroidCipherLibraryInfo.rngSupport}")
+        }.trim()
     }
 
     companion object {
