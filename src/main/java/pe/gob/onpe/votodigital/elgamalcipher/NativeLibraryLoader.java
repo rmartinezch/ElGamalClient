@@ -134,6 +134,8 @@ public final class NativeLibraryLoader {
 
     private static List<Path> getCandidateDirectories(RuntimePlatform platform) {
         Set<Path> directories = new LinkedHashSet<>();
+        directories.add(new File(new File("prebuilt"), platform.classifier()).toPath().toAbsolutePath().normalize());
+        directories.add(new File("prebuilt").toPath().toAbsolutePath().normalize());
         directories.add(new File(new File("libs"), platform.classifier()).toPath().toAbsolutePath().normalize());
         directories.add(new File("libs").toPath().toAbsolutePath().normalize());
 
@@ -141,6 +143,8 @@ public final class NativeLibraryLoader {
         if (codeSourceDir != null) {
             Path current = codeSourceDir;
             for (int i = 0; i < 3 && current != null; i++) {
+                directories.add(current.resolve("prebuilt").resolve(platform.classifier()).normalize());
+                directories.add(current.resolve("prebuilt").normalize());
                 directories.add(current.resolve("libs").resolve(platform.classifier()).normalize());
                 directories.add(current.resolve("libs").normalize());
                 current = current.getParent();

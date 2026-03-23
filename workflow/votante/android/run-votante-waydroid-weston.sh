@@ -148,7 +148,7 @@ ensure_waydroid_weston() {
   fi
   mkdir -p "$PROJECT_ROOT/.build/waydroid-weston"
   setsid bash -lc \
-    "env SHOW_UI=0 WAYDROID_SHOW_UI=\"$SHOW_UI\" \"$PROJECT_ROOT/scripts/android/start-waydroid-weston.sh\"" \
+    "env SHOW_UI=0 WAYDROID_SHOW_UI=\"$SHOW_UI\" \"$PROJECT_ROOT/scripts/android/entorno/start-waydroid-weston.sh\"" \
     >>"$PROJECT_ROOT/.build/waydroid-weston/votante-launch-bootstrap.log" 2>&1 </dev/null &
 
   wait_for_session

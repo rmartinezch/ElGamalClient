@@ -66,7 +66,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
-                    <argLine>-Djava.library.path=${project.basedir}/libs${path.separator}${project.basedir}/libs/windows-x64</argLine>
+                    <argLine>-Djava.library.path=${project.basedir}/prebuilt/linux-x64${path.separator}${project.basedir}/prebuilt/windows-x64</argLine>
                 </configuration>
             </plugin>
             <!-- Plugin para ejecutar -->

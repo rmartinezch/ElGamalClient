@@ -3,3 +3,6 @@
 /local.properties
 /app/build/
 /app/src/generated/
+/app/libs/
+/app/src/main/assets/cifrador/
+/app/src/main/jniLibs/

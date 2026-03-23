@@ -121,8 +121,14 @@ class AndroidVoterBridge(
                 "label=${firstNonBlank(serviceSessionLabel, "n/d")}"
         )
 
-        val publicKeyWrite = runner.importPublicKeyBytes(publicKey.contentBytes)
-        val votesWrite = runner.importVotesText(bundle.bundleText)
+        val publicKeyFile = runner.currentPublicKeyFile().apply {
+            parentFile?.mkdirs()
+            writeBytes(publicKey.contentBytes)
+        }
+        val votesFile = runner.currentVotesFile().apply {
+            parentFile?.mkdirs()
+            writeText(bundle.bundleText, StandardCharsets.UTF_8)
+        }
         events += event("Cedula canonica validada y serializada en plain_votes.txt")
         events += event("Invocando cifrador desacoplado del ejecutable.")
 
@@ -132,7 +138,7 @@ class AndroidVoterBridge(
             throw IllegalStateException("No se genero ciphertexts_ext. runId=$runId")
         }
 
-        val ciphertextsText = runner.currentCiphertextsFile().readText(StandardCharsets.UTF_8)
+        val ciphertextsText = cipherResult.outputFile.readText(StandardCharsets.UTF_8)
         val ciphertextCount = countNonBlankLines(ciphertextsText)
         events += event("Voto cifrado generado. registros=$ciphertextCount")
 
@@ -183,10 +189,10 @@ class AndroidVoterBridge(
         )
         events += event("Servicio remoto respondio ok=$receiptAccepted auxsid=$serviceResolvedAuxsid")
 
-        copyToSubmission(publicKeyWrite.targetFile, File(submissionDir, "publicKey"))
-        copyToSubmission(votesWrite.targetFile, File(submissionDir, "plain_votes.txt"))
-        copyToSubmission(runner.currentCiphertextsFile(), File(submissionDir, "ciphertexts_ext"))
-        copyToSubmission(runner.currentLogFile(), File(submissionDir, "android-cifrador.log"))
+        copyToSubmission(publicKeyFile, File(submissionDir, "publicKey"))
+        copyToSubmission(votesFile, File(submissionDir, "plain_votes.txt"))
+        copyToSubmission(cipherResult.outputFile, File(submissionDir, "ciphertexts_ext"))
+        copyToSubmission(cipherResult.logFile, File(submissionDir, "android-cifrador.log"))
         File(submissionDir, "emission-context.json").writeText(
             JSONObject()
                 .put("service_base_url", serviceBaseUrl)

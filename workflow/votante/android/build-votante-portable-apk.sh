@@ -6,23 +6,29 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 WORKFLOW_DIR="$PROJECT_ROOT/workflow/votante/android"
 APP_DIR="$WORKFLOW_DIR/app"
 APP_GENERATED_ASSETS_DIR="$APP_DIR/src/generated/assets/votante"
-BASE_ANDROID_DIR="$PROJECT_ROOT/android"
-LIBRARY_DIR="$BASE_ANDROID_DIR/app"
-LIBRARY_LIBS_DIR="$LIBRARY_DIR/libs"
-BASE_JNILIBS_DIR="$BASE_ANDROID_DIR/app/src/main/jniLibs"
+BASE_ANDROID_DIR="$PROJECT_ROOT/platform/android"
+PREBUILT_ANDROID_DIR="$PROJECT_ROOT/prebuilt/android/jniLibs"
+BASE_JNILIBS_DIR="$PREBUILT_ANDROID_DIR"
 DIST_DIR="$PROJECT_ROOT/dist/android"
 OUTPUT_APK_NAME="${OUTPUT_APK_NAME:-VotanteAndroid-portable.apk}"
 OUTPUT_APK_PATH="$DIST_DIR/$OUTPUT_APK_NAME"
 OUTPUT_SHA_PATH="$OUTPUT_APK_PATH.sha256"
 GRADLEW_PATH="$BASE_ANDROID_DIR/gradlew"
-JAR_TARGET_NAME="${JAR_TARGET_NAME:-ElGamalCipher-android.jar}"
-JAR_LIBRARY_PATH="$LIBRARY_LIBS_DIR/$JAR_TARGET_NAME"
 RUNTIME_CONFIG_PATH="$APP_GENERATED_ASSETS_DIR/runtime-config.json"
 ABI_LIST=("arm64-v8a" "x86_64")
 JNI_LIBS=("libvecj-2.2.0.so" "libvmgj-1.3.0.so")
 SERVICE_BASE_URL="${VOTANTE_ANDROID_SERVICE_BASE_URL:-}"
 
-source "$PROJECT_ROOT/scripts/android/lib-android-env.sh"
+source "$PROJECT_ROOT/scripts/android/entorno/lib-android-env.sh"
+
+find_zip_entries() {
+  if command -v rg >/dev/null 2>&1; then
+    rg 'lib/(arm64-v8a|x86_64)/(libvecj-2\.2\.0\.so|libvmgj-1\.3\.0\.so)|classes(\d+)?\.dex'
+    return 0
+  fi
+
+  grep -E 'lib/(arm64-v8a|x86_64)/(libvecj-2\.2\.0\.so|libvmgj-1\.3\.0\.so)|classes([0-9]+)?\.dex'
+}
 
 project_version() {
   sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$PROJECT_ROOT/pom.xml" | head -n 1
@@ -51,7 +57,7 @@ sync_jni_libs() {
 
   if [[ "$needs_build" == "1" ]]; then
     echo "[votante-android] JNI Android no encontrado en $BASE_JNILIBS_DIR. Compilando..."
-    "$PROJECT_ROOT/scripts/android/build-jni.sh"
+    "$PROJECT_ROOT/scripts/android/compilacion/build-jni.sh"
   fi
 
   for abi in "${ABI_LIST[@]}"; do
@@ -63,13 +69,11 @@ sync_jni_libs() {
 }
 
 main() {
-  local sdk_root app_version jar_source apk_source
-  app_version="$(project_version)"
-  jar_source="$PROJECT_ROOT/target/ElGamalCipher-$app_version.jar"
+  local sdk_root apk_source
   apk_source="$APP_DIR/build/outputs/apk/debug/app-debug.apk"
   sdk_root="$(resolve_android_sdk_root "$PROJECT_ROOT")"
 
-  mkdir -p "$LIBRARY_LIBS_DIR" "$APP_GENERATED_ASSETS_DIR" "$DIST_DIR"
+  mkdir -p "$APP_GENERATED_ASSETS_DIR" "$DIST_DIR"
   printf 'sdk.dir=%s\n' "$sdk_root" > "$WORKFLOW_DIR/local.properties"
   printf 'sdk.dir=%s\n' "$sdk_root" > "$BASE_ANDROID_DIR/local.properties"
 
@@ -78,15 +82,6 @@ main() {
   "serviceBaseUrl": "${SERVICE_BASE_URL}"
 }
 CONFIG
-
-  echo "[votante-android] Recompilando jar portable para Android (Java 17)..."
-  (
-    cd "$PROJECT_ROOT"
-    mvn -q -DskipTests -Dmaven.compiler.release=17 package
-  )
-  require_file "$jar_source"
-
-  cp -f "$jar_source" "$JAR_LIBRARY_PATH"
 
   echo "[votante-android] Sincronizando jniLibs Android..."
   sync_jni_libs
@@ -105,7 +100,7 @@ CONFIG
   )
 
   echo "[votante-android] Verificando contenido portable dentro del APK..."
-  unzip -l "$OUTPUT_APK_PATH" | rg 'lib/(arm64-v8a|x86_64)/(libvecj-2\.2\.0\.so|libvmgj-1\.3\.0\.so)|classes(\d+)?\.dex'
+  unzip -l "$OUTPUT_APK_PATH" | find_zip_entries
 
   printf '\n[votante-android] APK generado en: %s\n' "$OUTPUT_APK_PATH"
   printf '[votante-android] SHA-256: %s\n' "$OUTPUT_SHA_PATH"

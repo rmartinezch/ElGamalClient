@@ -20,17 +20,17 @@ Si el dispositivo TrueRNG no existe o no es legible, el flujo vuelve a
 
 ## Scripts Ubuntu
 
-- `scripts/ubuntu/bootstrap-verificatum.sh`
-- `scripts/ubuntu/build-jar.sh`
-- `scripts/ubuntu/run-cifrador.sh`
-- `scripts/ubuntu/build-cifrador-portable.sh`
-- `scripts/ubuntu/package-cifrador-portable.sh`
+- `scripts/ubuntu/entorno/bootstrap-verificatum.sh`
+- `scripts/ubuntu/compilacion/build-cifrador.sh`
+- `scripts/ubuntu/ejecucion/run-cifrador.sh`
+- `scripts/ubuntu/empaquetado/build-cifrador-portable.sh`
+- `scripts/ubuntu/empaquetado/package-cifrador-portable.sh`
 
 Uso típico:
 
 ```bash
-./scripts/ubuntu/build-jar.sh
-./scripts/ubuntu/run-cifrador.sh recursos/publicKey recursos/shuffled_votes.txt salida/ciphertexts_ext -sw
+./scripts/ubuntu/compilacion/build-cifrador.sh
+./scripts/ubuntu/ejecucion/run-cifrador.sh recursos/publicKey recursos/shuffled_votes.txt salida/ciphertexts_ext -sw
 ```
 
 ## Portabilidad Ubuntu
@@ -38,7 +38,7 @@ Uso típico:
 La imagen portable Ubuntu se genera con:
 
 ```bash
-./scripts/ubuntu/build-cifrador-portable.sh
+./scripts/ubuntu/empaquetado/build-cifrador-portable.sh
 ```
 
 Carpeta resultante:
@@ -48,7 +48,7 @@ Carpeta resultante:
 Paquete comprimido:
 
 ```bash
-./scripts/ubuntu/package-cifrador-portable.sh
+./scripts/ubuntu/empaquetado/package-cifrador-portable.sh
 ```
 
 Salida:
@@ -59,4 +59,18 @@ Salida:
 
 - `scripts/windows/*`: build/empaquetado/pruebas remotas de Windows.
 - `scripts/ubuntu/*`: compilación/ejecución local Ubuntu.
-- `scripts/*`: wrappers de compatibilidad para comandos antiguos.
+- `scripts/android/*`: build Android del `AAR`, entorno y pruebas.
+
+## Build nativo Linux
+
+`scripts/ubuntu/compilacion/build-native-linux.sh` recompila desde
+`native/verificatum-src`:
+
+- `verificatum-vec`
+- `verificatum-gmpmee`
+- `libvecj-2.2.0.so`
+- `libvmgj-1.3.0.so`
+
+Las salidas canónicas quedan en:
+
+- `prebuilt/linux-x64`

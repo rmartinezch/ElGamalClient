@@ -21,4 +21,4 @@ dependencyResolutionManagement {
 rootProject.name = "votante-android"
 include(":app")
 include(":cifradorlib")
-project(":cifradorlib").projectDir = file("../../../android/app")
+project(":cifradorlib").projectDir = file("../../../platform/android/app")

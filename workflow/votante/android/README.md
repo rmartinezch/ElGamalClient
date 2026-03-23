@@ -1,6 +1,6 @@
 # Votante Android
 
-Implementación aislada de la estación de voto Android. Consume el cifrador Android como librería Gradle desde `D:\_Proyectos\cifradorM\android\app`, sin mezclar la UI del votante con la del cifrador.
+Implementación aislada de la estación de voto Android. Consume el cifrador Android como librería Gradle desde `platform/android/app`, sin mezclar la UI del votante con la del cifrador.
 
 ## Estado actual
 
@@ -9,7 +9,7 @@ Implementación aislada de la estación de voto Android. Consume el cifrador And
 - la estación Android hospeda la UI del votante en `WebView`
 - descubre mezcladoras en la red local, solicita `handshake`, consulta `GET /api/emission-context`, descarga llave pública y remite `ciphertexts_ext`
 - serializa la cédula con el mismo esquema canónico usado en Windows
-- cifra localmente reutilizando la librería Android del cifrador ubicada en `android/app`
+- cifra localmente reutilizando la librería Android del cifrador ubicada en `platform/android/app`
 - muestra constancia de recepción y monitor de eventos
 
 ## Reutilizacion
@@ -18,7 +18,7 @@ El cifrador Android queda desacoplado de esta app:
 
 - puede ser consumido por cualquier interfaz de votación Android
 - la app ubicada en `workflow/votante/android` es solo un ejemplo de uso dentro de este repositorio
-- la integración real se hace contra la librería `android/app`, no contra esta UI ejemplo
+- la integración real se hace contra la librería `platform/android/app`, no contra esta UI ejemplo
 
 ## Ubicacion principal
 
@@ -58,15 +58,16 @@ Ese catálogo replica los nombres ficticios de organizaciones políticas y candi
 
 ## Relación con el cifrador Android
 
-- librería del cifrador: `android/app`
+- librería del cifrador: `platform/android/app`
+- prebuilts Android consumidos por la librería: `prebuilt/android/jniLibs`
 - módulo consumidor del votante: `workflow/votante/android/app`
 - el `settings.gradle.kts` del votante incluye la librería como:
   - `include(":cifradorlib")`
-  - `project(":cifradorlib").projectDir = file("../../../android/app")`
+  - `project(":cifradorlib").projectDir = file("../../../platform/android/app")`
 
 Con esto:
 
-- el `.jar` y las `.so` se preparan en la librería
+- el `AAR` y las `.so` se preparan desde el proyecto fuente del cifrador
 - el APK del votante consume la librería resultante
 - el votante ya no mantiene copias locales de `AndroidCipherRunner`, `AndroidTrueRngSupport` ni `AndroidUsbTrueRngRandomSource`
 
@@ -84,12 +85,15 @@ El módulo ahora puede compilarse como APK autocontenido con:
 
 Ese script:
 
-- recompila `ElGamalCipher-1.1.0.jar` para Android en Java 17
-- copia el `jar` a `android/app/libs` para alimentar la librería `:cifradorlib`
 - genera `runtime-config.json` para fijar `serviceBaseUrl` cuando se exporta `VOTANTE_ANDROID_SERVICE_BASE_URL`
-- asegura `libvecj-2.2.0.so` y `libvmgj-1.3.0.so` en la librería `android/app`
-- compila el APK del votante con el wrapper Gradle existente en `android/`
+- asegura `libvecj-2.2.0.so` y `libvmgj-1.3.0.so` en `prebuilt/android/jniLibs/<abi>`
+- compila el APK del votante con el wrapper Gradle existente en `platform/android/`
 - deja el artefacto final en `dist/android/VotanteAndroid-portable.apk`
+
+Nota sobre arquitecturas:
+
+- `arm64-v8a` es el ABI objetivo para teléfonos Android reales
+- `x86_64` se mantiene porque también se usa en emulador y Waydroid
 
 Para priorizar una mezcladora conocida sin desactivar el barrido de red local:
 

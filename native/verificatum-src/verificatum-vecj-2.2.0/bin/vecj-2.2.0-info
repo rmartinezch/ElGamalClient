@@ -1,0 +1,17 @@
+#!/bin/sh
+
+if test x$1 = x"bin";
+then
+    printf "/usr/local/bin"
+elif test x$1 = "xlib";
+then
+    printf "/usr/local/lib"
+elif test x$1 = "xjar";
+then
+    printf "/usr/local/share/java/verificatum-vecj-2.2.0.jar"
+elif test x$1 = "xcomplete";
+then
+    printf "vecj-2.2.0(vec-2.4.2)"
+else
+    printf "Illegal parameter! (%s)\n" $1
+fi

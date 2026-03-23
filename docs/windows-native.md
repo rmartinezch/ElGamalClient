@@ -11,7 +11,9 @@ Verificatum.
 Implementado en esta rama:
 
 - detección de sistema operativo y arquitectura
-- carga de bibliotecas nativas desde `libs/<os-arch>` o `libs`
+- carga de bibliotecas nativas desde `prebuilt/<os-arch>` o `prebuilt`
+  en desarrollo, y desde `libs/<os-arch>` o `libs` en artefactos
+  portables
 - relanzamiento automático del JAR con `java.library.path`
 - RNG portable basado en `SecureRandom`
 - pruebas automáticas de regresión en Linux
@@ -23,7 +25,7 @@ Validado en Windows x64:
 
 - compilación local de `vecj-2.2.0.dll`
 - compilación local de `vmgj-1.3.0.dll`
-- carga JNI real desde `libs/windows-x64`
+- carga JNI real desde `prebuilt/windows-x64`
 - ejecución completa del cifrador con `2125` votos
 - generación del paquete final con `jpackage`
 
@@ -51,7 +53,7 @@ Resultado observado:
 ## Layout esperado
 
 ```text
-libs/
+prebuilt/
   linux-x64/
     libvecj-2.2.0.so
   windows-x64/
@@ -59,7 +61,8 @@ libs/
     vmgj-1.3.0.dll
 ```
 
-El cargador busca primero `libs/<os-arch>` y luego `libs`.
+El cargador busca primero `prebuilt/<os-arch>` y luego `prebuilt`.
+Para los empaquetados finales mantiene compatibilidad con `libs/<os-arch>`.
 
 ## RNG
 
@@ -71,15 +74,15 @@ El cargador busca primero `libs/<os-arch>` y luego `libs`.
 
 Se incluye el script:
 
-- `scripts/windows/package-windows.ps1`
-- `scripts/windows/build-native-windows.ps1`
+- `scripts/windows/empaquetado/package-windows.ps1`
+- `scripts/windows/compilacion/build-native-windows.ps1`
 
 `build-native-windows.ps1`:
 
 - instala `MSYS2 UCRT64` si no existe
 - compila `verificatum-vec` y `verificatum-gmpmee`
 - compila `vecj-2.2.0.dll` y `vmgj-1.3.0.dll`
-- deja las DLL en `libs/windows-x64`
+- deja las DLL en `prebuilt/windows-x64`
 - ejecuta una prueba mínima JNI
 
 `package-windows.ps1`:
@@ -94,17 +97,25 @@ Se incluye el script:
 
 Se agregan estos scripts operativos:
 
-- `scripts/windows/build-cifrador-exe.ps1`
-- `scripts/windows/package-cifrador-portable.ps1`
-- `scripts/windows/test-remote-verificatum-mix.bat`
-- `scripts/windows/test-remote-verificatum-mix.ps1`
+- `scripts/windows/compilacion/build-cifrador.ps1`
+- `scripts/windows/empaquetado/build-cifrador-portable.ps1`
+- `scripts/windows/empaquetado/package-cifrador-portable.ps1`
+- `scripts/windows/pruebas/test-remote-verificatum-mix.bat`
+- `scripts/windows/pruebas/test-remote-verificatum-mix.ps1`
 
-`build-cifrador-exe.ps1`:
+`build-cifrador.ps1`:
 
 - asegura dependencias Maven locales si faltan
 - compila el proyecto con Maven
 - compila DLL nativas Windows si faltan
-- empaqueta `dist/windows/image/Cifrador/Cifrador.exe`
+- exporta el `jar` canónico y las DLL JNI a `prebuilt/`
+
+`build-cifrador-portable.ps1`:
+
+- consume `prebuilt/java` y `prebuilt/windows-x64`
+- copia un runtime Java embebido
+- compila `Cifrador.exe`
+- deja `dist/windows/image/Cifrador`
 
 `package-cifrador-portable.ps1`:
 

@@ -34,6 +34,15 @@ Se implementó una lógica condicional para manejar dispositivos de entropía po
 
 ---
 
+## Estructura del repositorio
+
+- `native/`: fuentes compartidas de `vec`, `gmpmee`, `vecj` y `vmgj` usadas para compilar insumos nativos en Android y Windows.
+- `platform/`: proyectos fuente de plataforma que producen artefactos canónicos del cifrador.
+- `scripts/`: scripts de compilación y empaquetado separados por sistema operativo.
+- `tools/`: interfaces técnicas y herramientas auxiliares separadas por sistema operativo.
+- `workflow/`: estaciones de votación y flujos consumidores del cifrador.
+- `dist/`: artefactos finales listos para distribución.
+
 ## ⚡ Comparativa de Rendimiento (Benchmark)
 
 Prueba realizada con **10,000 votos**:
@@ -65,7 +74,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\bootstrap-verificatum
 En Ubuntu/Linux, la validación de prerequisitos locales se hace con:
 
 ```bash
-./scripts/ubuntu/bootstrap-verificatum.sh
+./scripts/ubuntu/entorno/bootstrap-verificatum.sh
 ```
 
 En Windows, el bootstrap genera e instala en `.mvn/local-repo`:
@@ -79,13 +88,14 @@ En Windows, el bootstrap genera e instala en `.mvn/local-repo`:
     `-sw` usa `/dev/urandom` y `-hw` usa TrueRNG (`/dev/TrueRNG0` por
     defecto, configurable).
 *   Windows x64: la aplicación ya detecta plataforma, busca bibliotecas
-    nativas por layout (`libs/windows-x64`).
+    nativas por layout local (`prebuilt/windows-x64`) y por layout
+    portable (`libs/windows-x64`).
     `-sw` usa `SecureRandom` y `-hw` usa TrueRNG por puerto serie
     (`COMx`) si el dispositivo USB ya expone un puerto serial en
     Windows; si no está disponible, vuelve a `SecureRandom`.
 *   Otros sistemas operativos: usan `SecureRandom` en `-sw` y `-hw`.
 *   La compilacion nativa Windows queda cerrada con
-    `vecj-2.2.0.dll` y `vmgj-1.3.0.dll` en `libs/windows-x64`.
+    `vecj-2.2.0.dll` y `vmgj-1.3.0.dll` en `prebuilt/windows-x64`.
 *   `verificatum-vmgj` requiere un ajuste de 64 bits en su JNI:
     los punteros se transportan como `jlong` usando `intptr_t`.
 
@@ -95,12 +105,13 @@ En Windows, el bootstrap genera e instala en `.mvn/local-repo`:
 *   `scripts/ubuntu`: scripts `.sh` para validación de prerequisitos,
     compilación, ejecución local y empaquetado portable en Ubuntu.
 *   `scripts/android`: scripts `.sh` para chequeo de entorno,
-    compilación e instalación de la app Android de fase 2.
+    compilación del `AAR` Android del cifrador y empaquetado de sus
+    prebuilts JNI.
 
 ### Compilación
 ```bash
 mvn -q -version
-./scripts/ubuntu/bootstrap-verificatum.sh
+./scripts/ubuntu/entorno/bootstrap-verificatum.sh
 mvn clean package -DskipTests
 ```
 
@@ -109,7 +120,7 @@ Con los fuentes locales de Verificatum disponibles, el repositorio puede
 construir las DLL JNI de Windows x64 con:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\build-native-windows.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\build-native-windows.ps1
 ```
 
 El script:
@@ -118,12 +129,12 @@ El script:
 *   compila `verificatum-vec` y `verificatum-gmpmee` como librerias
     estaticas locales
 *   compila `vecj-2.2.0.dll` y `vmgj-1.3.0.dll`
-*   deja ambas DLL en `libs/windows-x64`
+*   deja ambas DLL en `prebuilt/windows-x64`
 *   ejecuta una prueba minima JNI en Windows
 
 ### Ejecución
 ```bash
-java -jar target/ElGamalCipher-1.1.0.jar \
+java -jar prebuilt/java/ElGamalCipher-1.1.0.jar \
      <ruta_publicKey> \
      <ruta_votos_planos> \
      <ruta_salida_cifrados> \
@@ -164,13 +175,15 @@ java -jar target/ElGamalCipher-1.1.0.jar \
 ### Layout Nativo por Plataforma
 La aplicación busca bibliotecas nativas en este orden:
 
-1.  `libs/<os-arch>`
-2.  `libs`
+1.  `prebuilt/<os-arch>`
+2.  `prebuilt`
+3.  `libs/<os-arch>`
+4.  `libs`
 
 Ejemplos:
 
-*   `libs/linux-x64/libvecj-2.2.0.so`
-*   `libs/windows-x64/vecj-2.2.0.dll`
+*   `prebuilt/linux-x64/libvecj-2.2.0.so`
+*   `prebuilt/windows-x64/vecj-2.2.0.dll`
 
 Si el JAR se ejecuta sin `java.library.path` y encuentra un layout
 válido local, se relanza automáticamente con la ruta correcta.
@@ -182,7 +195,7 @@ java -jar ElGamalCipher.jar publicKey votos.txt cifrados.txt -sw -p
 
 ### Empaquetado Windows
 Con el JAR ya compilado y con `vecj-2.2.0.dll` y `vmgj-1.3.0.dll`
-presentes en `libs/windows-x64`:
+presentes en `prebuilt/windows-x64`:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\package-windows.ps1
@@ -192,7 +205,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\package-windows.ps1
 Para generar una imagen portable en Linux:
 
 ```bash
-./scripts/ubuntu/build-cifrador-portable.sh
+./scripts/ubuntu/empaquetado/build-cifrador-portable.sh
 ```
 
 Salida esperada:
@@ -225,7 +238,7 @@ El script:
 ### Empaquetado TAR.GZ portable Ubuntu
 
 ```bash
-./scripts/ubuntu/package-cifrador-portable.sh
+./scripts/ubuntu/empaquetado/package-cifrador-portable.sh
 ```
 
 Salida esperada:
@@ -233,69 +246,79 @@ Salida esperada:
 *   `dist/linux/Cifrador-1.1.0-linux-x64-portable.tar.gz`
 
 ### Inicio Fase 2 Android
-Se creó un proyecto Android mínimo en `android/` para arrancar pruebas de
-host, ABI y carga JNI.
+Se reorganizó el proyecto Android del cifrador en `platform/android/`
+para separarlo de las estaciones y de las herramientas de diagnóstico.
 
 Comandos base:
 
 ```bash
-./scripts/android/doctor.sh
-./scripts/android/build-debug.sh
-./scripts/android/install-debug.sh
+./scripts/android/entorno/doctor.sh
+./scripts/android/compilacion/build-cifrador.sh
 ```
 
 ### Empaquetado Portable Android
 Para generar una imagen portable Android en `dist/`:
 
 ```bash
-./scripts/android/build-cifrador-portable.sh
+./scripts/android/empaquetado/build-cifrador-portable.sh
 ```
 
 Salida esperada:
 
-*   `dist/android/image/Cifrador/apk/Cifrador.apk`
-*   `dist/android/image/Cifrador/apk/pruebas_auto.apk`
-*   `dist/android/image/Cifrador/recursos/publicKey`
-*   `dist/android/image/Cifrador/recursos/shuffled_votes.txt`
-*   `dist/android/image/Cifrador/scripts/install.sh`
-*   `dist/android/image/Cifrador/scripts/run-smoke-test.sh`
+*   `dist/android/image/Cifrador/aar/Cifrador-android-debug.aar`
+*   `dist/android/image/Cifrador/jniLibs/arm64-v8a/libvecj-2.2.0.so`
+*   `dist/android/image/Cifrador/jniLibs/arm64-v8a/libvmgj-1.3.0.so`
+*   `dist/android/image/Cifrador/jniLibs/x86_64/libvecj-2.2.0.so`
+*   `dist/android/image/Cifrador/jniLibs/x86_64/libvmgj-1.3.0.so`
 *   `dist/android/image/Cifrador/metadata/checksums.sha256`
 
 El script:
 
-*   compila el APK principal
-*   compila el APK de pruebas instrumentadas
-*   copia ambos artefactos a `dist/android/image/Cifrador`
-*   genera scripts portables de instalación y smoke test basados en `adb`
+*   compila el `AAR` Android del cifrador desde `platform/android`
+*   exporta los prebuilts JNI de Android por ABI
+*   copia el `AAR` y las `jniLibs` a `dist/android/image/Cifrador`
 *   genera checksums SHA-256
+
+### Sobre `target/` y `prebuilt/java`
+
+`target/` sigue siendo necesario, pero solo como salida transitoria de Maven.
+Ahí aparecen clases compiladas, reportes de pruebas y el `jar` recién generado.
+
+El artefacto Java canónico para consumo posterior queda en:
+
+*   `prebuilt/java/ElGamalCipher-1.1.0.jar`
+
+Ese `jar` es compartido por Ubuntu y Windows porque es bytecode Java común.
+Lo que sí cambia por sistema operativo son las bibliotecas JNI:
+
+*   `prebuilt/linux-x64/*.so`
+*   `prebuilt/windows-x64/*.dll`
+
+Android es distinto: no consume ese `jar` directamente como artefacto final de integración,
+porque necesita un `AAR` con `jniLibs`, manifiesto y metadatos Gradle. Por eso existe
+`platform/android` como proyecto fuente específico de Android.
 
 ### Empaquetado ZIP portable Android
 
 ```bash
-./scripts/android/package-cifrador-portable.sh
+./scripts/android/empaquetado/package-cifrador-portable.sh
 ```
 
 Salida esperada:
 
 *   `dist/android/Cifrador-1.1.0-android-portable.zip`
 
-### Uso del artefacto portable Android
-
-```bash
-./dist/android/image/Cifrador/scripts/install.sh
-./dist/android/image/Cifrador/scripts/run-smoke-test.sh
-```
-
 Detalles de la fase:
 
-*   [android/README.md](/home/willy/cifradorM/android/README.md)
+*   [platform/android/README.md](/home/willy/cifradorM/platform/android/README.md)
+*   [tools/android/README.md](/home/willy/cifradorM/tools/android/README.md)
 *   [docs/plan-fase2-android.md](/home/willy/cifradorM/docs/plan-fase2-android.md)
 
 ### Build reproducible de `Cifrador.exe`
 Para compilar el ejecutable Windows portable desde este repo:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\build-cifrador-exe.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\build-cifrador-portable.ps1
 ```
 
 Salida esperada:

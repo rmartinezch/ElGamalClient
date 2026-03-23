@@ -14,7 +14,7 @@ Fecha de verificacion: 2026-03-06
 - [x] `ElGamalMain` ya no concatena manualmente el directorio actual con
   los argumentos de entrada.
 - [x] Se agrego `NativeLibraryLoader` para relanzar el JAR con
-  `java.library.path` correcto cuando encuentra `libs/` local.
+  `java.library.path` correcto cuando encuentra `prebuilt/` local.
 - [x] `ElGamalPublicKey` ahora reporta mejor la causa raiz cuando falta
   una dependencia nativa.
 - [x] Se agregaron pruebas automatizadas para ejecucion con rutas
@@ -30,7 +30,7 @@ Fecha de verificacion: 2026-03-06
 
 - [x] `java -jar target/ElGamalCipher-1.1.0.jar <abs-publicKey> <abs-votos> <abs-salida> -sw`
   Resultado: el proceso se relanza automaticamente con
-  `java.library.path=/home/soettamusb/verificatum/cifrador/libs`,
+  `java.library.path=/home/soettamusb/verificatum/cifrador/prebuilt/linux-x64`,
   carga la llave publica y genera salida cifrada valida
 
 - [x] Verificacion del archivo de salida

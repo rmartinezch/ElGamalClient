@@ -6,7 +6,7 @@ Arranque completado en esta fecha:
 
 - se desacopló el core cifrador del parsing CLI (`ElGamalCipherService`,
   `CifradorRequest`, `CifradorRngMode`)
-- se creó proyecto Android mínimo en `android/` con Gradle wrapper y app
+- se creó proyecto Android mínimo en `tools/android/` con Gradle wrapper y app
   base para check de ABI/JNI
 - se creó `scripts/android` con flujo inicial (`doctor`, `assembleDebug`,
   `installDebug`)

@@ -1,10 +1,27 @@
-# Scripts por plataforma
+# Scripts
 
-- `windows/`: scripts PowerShell/BAT para build y empaquetado Windows.
-- `ubuntu/`: scripts Bash para build/ejecución local y empaquetado portable en Ubuntu.
-- `android/`: scripts Bash para doctor/build JNI/build APK/emulador/pruebas Android fase 2.
+Scripts organizados por plataforma y por función.
 
-Regla de uso:
+## Estructura
 
-- usar siempre los scripts desde la subcarpeta de plataforma
-- no hay wrappers duplicados en `scripts/`
+- `android/`
+  - `compilacion/`
+  - `empaquetado/`
+  - `pruebas/`
+  - `entorno/`
+- `ubuntu/`
+  - `compilacion/`
+  - `empaquetado/`
+  - `ejecucion/`
+  - `entorno/`
+- `windows/`
+  - `compilacion/`
+  - `empaquetado/`
+  - `pruebas/`
+
+## Regla
+
+- los scripts vivos están solo en las subcarpetas funcionales
+- no se mantienen wrappers duplicados en `scripts/<plataforma>/`
+- cada plataforma debe exponer un entrypoint `build-cifrador` en `compilacion/`
+- Android, Ubuntu y Windows regeneran sus insumos nativos desde `native/verificatum-src`
