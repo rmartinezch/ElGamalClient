@@ -13,7 +13,7 @@ val androidXTestJunitVersion = "1.2.1"
 val androidXEspressoVersion = "3.6.1"
 
 plugins {
-    id("com.android.application")
+    id("com.android.library")
     id("org.jetbrains.kotlin.android")
 }
 
@@ -23,13 +23,8 @@ android {
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
-        applicationId = "pe.gob.onpe.votodigital.cifrador.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
             abiFilters += listOf("x86_64", "arm64-v8a")

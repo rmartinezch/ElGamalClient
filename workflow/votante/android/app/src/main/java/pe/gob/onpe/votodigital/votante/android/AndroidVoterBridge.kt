@@ -4,6 +4,7 @@ import android.content.Context
 import android.webkit.JavascriptInterface
 import org.json.JSONArray
 import org.json.JSONObject
+import pe.gob.onpe.votodigital.cifrador.android.AndroidCipherRunner
 import pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode
 import java.io.File
 import java.net.HttpURLConnection

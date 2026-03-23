@@ -5,11 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 WORKFLOW_DIR="$PROJECT_ROOT/workflow/votante/android"
 APP_DIR="$WORKFLOW_DIR/app"
-APP_LIBS_DIR="$APP_DIR/libs"
-APP_ASSETS_DIR="$APP_DIR/src/main/assets/cifrador"
 APP_GENERATED_ASSETS_DIR="$APP_DIR/src/generated/assets/votante"
-APP_JNILIBS_DIR="$APP_DIR/src/main/jniLibs"
 BASE_ANDROID_DIR="$PROJECT_ROOT/android"
+LIBRARY_DIR="$BASE_ANDROID_DIR/app"
+LIBRARY_LIBS_DIR="$LIBRARY_DIR/libs"
 BASE_JNILIBS_DIR="$BASE_ANDROID_DIR/app/src/main/jniLibs"
 DIST_DIR="$PROJECT_ROOT/dist/android"
 OUTPUT_APK_NAME="${OUTPUT_APK_NAME:-VotanteAndroid-portable.apk}"
@@ -17,8 +16,7 @@ OUTPUT_APK_PATH="$DIST_DIR/$OUTPUT_APK_NAME"
 OUTPUT_SHA_PATH="$OUTPUT_APK_PATH.sha256"
 GRADLEW_PATH="$BASE_ANDROID_DIR/gradlew"
 JAR_TARGET_NAME="${JAR_TARGET_NAME:-ElGamalCipher-android.jar}"
-JAR_APP_PATH="$APP_LIBS_DIR/$JAR_TARGET_NAME"
-JAR_ASSET_PATH="$APP_ASSETS_DIR/$JAR_TARGET_NAME"
+JAR_LIBRARY_PATH="$LIBRARY_LIBS_DIR/$JAR_TARGET_NAME"
 RUNTIME_CONFIG_PATH="$APP_GENERATED_ASSETS_DIR/runtime-config.json"
 ABI_LIST=("arm64-v8a" "x86_64")
 JNI_LIBS=("libvecj-2.2.0.so" "libvmgj-1.3.0.so")
@@ -40,7 +38,7 @@ require_file() {
 
 sync_jni_libs() {
   local needs_build=0
-  local abi lib source_path target_dir
+  local abi lib source_path
 
   for abi in "${ABI_LIST[@]}"; do
     for lib in "${JNI_LIBS[@]}"; do
@@ -57,12 +55,9 @@ sync_jni_libs() {
   fi
 
   for abi in "${ABI_LIST[@]}"; do
-    target_dir="$APP_JNILIBS_DIR/$abi"
-    mkdir -p "$target_dir"
     for lib in "${JNI_LIBS[@]}"; do
       source_path="$BASE_JNILIBS_DIR/$abi/$lib"
       require_file "$source_path"
-      cp -f "$source_path" "$target_dir/$lib"
     done
   done
 }
@@ -74,8 +69,9 @@ main() {
   apk_source="$APP_DIR/build/outputs/apk/debug/app-debug.apk"
   sdk_root="$(resolve_android_sdk_root "$PROJECT_ROOT")"
 
-  mkdir -p "$APP_LIBS_DIR" "$APP_ASSETS_DIR" "$APP_GENERATED_ASSETS_DIR" "$DIST_DIR"
+  mkdir -p "$LIBRARY_LIBS_DIR" "$APP_GENERATED_ASSETS_DIR" "$DIST_DIR"
   printf 'sdk.dir=%s\n' "$sdk_root" > "$WORKFLOW_DIR/local.properties"
+  printf 'sdk.dir=%s\n' "$sdk_root" > "$BASE_ANDROID_DIR/local.properties"
 
   cat > "$RUNTIME_CONFIG_PATH" <<CONFIG
 {
@@ -90,8 +86,7 @@ CONFIG
   )
   require_file "$jar_source"
 
-  cp -f "$jar_source" "$JAR_APP_PATH"
-  cp -f "$jar_source" "$JAR_ASSET_PATH"
+  cp -f "$jar_source" "$JAR_LIBRARY_PATH"
 
   echo "[votante-android] Sincronizando jniLibs Android..."
   sync_jni_libs
@@ -110,7 +105,7 @@ CONFIG
   )
 
   echo "[votante-android] Verificando contenido portable dentro del APK..."
-  unzip -l "$OUTPUT_APK_PATH" | rg 'lib/(arm64-v8a|x86_64)/(libvecj-2\.2\.0\.so|libvmgj-1\.3\.0\.so)|assets/cifrador/ElGamalCipher-android\.jar'
+  unzip -l "$OUTPUT_APK_PATH" | rg 'lib/(arm64-v8a|x86_64)/(libvecj-2\.2\.0\.so|libvmgj-1\.3\.0\.so)|classes(\d+)?\.dex'
 
   printf '\n[votante-android] APK generado en: %s\n' "$OUTPUT_APK_PATH"
   printf '[votante-android] SHA-256: %s\n' "$OUTPUT_SHA_PATH"

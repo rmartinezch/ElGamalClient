@@ -12,8 +12,13 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven(url = "https://jitpack.io")
+        maven {
+            url = uri("../../../.mvn/local-repo")
+        }
     }
 }
 
 rootProject.name = "votante-android"
 include(":app")
+include(":cifradorlib")
+project(":cifradorlib").projectDir = file("../../../android/app")

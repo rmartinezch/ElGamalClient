@@ -1,22 +1,28 @@
 # Android - Fase 2
 
-Proyecto mínimo Android para iniciar el port del cifrador.
+Librería Android del cifrador reutilizable por otras apps, incluida la estación de votación en `workflow/votante/android`.
 
 ## Estado actual
 
-- app base creada en `android/app`
+- módulo librería creado en `android/app`
 - runner Android con smoke test real de `vecj` y `vmgj`
 - runner Android con cifrado real usando `ElGamalCipherService`
-- UI basica para:
-  - ejecutar prueba JNI
-  - importar `publicKey`
-  - importar `shuffled_votes.txt`
-  - ejecutar cifrado en Android
-  - exportar `ciphertexts_ext`
 - estructura `jniLibs` operativa para `x86_64` y `arm64-v8a`
 - build JNI automatizado con Android NDK
 - pruebas instrumentadas para emulador `x86_64`
 - prueba híbrida Android -> Linux con mezcla y verificación Verificatum
+
+La UI del votante Android ya no vive aquí. Ahora consume esta librería desde:
+
+- `workflow/votante/android/app`
+
+## Reutilizacion
+
+Esta librería del cifrador está pensada para ser reutilizada:
+
+- puede ser consumida por cualquier interfaz de votación Android
+- la app en `workflow/votante/android` es solo un ejemplo de consumo dentro de este repositorio
+- otras apps pueden integrarla como módulo Gradle o empaquetarla como `AAR`
 
 ## Build local
 
@@ -31,7 +37,7 @@ Luego compilar:
 
 ```bash
 ../scripts/android/build-jni.sh
-./gradlew :app:assembleDebug
+./gradlew :app:assembleRelease
 ```
 
 ## Empaquetado portable en `dist/`
@@ -58,29 +64,13 @@ Salida:
 - `dist/android/image/Cifrador/scripts/run-smoke-test.sh`
 - `dist/android/Cifrador-1.1.0-android-portable.zip`
 
-## Instalación en dispositivo/emulador
+## Consumo desde otra app
 
-```bash
-../scripts/android/install-debug.sh
-```
+La estación Android del votante la consume como módulo Gradle incluido:
 
-## Uso de la UI Android
-
-La app ahora expone una interfaz básica para validación manual en el
-teléfono o emulador:
-
-1. ejecutar la prueba JNI
-2. seleccionar `publicKey`
-3. seleccionar el archivo de votos
-4. ejecutar el cifrado
-5. exportar `ciphertexts_ext`
-
-Restricciones actuales:
-
-- la UI usa `SecureRandom` en Android
-- no hay soporte de `TrueRNG` USB en la app Android actual
-- el flujo de importación/exportación usa el selector de documentos del
-  sistema
+- `workflow/votante/android/settings.gradle.kts`
+- alias local: `:cifradorlib`
+- directorio real: `../../../android/app`
 
 ## Pruebas automáticas en emulador
 

@@ -12,6 +12,14 @@ Shell didactica para `Windows` con UI web y bridge local al
 - consultar `GET /api/emission-context` antes de emitir
 - remitir `ciphertexts_ext` al servicio externo en `wsantivanez-hm:7040`
 
+## Reutilizacion
+
+El cifrador Windows queda desacoplado de esta UI:
+
+- puede ser invocado o consumido por cualquier interfaz de votación para Windows
+- la interfaz ubicada en `workflow/votante/windows` es solo un ejemplo de uso dentro de este repositorio
+- el punto estable de integración es el flujo `java.exe + ElGamalCipher-1.1.0.jar + DLL nativas`
+
 ## Arranque
 
 ```powershell

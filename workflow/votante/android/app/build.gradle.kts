@@ -43,7 +43,6 @@ android {
 
     sourceSets {
         getByName("main") {
-            jniLibs.srcDir("src/main/jniLibs")
             assets.srcDir("src/main/assets")
             assets.srcDir("src/generated/assets")
         }
@@ -68,7 +67,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:$androidXAppCompatVersion")
     implementation("com.google.android.material:material:$materialVersion")
     implementation("com.github.mik3y:usb-serial-for-android:$usbSerialVersion")
-    implementation(files("libs/ElGamalCipher-android.jar"))
+    implementation(project(":cifradorlib"))
 
     testImplementation("junit:junit:$junit4Version")
 }

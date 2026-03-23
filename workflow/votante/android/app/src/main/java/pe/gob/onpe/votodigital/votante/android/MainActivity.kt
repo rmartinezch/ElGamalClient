@@ -9,6 +9,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
+import pe.gob.onpe.votodigital.cifrador.android.AndroidCipherRunner
 
 class MainActivity : AppCompatActivity() {
 
