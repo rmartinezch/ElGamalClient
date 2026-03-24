@@ -1,132 +1,146 @@
-# ElGamalClient - Cifrado de Votos Electrónicos
+# ElGamalClient - Cifrado de Votos Electronicos
 
-Este proyecto implementa el cifrado de votos electrónicos utilizando el esquema de cifrado ElGamal sobre curvas elípticas. Es una herramienta crítica diseñada para procesar grandes volúmenes de votos de manera segura y eficiente.
+Implementacion del cifrado de votos electronicos usando ElGamal sobre curvas elipticas, con soporte multiplataforma para:
 
----
+- `Windows x64`
+- `Ubuntu/Linux`
+- `Android`
 
-## 🚀 Mejoras y Optimizaciones
+El repositorio contiene tanto el cifrador como libreria reusable como estaciones de votacion de ejemplo que lo consumen.
 
-El proyecto ha sido sometido a un proceso de refactorización intensivo para mejorar drásticamente su rendimiento y usabilidad. A continuación se detalla el estado original y las mejoras implementadas.
+## Indice
 
-### 📉 Estado Original (Antes)
-*   **Procesamiento Secuencial:** La codificación y el cifrado de votos se realizaban uno por uno en un bucle simple.
-*   **Cuello de Botella en RNG:** El acceso al generador de números aleatorios (`RandomSource`) estaba protegido por un bloque `synchronized`, obligando a los hilos (si hubiera habido) a esperar su turno, impidiendo el paralelismo real.
-*   **Rendimiento:** Cifrar 10,000 votos tomaba aproximadamente **1 minuto y 22 segundos**.
+1. [Resumen](#resumen)
+2. [Estado Actual](#estado-actual)
+3. [Estructura Del Repositorio](#estructura-del-repositorio)
+4. [Requisitos](#requisitos)
+5. [Bootstrap De Dependencias Verificatum](#bootstrap-de-dependencias-verificatum)
+6. [Artefactos Canonicos](#artefactos-canonicos)
+7. [Compilacion](#compilacion)
+8. [Integracion Externa Como Libreria](#integracion-externa-como-libreria)
+9. [Uso Del Cifrador Desde CLI](#uso-del-cifrador-desde-cli)
+10. [RNG Y Soporte De Hardware](#rng-y-soporte-de-hardware)
+11. [Layout Nativo Y Carga De JNI](#layout-nativo-y-carga-de-jni)
+12. [Empaquetado Y Distribucion](#empaquetado-y-distribucion)
+13. [Pruebas Y Validaciones](#pruebas-y-validaciones)
+14. [Consumidores De Ejemplo En Este Repo](#consumidores-de-ejemplo-en-este-repo)
+15. [Resumen De Rendimiento](#resumen-de-rendimiento)
+16. [Historial Breve](#historial-breve)
 
-### 📈 Mejoras Realizadas (Después)
+## Resumen
 
-#### 1. Paralelismo Masivo con Java Streams
-Se reemplazaron los bucles secuenciales por **Streams Paralelos** (`Arrays.stream().parallel()`). Esto permite utilizar **todos los núcleos disponibles** del procesador simultáneamente para realizar las costosas operaciones matemáticas de exponenciación modular.
+El cifrador se distribuye con filosofias distintas segun plataforma:
 
-#### 2. Eliminación de Bloqueos (Lock-Free)
-Para evitar que los hilos compitieran por el recurso compartido de números aleatorios, se implementó **`ThreadLocal<RandomSource>`**.
-*   **Resultado:** Cada hilo tiene su propia instancia del generador de números aleatorios. Ningún hilo espera a otro, logrando una escalabilidad casi lineal.
+- `Windows` y `Ubuntu`:
+  - artefacto canonico = `jar + librerias nativas JNI`
+- `Android`:
+  - artefacto canonico = `AAR`
 
-#### 3. Barra de Progreso (`-p`)
-Se añadió una funcionalidad opcional para visualizar el avance del proceso en tiempo real sin impactar el rendimiento.
-*   Uso: Agregar el flag `-p` al final del comando.
-*   Implementación: Hilo independiente de bajo costo y contadores atómicos `Non-blocking`.
+La regla general del proyecto es:
 
-#### 4. Gestión Inteligente de Hardware RNG (`-hw`)
-Se implementó una lógica condicional para manejar dispositivos de entropía por hardware (USB TrueRNG):
-*   **Modo Software (`-sw`):** Utiliza paralelismo máximo.
-*   **Modo Hardware (`-hw`):** Desactiva automáticamente el paralelismo para evitar la saturación y colisiones en el dispositivo físico, garantizando la estabilidad del sistema.
+- el cifrador debe poder ser consumido por cualquier interfaz externa
+- las interfaces ubicadas en `workflow/` son solo consumidores de ejemplo
+- ninguna aplicacion externa debe depender del codigo fuente interno del cifrador
 
----
+## Estado Actual
 
-## Estructura del repositorio
+Puntos principales del estado actual:
 
-- `native/`: fuentes compartidas de `vec`, `gmpmee`, `vecj` y `vmgj` usadas para compilar insumos nativos en Android y Windows.
-- `platform/`: proyectos fuente de plataforma que producen artefactos canónicos del cifrador.
-- `scripts/`: scripts de compilación y empaquetado separados por sistema operativo.
-- `tools/`: interfaces técnicas y herramientas auxiliares separadas por sistema operativo.
-- `workflow/`: estaciones de votación y flujos consumidores del cifrador.
-- `dist/`: artefactos finales listos para distribución.
+- el cifrador Java se compila con `Java 21`
+- `Windows` usa `ElGamalCipher-1.1.0.jar` mas `vecj-2.2.0.dll` y `vmgj-1.3.0.dll`
+- `Ubuntu` usa el mismo `jar` mas `libvecj` y `libvmgj`
+- `Android` expone el cifrador como libreria reusable
+- la estacion de votacion Windows consume el cifrador Windows como libreria
+- la estacion de votacion Android consume el cifrador Android como libreria
 
-## ⚡ Comparativa de Rendimiento (Benchmark)
+## Estructura Del Repositorio
 
-Prueba realizada con **10,000 votos**:
+- `android/`
+  - modulo Android del cifrador reusable
+- `dist/`
+  - artefactos finales listos para distribucion
+- `docs/`
+  - documentacion tecnica adicional
+- `native/`
+  - fuentes compartidas de `vec`, `gmpmee`, `vecj` y `vmgj`
+- `prebuilt/`
+  - artefactos canonicos compilados para consumo posterior
+- `recursos/`
+  - llaves, votos y recursos de prueba
+- `scripts/`
+  - scripts de compilacion, empaquetado, entorno y pruebas por plataforma
+- `src/`
+  - codigo Java principal del cifrador
+- `tools/`
+  - herramientas auxiliares separadas del flujo principal
+- `workflow/`
+  - estaciones de votacion y consumidores de ejemplo del cifrador
 
-| Métrica | Versión Original | Versión Optimizada | Mejora |
-| :--- | :---: | :---: | :---: |
-| **Tiempo de Ejecución** | ~1m 22s | **~10s** | **~8x más rápido** |
-| **Uso de CPU** | Un solo núcleo | Multi-núcleo (100%) | Eficiencia total |
+## Requisitos
 
-*Nota: Escalado probado exitosamente hasta 1,000,000 de votos (aprox. 17 mins).*
+- `Java 21` o superior
+- `Maven 3.x`
 
----
+Requisitos adicionales por plataforma:
 
-## 🛠️ Instrucciones de Uso
+- `Windows`
+  - PowerShell
+  - `MSYS2 UCRT64` si se van a recompilar DLL JNI
+- `Ubuntu`
+  - toolchain nativo para JNI Linux
+- `Android`
+  - Android SDK / Gradle para compilar el `AAR` o el consumidor Android
 
-### Requisitos
-*   Java 21 o superior
-*   Maven 3.x
+## Bootstrap De Dependencias Verificatum
 
-### Bootstrap de dependencias Verificatum
-Las dependencias `com.verificatum` usadas por este proyecto no están en
-Maven Central. En esta rama se puede poblar un repositorio Maven local
-del proyecto ejecutando:
+Las dependencias `com.verificatum` no viven en Maven Central. Este repo usa bootstrap local.
+
+Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\bootstrap-verificatum.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1
 ```
 
-En Ubuntu/Linux, la validación de prerequisitos locales se hace con:
+Ubuntu:
 
 ```bash
 ./scripts/ubuntu/entorno/bootstrap-verificatum.sh
 ```
 
-En Windows, el bootstrap genera e instala en `.mvn/local-repo`:
+En Windows el bootstrap instala en `.mvn/local-repo`:
 
-*   `com.verificatum:verificatum-vmgj:1.3.0`
-*   `com.verificatum:verificatum-vecj:2.2.0`
-*   `com.verificatum:verificatum-vcr-vmgj-vecj:3.1.0`
+- `com.verificatum:verificatum-vmgj:1.3.0`
+- `com.verificatum:verificatum-vecj:2.2.0`
+- `com.verificatum:verificatum-vcr-vmgj-vecj:3.1.0`
 
-### Soporte de Plataforma
-*   Ubuntu: validado funcionalmente con RNG de `RandomDevice`:
-    `-sw` usa `/dev/urandom` y `-hw` usa TrueRNG (`/dev/TrueRNG0` por
-    defecto, configurable).
-*   Windows x64: la aplicación ya detecta plataforma, busca bibliotecas
-    nativas por layout local (`prebuilt/windows-x64`) y por layout
-    portable (`libs/windows-x64`).
-    `-sw` usa `SecureRandom` y `-hw` usa TrueRNG por puerto serie
-    (`COMx`) si el dispositivo USB ya expone un puerto serial en
-    Windows; si no está disponible, vuelve a `SecureRandom`.
-*   Otros sistemas operativos: usan `SecureRandom` en `-sw` y `-hw`.
-*   La compilacion nativa Windows queda cerrada con
-    `vecj-2.2.0.dll` y `vmgj-1.3.0.dll` en `prebuilt/windows-x64`.
-*   `verificatum-vmgj` requiere un ajuste de 64 bits en su JNI:
-    los punteros se transportan como `jlong` usando `intptr_t`.
+## Artefactos Canonicos
 
-### Scripts por Plataforma
-*   `scripts/windows`: scripts PowerShell y `.bat` para build, empaquetado
-    y pruebas remotas en Windows.
-*   `scripts/ubuntu`: scripts `.sh` para validación de prerequisitos,
-    compilación, ejecución local y empaquetado portable en Ubuntu.
-*   `scripts/android`: scripts `.sh` para chequeo de entorno,
-    compilación del `AAR` Android del cifrador y empaquetado de sus
-    prebuilts JNI.
+### Windows
 
-### Integración Externa Como Librería
+- `prebuilt/java/ElGamalCipher-1.1.0.jar`
+- `prebuilt/windows-x64/vecj-2.2.0.dll`
+- `prebuilt/windows-x64/vmgj-1.3.0.dll`
 
-El cifrador se consume distinto según plataforma:
+Bundle de libreria distribuible:
 
-*   Ubuntu y Windows consumen el `jar` Java compilado más las bibliotecas JNI por sistema operativo.
-*   Android consume el `AAR` compilado.
-*   Ninguna app externa debe depender del código fuente interno del cifrador.
+- `dist/windows/library/Cifrador/app/ElGamalCipher-1.1.0.jar`
+- `dist/windows/library/Cifrador/libs/windows-x64/vecj-2.2.0.dll`
+- `dist/windows/library/Cifrador/libs/windows-x64/vmgj-1.3.0.dll`
 
-#### Artefactos canónicos
+### Ubuntu
 
-*   Ubuntu y Windows:
-    *   `prebuilt/java/ElGamalCipher-1.1.0.jar`
-    *   `prebuilt/linux-x64/` o `prebuilt/windows-x64/`
-*   Android:
-    *   `prebuilt/android/aar/ElGamalCipher-android-debug.aar`
-    *   `prebuilt/android/jniLibs/arm64-v8a/`
-    *   `prebuilt/android/jniLibs/x86_64/`
+- `prebuilt/java/ElGamalCipher-1.1.0.jar`
+- `prebuilt/linux-x64/`
 
-#### Cómo producir los artefactos
+### Android
+
+- `prebuilt/android/aar/ElGamalCipher-android-debug.aar`
+- `prebuilt/android/jniLibs/arm64-v8a/`
+- `prebuilt/android/jniLibs/x86_64/`
+
+## Compilacion
+
+### Compilacion Base Del Cifrador
 
 Windows:
 
@@ -134,90 +148,50 @@ Windows:
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\build-cifrador.ps1
 ```
 
+Ubuntu:
+
 ```bash
 ./scripts/ubuntu/compilacion/build-cifrador.sh
+```
+
+Android:
+
+```bash
 ./scripts/android/compilacion/build-cifrador.sh
 ```
 
-Si el objetivo es distribuir un bundle portable a otra aplicación o a otro equipo:
+### Compilacion Nativa Windows
 
-Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\build-cifrador-portable.ps1
-```
-
-```bash
-./scripts/ubuntu/empaquetado/build-cifrador-portable.sh
-./scripts/android/empaquetado/build-cifrador-portable.sh
-```
-
-Y si además se requiere comprimir el bundle final:
+Para recompilar las DLL JNI de Windows x64:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\package-cifrador-portable.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\build-native-windows.ps1
 ```
 
-```bash
-./scripts/ubuntu/empaquetado/package-cifrador-portable.sh
-./scripts/android/empaquetado/package-cifrador-portable.sh
-```
+Salida esperada:
 
-#### Ubuntu o Java de escritorio
+- `prebuilt/windows-x64/vecj-2.2.0.dll`
+- `prebuilt/windows-x64/vmgj-1.3.0.dll`
 
-Una app externa en Ubuntu debe enlazar el `jar` y hacer visibles `libvecj` y `libvmgj`.
+## Integracion Externa Como Libreria
 
-Opción directa con `java.library.path`:
+### Filosofia General
 
-```bash
-java \
-  -Djava.library.path=/ruta/al/proyecto/prebuilt/linux-x64 \
-  -cp /ruta/al/proyecto/prebuilt/java/ElGamalCipher-1.1.0.jar:mi-app.jar \
-  com.ejemplo.Main
-```
+- `Windows` y `Ubuntu` consumen `jar + JNI`
+- `Android` consume `AAR`
+- el cifrador es la libreria
+- las interfaces de votacion son consumidores separados
 
-También puede empaquetarse con un layout local que el loader ya reconoce:
+### API Java Principal
 
-```text
-mi-app/
-  app/
-    ElGamalCipher-1.1.0.jar
-    mi-app.jar
-  prebuilt/
-    linux-x64/
-      libvecj-2.2.0.so
-      libvmgj-1.3.0.so
-```
+API reusable para consumidores Java o escritorio:
 
-En Windows, el conjunto canónico de librería para integración externa es:
+- `pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService`
+- `pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest`
+- `pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode`
+- `pe.gob.onpe.votodigital.elgamalcipher.LogConfig`
 
-*   `prebuilt/java/ElGamalCipher-1.1.0.jar`
-*   `prebuilt/windows-x64/vecj-2.2.0.dll`
-*   `prebuilt/windows-x64/vmgj-1.3.0.dll`
-
-Una aplicación externa en Windows debe consumir ese `jar` y esas DLL JNI, por ejemplo:
-
-```powershell
-java `
-  -Djava.library.path=D:\ruta\prebuilt\windows-x64 `
-  -cp D:\ruta\prebuilt\java\ElGamalCipher-1.1.0.jar;mi-app.jar `
-  com.ejemplo.Main
-```
-
-El bundle `dist/windows/library/Cifrador/` es el artefacto canónico de librería en Windows y contiene:
-*   `dist/windows/library/Cifrador/app/ElGamalCipher-1.1.0.jar`
-*   `dist/windows/library/Cifrador/libs/windows-x64/*.dll`
-
-No existe `.exe` como parte del artefacto canónico de integración en Windows. La interfaz o launcher que consuma el cifrador debe vivir fuera de esa librería.
-
-API principal para consumo programático:
-
-*   `pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService`
-*   `pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest`
-*   `pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode`
-*   `pe.gob.onpe.votodigital.elgamalcipher.LogConfig`
-
-Ejemplo mínimo:
+Ejemplo minimo:
 
 ```java
 import java.nio.file.Path;
@@ -256,18 +230,44 @@ public final class DemoCifrado {
 }
 ```
 
-Funciones principales:
+### Windows
 
-*   `encrypt(request)`: cifra usando `SecureRandom`.
-*   `encrypt(request, hardwareRandomSourceOverride)`: cifra usando un `RandomSource` hardware inyectado por el consumidor.
-*   `CifradorRngMode.SOFTWARE`: modo equivalente a `-sw`.
-*   `CifradorRngMode.HARDWARE`: modo equivalente a `-hw`.
+Una aplicacion externa en Windows debe consumir:
 
-#### Android
+- `ElGamalCipher-1.1.0.jar`
+- `vecj-2.2.0.dll`
+- `vmgj-1.3.0.dll`
 
-Una app Android externa debe consumir el `AAR` compilado, no `platform/android`.
+Ejemplo:
 
-Dependencia Gradle:
+```powershell
+java `
+  -Djava.library.path=D:\ruta\prebuilt\windows-x64 `
+  -cp D:\ruta\prebuilt\java\ElGamalCipher-1.1.0.jar;mi-app.jar `
+  com.ejemplo.Main
+```
+
+Importante:
+
+- el artefacto canonico Windows es libreria, no `.exe`
+- no copies solo el `jar`; copia tambien las DLL JNI
+
+### Ubuntu
+
+Una aplicacion externa en Ubuntu debe enlazar el `jar` y exponer `libvecj` y `libvmgj`.
+
+Ejemplo:
+
+```bash
+java \
+  -Djava.library.path=/ruta/al/proyecto/prebuilt/linux-x64 \
+  -cp /ruta/al/proyecto/prebuilt/java/ElGamalCipher-1.1.0.jar:mi-app.jar \
+  com.ejemplo.Main
+```
+
+### Android
+
+Una app Android externa debe consumir el `AAR` compilado:
 
 ```kotlin
 dependencies {
@@ -275,84 +275,21 @@ dependencies {
 }
 ```
 
-El `AAR` ya empaqueta el bridge Android y las `jniLibs` necesarias para:
+API Android principal:
 
-*   `arm64-v8a`: teléfonos reales
-*   `x86_64`: Waydroid y emuladores Android sobre hosts x86_64
+- `pe.gob.onpe.votodigital.cifrador.android.AndroidCipherRunner`
+- `pe.gob.onpe.votodigital.cifrador.android.AndroidCipherLibraryInfo`
 
-API principal en Android:
+El `AAR` ya empaqueta:
 
-*   `pe.gob.onpe.votodigital.cifrador.android.AndroidCipherRunner`
-*   `pe.gob.onpe.votodigital.cifrador.android.AndroidCipherLibraryInfo`
+- bridge Android
+- `jniLibs` para `arm64-v8a`
+- `jniLibs` para `x86_64`
 
-Métodos principales de `AndroidCipherRunner`:
+## Uso Del Cifrador Desde CLI
 
-*   `encryptSandboxInputs(CifradorRngMode.SOFTWARE | HARDWARE)`
-*   `importPublicKey(Uri)`
-*   `importVotes(Uri)`
-*   `exportCiphertexts(Uri)`
-*   `currentPublicKeyFile()`
-*   `currentVotesFile()`
-*   `describeTrueRngStatus()`
+Ejecucion base:
 
-Ejemplo mínimo:
-
-```kotlin
-import pe.gob.onpe.votodigital.cifrador.android.AndroidCipherRunner
-import pe.gob.onpe.votodigital.cifrador.android.AndroidCipherLibraryInfo
-import pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode
-
-val runner = AndroidCipherRunner(applicationContext)
-
-runner.importPublicKey(publicKeyUri)
-runner.importVotes(votesUri)
-
-val result = runner.encryptSandboxInputs(CifradorRngMode.SOFTWARE)
-check(result.success) { result.message }
-
-println(AndroidCipherLibraryInfo.versionName)
-println(AndroidCipherLibraryInfo.buildTimestamp)
-println(AndroidCipherLibraryInfo.rngSupport)
-```
-
-Flujo esperado:
-
-1.  importar `publicKey`
-2.  importar `shuffled_votes.txt`
-3.  cifrar con `encryptSandboxInputs()`
-4.  exportar `ciphertexts_ext` con `exportCiphertexts()`
-
-Si se usa TrueRNG en Android:
-
-*   usar `CifradorRngMode.HARDWARE`
-*   solicitar permiso USB desde la app consumidora
-*   mantener `x86_64` si el mismo APK debe correr también en Waydroid
-
-### Compilación
-```bash
-mvn -q -version
-./scripts/ubuntu/entorno/bootstrap-verificatum.sh
-mvn clean package -DskipTests
-```
-
-### Compilacion Nativa Windows
-Con los fuentes locales de Verificatum disponibles, el repositorio puede
-construir las DLL JNI de Windows x64 con:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\build-native-windows.ps1
-```
-
-El script:
-
-*   instala `MSYS2 UCRT64` si no existe
-*   compila `verificatum-vec` y `verificatum-gmpmee` como librerias
-    estaticas locales
-*   compila `vecj-2.2.0.dll` y `vmgj-1.3.0.dll`
-*   deja ambas DLL en `prebuilt/windows-x64`
-*   ejecuta una prueba minima JNI en Windows
-
-### Ejecución
 ```bash
 java -jar prebuilt/java/ElGamalCipher-1.1.0.jar \
      <ruta_publicKey> \
@@ -362,249 +299,133 @@ java -jar prebuilt/java/ElGamalCipher-1.1.0.jar \
      [-p]
 ```
 
-**Parámetros:**
-1.  `public_Key_file_name`: Ruta al archivo de clave pública.
-2.  `plain_votes_file_name`: Archivo de entrada con votos.
-3.  `ciphered_votes_file_name`: Archivo de salida.
-4.  `-sw` / `-hw`: Seleccionar modalidad RNG (ver reglas por plataforma).
-5.  `-p` (Opcional): Mostrar barra de progreso.
+Parametros:
 
-### RNG y Dispositivo por Hardware
-*   En `Ubuntu`:
-    *   `-sw` usa `RandomDevice()` (`/dev/urandom`).
-    *   `-hw` usa TrueRNG por:
-        *   propiedad JVM `-Delgamal.rng.device=<ruta>`
-        *   variable de entorno `ELGAMAL_RNG_DEVICE`
-        *   valor por defecto `/dev/TrueRNG0`
-    *   si el dispositivo TrueRNG no existe o no es legible, vuelve a
-        `RandomDevice()` (`/dev/urandom`).
-*   En `Windows`:
-    *   `-sw` usa `PlatformRandomSource` basado en `SecureRandom`.
-    *   `-hw` usa TrueRNG por:
-        *   autodetección de puerto serie USB por `VID:PID 04D8:F5FE`
-        *   o propiedad JVM `-Delgamal.rng.device=COMx`
-        *   o variable de entorno `ELGAMAL_RNG_DEVICE=COMx`
-    *   no requiere crear `/dev/TrueRNG0`; solo que el driver del
-        dispositivo ya lo exponga como puerto `COM`.
-    *   si el puerto no está disponible o no puede abrirse, vuelve a
-        `SecureRandom`.
-*   En `macOS`, `Android` y otros sistemas:
-    *   `-sw` y `-hw` usan `PlatformRandomSource` basado en
-        `SecureRandom`.
+1. `public_Key_file_name`: ruta a la llave publica
+2. `plain_votes_file_name`: archivo con votos planos
+3. `ciphered_votes_file_name`: salida `ciphertexts_ext`
+4. `-sw` o `-hw`: modalidad RNG
+5. `-p`: barra de progreso opcional
 
-### Layout Nativo por Plataforma
-La aplicación busca bibliotecas nativas en este orden:
+## RNG Y Soporte De Hardware
 
-1.  `prebuilt/<os-arch>`
-2.  `prebuilt`
-3.  `libs/<os-arch>`
-4.  `libs`
+### Ubuntu
+
+- `-sw` usa `RandomDevice()` con `/dev/urandom`
+- `-hw` usa TrueRNG por:
+  - propiedad JVM `-Delgamal.rng.device=<ruta>`
+  - variable `ELGAMAL_RNG_DEVICE`
+  - valor por defecto `/dev/TrueRNG0`
+
+### Windows
+
+- `-sw` usa `SecureRandom`
+- `-hw` usa TrueRNG por:
+  - autodeteccion `VID:PID 04D8:F5FE`
+  - propiedad JVM `-Delgamal.rng.device=COMx`
+  - variable `ELGAMAL_RNG_DEVICE=COMx`
+
+### Otros Sistemas
+
+- `-sw` y `-hw` usan `SecureRandom`
+
+## Layout Nativo Y Carga De JNI
+
+La aplicacion busca bibliotecas nativas en este orden:
+
+1. `prebuilt/<os-arch>`
+2. `prebuilt`
+3. `libs/<os-arch>`
+4. `libs`
 
 Ejemplos:
 
-*   `prebuilt/linux-x64/libvecj-2.2.0.so`
-*   `prebuilt/windows-x64/vecj-2.2.0.dll`
+- `prebuilt/linux-x64/libvecj-2.2.0.so`
+- `prebuilt/windows-x64/vecj-2.2.0.dll`
 
-Si el JAR se ejecuta sin `java.library.path` y encuentra un layout
-válido local, se relanza automáticamente con la ruta correcta.
+Si el `jar` se ejecuta sin `java.library.path` y encuentra un layout local valido, puede relanzarse con la ruta correcta.
 
-**Ejemplo:**
-```bash
-java -jar ElGamalCipher.jar publicKey votos.txt cifrados.txt -sw -p
-```
+## Empaquetado Y Distribucion
 
-### Empaquetado Windows
-Con el JAR ya compilado y con `vecj-2.2.0.dll` y `vmgj-1.3.0.dll`
-presentes en `prebuilt/windows-x64`:
+### Windows
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\package-windows.ps1
-```
-
-### Empaquetado Portable Ubuntu
-Para generar una imagen portable en Linux:
-
-```bash
-./scripts/ubuntu/empaquetado/build-cifrador-portable.sh
-```
-
-Salida esperada:
-
-*   `dist/linux/image/Cifrador/Cifrador`
-*   `dist/linux/image/Cifrador/runtime`
-*   `dist/linux/image/Cifrador/app`
-*   `dist/linux/image/Cifrador/libs/linux-x64` (o `linux-arm64`)
-
-El script:
-
-*   compila el JAR con Maven
-*   copia runtime Java embebido
-*   copia JNI de Verificatum (`libvecj`, `libvmgj`)
-*   copia dependencias nativas transitivas detectadas en `/usr/local/lib`
-  (por ejemplo `libvec.so.0`, `libgmpmee.so.0`)
-*   genera launcher `Cifrador` con `LD_LIBRARY_PATH` y
-  `java.library.path` relativos
-
-### Uso del launcher portable Ubuntu
-
-```bash
-./dist/linux/image/Cifrador/Cifrador \
-  recursos/publicKey \
-  recursos/shuffled_votes.txt \
-  salida/ciphertexts_ext \
-  -sw
-```
-
-### Empaquetado TAR.GZ portable Ubuntu
-
-```bash
-./scripts/ubuntu/empaquetado/package-cifrador-portable.sh
-```
-
-Salida esperada:
-
-*   `dist/linux/Cifrador-1.1.0-linux-x64-portable.tar.gz`
-
-### Inicio Fase 2 Android
-Se reorganizó el proyecto Android del cifrador en `platform/android/`
-para separarlo de las estaciones y de las herramientas de diagnóstico.
-
-Comandos base:
-
-```bash
-./scripts/android/entorno/doctor.sh
-./scripts/android/compilacion/build-cifrador.sh
-```
-
-### Empaquetado Portable Android
-Para generar una imagen portable Android en `dist/`:
-
-```bash
-./scripts/android/empaquetado/build-cifrador-portable.sh
-```
-
-Salida esperada:
-
-*   `dist/android/image/Cifrador/aar/Cifrador-android-debug.aar`
-*   `dist/android/image/Cifrador/jniLibs/arm64-v8a/libvecj-2.2.0.so`
-*   `dist/android/image/Cifrador/jniLibs/arm64-v8a/libvmgj-1.3.0.so`
-*   `dist/android/image/Cifrador/jniLibs/x86_64/libvecj-2.2.0.so`
-*   `dist/android/image/Cifrador/jniLibs/x86_64/libvmgj-1.3.0.so`
-*   `dist/android/image/Cifrador/metadata/checksums.sha256`
-
-El script:
-
-*   compila el `AAR` Android del cifrador desde `platform/android`
-*   exporta los prebuilts JNI de Android por ABI
-*   copia el `AAR` y las `jniLibs` a `dist/android/image/Cifrador`
-*   genera checksums SHA-256
-
-### Sobre `target/` y `prebuilt/java`
-
-`target/` sigue siendo necesario, pero solo como salida transitoria de Maven.
-Ahí aparecen clases compiladas, reportes de pruebas y el `jar` recién generado.
-
-El artefacto Java canónico para consumo posterior queda en:
-
-*   `prebuilt/java/ElGamalCipher-1.1.0.jar`
-
-Ese `jar` es compartido por Ubuntu y Windows porque es bytecode Java común.
-Lo que sí cambia por sistema operativo son las bibliotecas JNI:
-
-*   `prebuilt/linux-x64/*.so`
-*   `prebuilt/windows-x64/*.dll`
-
-Android es distinto: no consume ese `jar` directamente como artefacto final de integración,
-porque necesita un `AAR` con `jniLibs`, manifiesto y metadatos Gradle. Por eso existe
-`platform/android` como proyecto fuente específico de Android.
-
-### Empaquetado ZIP portable Android
-
-```bash
-./scripts/android/empaquetado/package-cifrador-portable.sh
-```
-
-Salida esperada:
-
-*   `dist/android/Cifrador-1.1.0-android-portable.zip`
-
-Detalles de la fase:
-
-*   [platform/android/README.md](/home/willy/cifradorM/platform/android/README.md)
-*   [tools/android/README.md](/home/willy/cifradorM/tools/android/README.md)
-*   [docs/plan-fase2-android.md](/home/willy/cifradorM/docs/plan-fase2-android.md)
-
-### Build reproducible del bundle de librería Windows
-Para compilar el bundle canónico del cifrador Windows desde este repo:
+Build del bundle de libreria:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\build-cifrador-portable.ps1
 ```
 
-Salida esperada:
+Salida:
 
-*   `dist/windows/library/Cifrador/app`
-*   `dist/windows/library/Cifrador/libs/windows-x64`
+- `dist/windows/library/Cifrador/app/ElGamalCipher-1.1.0.jar`
+- `dist/windows/library/Cifrador/libs/windows-x64/vecj-2.2.0.dll`
+- `dist/windows/library/Cifrador/libs/windows-x64/vmgj-1.3.0.dll`
 
-El script:
-
-*   compila el JAR con Maven
-*   reconstruye las DLL JNI de Windows si faltan
-*   deja un bundle de librería en `dist/windows/library/Cifrador`
-
-### Uso del bundle generado
-La librería Windows se invoca así:
-
-```powershell
-java `
-    -Djava.library.path=.\dist\windows\library\Cifrador\libs\windows-x64 `
-    -jar .\dist\windows\library\Cifrador\app\ElGamalCipher-1.1.0.jar `
-    .\recursos\publicKey `
-    .\recursos\shuffled_votes.txt `
-    .\salida\ciphertexts_ext `
-    -sw
-```
-
-### Portabilidad del bundle Windows
-El artefacto de librería actual es esta carpeta:
-
-*   `dist/windows/library/Cifrador`
-
-Si copias esa carpeta a otra ruta de un Windows x64 compatible,
-otra aplicación puede consumirla mientras provea su propio runtime Java
-o ejecute con un JDK/JRE ya instalado. La librería busca:
-
-*   `app\ElGamalCipher-1.1.0.jar`
-*   `libs\windows-x64\vecj-2.2.0.dll`
-*   `libs\windows-x64\vmgj-1.3.0.dll`
-
-Importante:
-
-*   lo portable como librería es `Cifrador`, no `Cifrador.exe`
-*   no copies solo el `jar`; copia también las DLL nativas
-*   la interfaz de votación Windows de este repo es solo un consumidor de ejemplo de esa librería
-
-### Empaquetado ZIP portable
-Para generar un `.zip` portable del ejecutable autocontenido:
+ZIP del bundle:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\package-cifrador-portable.ps1
 ```
 
-Salida esperada:
+Salida:
 
-*   `dist/windows/Cifrador-1.1.0-windows-x64-library.zip`
+- `dist/windows/Cifrador-1.1.0-windows-x64-library.zip`
 
-Si quieres forzar la reconstrucción del bundle de librería antes de crear el
-ZIP:
+### Ubuntu
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\package-cifrador-portable.ps1 -RebuildBundle
+Imagen portable:
+
+```bash
+./scripts/ubuntu/empaquetado/build-cifrador-portable.sh
 ```
 
-### Prueba remota automatizada con Verificatum Linux
-La prueba completa de mezcla de `1` party usando el bundle `jar + DLL` de Windows se puede
-ejecutar con:
+Salida:
+
+- `dist/linux/image/Cifrador/Cifrador`
+- `dist/linux/image/Cifrador/runtime`
+- `dist/linux/image/Cifrador/app`
+- `dist/linux/image/Cifrador/libs/linux-x64`
+
+Paquete comprimido:
+
+```bash
+./scripts/ubuntu/empaquetado/package-cifrador-portable.sh
+```
+
+Salida:
+
+- `dist/linux/Cifrador-1.1.0-linux-x64-portable.tar.gz`
+
+### Android
+
+Imagen portable:
+
+```bash
+./scripts/android/empaquetado/build-cifrador-portable.sh
+```
+
+Salida:
+
+- `dist/android/image/Cifrador/aar/Cifrador-android-debug.aar`
+- `dist/android/image/Cifrador/jniLibs/arm64-v8a/`
+- `dist/android/image/Cifrador/jniLibs/x86_64/`
+- `dist/android/image/Cifrador/metadata/checksums.sha256`
+
+Paquete comprimido:
+
+```bash
+./scripts/android/empaquetado/package-cifrador-portable.sh
+```
+
+Salida:
+
+- `dist/android/Cifrador-1.1.0-android-portable.zip`
+
+## Pruebas Y Validaciones
+
+### Windows Contra Verificatum Linux
+
+Prueba remota automatizada:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\pruebas\test-remote-verificatum-mix.ps1 `
@@ -613,87 +434,71 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\pruebas\te
     -RebuildBundle
 ```
 
-El script:
-
-*   usa `OpenSSH` nativo de Windows
-*   recompila el bundle de librería si hace falta o si se pasa `-RebuildBundle`
-*   genera una eleccion temporal en Linux
-*   descarga `publicKey`
-*   cifra `recursos/shuffled_votes.txt` usando `java -jar ElGamalCipher-1.1.0.jar` con `java.library.path`
-*   sube `ciphertexts_ext` al Linux
-*   ejecuta `shuffle`, `decrypt` y `vmnv`
-*   descarga `plaintexts`
-*   compara localmente los votos originales contra los descifrados
-*   escribe un resumen final y devuelve el control al prompt
-
-Ejemplo validado:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\pruebas\test-remote-verificatum-mix.ps1 `
-    -Password "123456." `
-    -SshHost CHUWIN11
-```
-
-Para ejecutar la misma prueba remota usando TrueRNG en Windows:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\pruebas\test-remote-verificatum-mix.ps1 `
-    -Password "123456." `
-    -SshHost CHUWIN11 `
-    -RngMode hw `
-    -RngDevice COM6
-```
-
-Tambien existe un wrapper `.bat` para consola o doble clic:
+Wrapper `.bat`:
 
 ```bat
-.\scripts\windows\test-remote-verificatum-mix.bat -Password "123456." -SshHost CHUWIN11
+.\scripts\windows\pruebas\test-remote-verificatum-mix.bat -Password "123456." -SshHost CHUWIN11
 ```
 
-Salida final esperada:
+Resultado esperado:
 
-*   `Resumen comparacion: originales=2125, descifrados=2125, mismo_conjunto=True, mismo_orden=False`
-*   `Prueba remota completada correctamente.`
+- `ciphertexts_ext` generado localmente
+- `shuffle`, `decrypt` y `vmnv` completados en Linux
+- comparación final consistente entre originales y descifrados
 
-Artefactos de la prueba:
+### Android
 
-*   `.build/remote-mix-test-CHUWIN11/publicKey`
-*   `.build/remote-mix-test-CHUWIN11/ciphertexts_ext`
-*   `.build/remote-mix-test-CHUWIN11/plaintexts`
-*   `.build/remote-mix-test-CHUWIN11/remote-mix.log`
-*   `.build/remote-mix-test-CHUWIN11/summary.json`
+Scripts relevantes:
 
-### TODO
-Estado Android al 2026-03-09:
+- `scripts/android/pruebas/test-connected.sh`
+- `scripts/android/pruebas/test-hybrid-mix.sh`
 
-*   JNI Android validado para `x86_64` y `arm64-v8a`
-*   cifrado real ejecutado en Android
-*   validación híbrida completada: Android cifra, Linux mezcla y
-    descifra, y el conjunto de votos coincide en distinto orden
+## Consumidores De Ejemplo En Este Repo
 
----
+### Votante Windows
 
-## 📜 Historial de Revisiones
+- codigo: `workflow/votante/windows`
+- consume el cifrador Windows como libreria
+- empaqueta su propio runtime Java
+- no depende de `Cifrador.exe`
 
-### Versión 1.1.0 (Actual)
-*   **Fecha:** 2026-01-08
-*   **Código Limpio (Clean Code):** Refactorización completa para cumplir con **SonarQube Quality Gate A**.
-    *   Reducción de complejidad cognitiva en `ElGamalMain`.
-    *   Uso de **Virtual Threads** (Java 21) para tareas secundarias.
-    *   Corrección de Code Smells (Manejo de recursos, Logs, Constantes).
-*   **Identificación:** El binario ahora muestra su versión al inicio de la ejecución.
+### Votante Android
 
-### Versión 1.0.0 (Optimizada)
-*   **Fecha:** 2026-01-07
-*   **Rendimiento:** Implementación de Streams Paralelos y ThreadLocal. Optimización 8x.
-*   **Seguridad:** Corrección de concurrencia para Hardware RNG.
-*   **Usabilidad:** Barra de progreso visual.
+- codigo: `workflow/votante/android`
+- consume el cifrador Android como libreria
+- la interfaz en este repo es solo un ejemplo de uso
+
+## Resumen De Rendimiento
+
+Prueba de referencia con `10,000` votos:
+
+| Metrica | Version Original | Version Optimizada | Mejora |
+| :--- | :---: | :---: | :---: |
+| Tiempo de ejecucion | ~1m 22s | ~10s | ~8x |
+| Uso de CPU | un nucleo | multi-nucleo | mejora sustancial |
+
+Mejoras clave:
+
+- paralelismo con streams
+- `ThreadLocal<RandomSource>`
+- barra de progreso opcional
+- control de modo hardware para TrueRNG
+
+## Historial Breve
+
+### Version 1.1.0
+
+- refactor para calidad de codigo
+- uso de capacidades modernas de Java 21
+- mejoras de logs, estructura y portabilidad
+
+### Version 1.0.0
+
+- optimizacion de rendimiento
+- paralelismo y mejora del acceso al RNG
 
 ### Rama `cifradorM`
-*   **Fecha:** 2026-03-06
-*   **Portabilidad:** Se introduce detección de plataforma, selección de
-    RNG portable, layout nativo por plataforma y base de empaquetado
-    para Windows.
-*   **Windows x64:** Se compilan localmente `vecj` y `vmgj`, se valida
-    una corrida real con `publicKey` y `shuffled_votes.txt`, y se genera
-    una `app-image` con `jpackage`.
+
+- soporte multiplataforma
+- empaquetado nativo por plataforma
+- consolidacion del cifrador como libreria reusable
