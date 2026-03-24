@@ -1,0 +1,91 @@
+plugins {
+    id 'com.android.library'
+}
+
+import java.time.OffsetDateTime
+
+def androidXCoreVersion = '1.13.1'
+def androidXAppCompatVersion = '1.7.0'
+def materialVersion = '1.12.0'
+def usbSerialVersion = '3.9.0'
+def serialCommVersion = '2.11.4'
+def verificatumBundleVersion = '3.1.0'
+def verificatumVecjVersion = '2.2.0'
+def verificatumVmgjVersion = '1.3.0'
+def junit4Version = '4.13.2'
+def androidXTestCoreVersion = '1.6.1'
+def androidXTestRunnerVersion = '1.6.2'
+def androidXTestJunitVersion = '1.2.1'
+def androidXEspressoVersion = '3.6.1'
+def cipherLibraryVersion = '1.1.0'
+def cipherLibraryBuildTimestamp = OffsetDateTime.now().toString()
+
+android {
+    namespace 'pe.gob.onpe.votodigital.cifrador.android'
+    compileSdk 34
+    ndkVersion '27.2.12479018'
+
+    defaultConfig {
+        minSdk 26
+        targetSdk 34
+
+        buildConfigField 'String', 'CIPHER_LIBRARY_VERSION', "\"${cipherLibraryVersion}\""
+        buildConfigField 'String', 'CIPHER_LIBRARY_BUILD_TIMESTAMP', "\"${cipherLibraryBuildTimestamp}\""
+        buildConfigField 'String', 'CIPHER_LIBRARY_RNG_SUPPORT', '"SecureRandom,TrueRNG"'
+
+        ndk {
+            abiFilters 'x86_64', 'arm64-v8a'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles(
+                getDefaultProguardFile('proguard-android-optimize.txt'),
+                'proguard-rules.pro'
+            )
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    sourceSets {
+        main {
+            java.srcDir '../../../src/main/java'
+            jniLibs.srcDir '../../../prebuilt/android/jniLibs'
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += '/META-INF/{AL2.0,LGPL2.1}'
+        }
+    }
+}
+
+dependencies {
+    implementation "androidx.core:core:${androidXCoreVersion}"
+    implementation "androidx.appcompat:appcompat:${androidXAppCompatVersion}"
+    implementation "com.google.android.material:material:${materialVersion}"
+    implementation "com.github.mik3y:usb-serial-for-android:${usbSerialVersion}"
+    implementation "com.verificatum:verificatum-vcr-vmgj-vecj:${verificatumBundleVersion}"
+    implementation "com.verificatum:verificatum-vecj:${verificatumVecjVersion}"
+    implementation "com.verificatum:verificatum-vmgj:${verificatumVmgjVersion}"
+
+    compileOnly "com.fazecast:jSerialComm:${serialCommVersion}"
+
+    testImplementation "junit:junit:${junit4Version}"
+
+    androidTestImplementation "androidx.test:core:${androidXTestCoreVersion}"
+    androidTestImplementation "androidx.test:runner:${androidXTestRunnerVersion}"
+    androidTestImplementation "androidx.test.ext:junit:${androidXTestJunitVersion}"
+    androidTestImplementation "androidx.test.espresso:espresso-core:${androidXEspressoVersion}"
+}

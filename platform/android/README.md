@@ -42,7 +42,7 @@ Desde la raíz del repositorio:
 Una app externa no debe incluir este proyecto como módulo fuente.
 Debe consumir el `AAR` ya compilado:
 
-```kotlin
+```groovy
 dependencies {
     implementation(files("/ruta/al/proyecto/prebuilt/android/aar/ElGamalCipher-android-debug.aar"))
 }
@@ -62,12 +62,15 @@ Flujo típico:
 
 Ejemplo mínimo:
 
-```kotlin
-val runner = AndroidCipherRunner(applicationContext)
-runner.importPublicKey(publicKeyUri)
-runner.importVotes(votesUri)
-val result = runner.encryptSandboxInputs(CifradorRngMode.SOFTWARE)
-check(result.success) { result.message }
+```java
+AndroidCipherRunner runner = new AndroidCipherRunner(getApplicationContext());
+runner.importPublicKey(publicKeyUri);
+runner.importVotes(votesUri);
+AndroidCipherRunner.CipherExecutionResult result =
+        runner.encryptSandboxInputs(CifradorRngMode.SOFTWARE);
+if (!result.isSuccess()) {
+    throw new IllegalStateException(result.getMessage());
+}
 ```
 
 Notas:
@@ -83,9 +86,11 @@ Android no puede integrarse solo con ese `jar`, porque la plataforma exige un ar
 para empaquetar de forma consistente:
 
 - `AndroidManifest`
-- clases Android/Kotlin
+- clases Android/Java
 - `jniLibs` por ABI
 - metadatos de build Android/Gradle
 
 Por eso `platform/android` existe como proyecto fuente de librería Android. No reemplaza al
 core Java del repositorio; solo adapta ese core al modelo de empaquetado requerido por Android.
+Actualmente esa capa Android del `AAR` también está implementada en Java.
+Sus scripts de build Gradle también quedaron en Groovy DSL para no arrastrar configuración Kotlin dentro de `platform/android`.
