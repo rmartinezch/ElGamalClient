@@ -11,21 +11,22 @@ El repositorio contiene tanto el cifrador como libreria reusable como estaciones
 ## Indice
 
 1. [Resumen](#resumen)
-2. [Estado Actual](#estado-actual)
-3. [Estructura Del Repositorio](#estructura-del-repositorio)
-4. [Requisitos](#requisitos)
-5. [Bootstrap De Dependencias Verificatum](#bootstrap-de-dependencias-verificatum)
-6. [Artefactos Canonicos](#artefactos-canonicos)
-7. [Compilacion](#compilacion)
-8. [Integracion Externa Como Libreria](#integracion-externa-como-libreria)
-9. [Uso Del Cifrador Desde CLI](#uso-del-cifrador-desde-cli)
-10. [RNG Y Soporte De Hardware](#rng-y-soporte-de-hardware)
-11. [Layout Nativo Y Carga De JNI](#layout-nativo-y-carga-de-jni)
-12. [Empaquetado Y Distribucion](#empaquetado-y-distribucion)
-13. [Pruebas Y Validaciones](#pruebas-y-validaciones)
-14. [Consumidores De Ejemplo En Este Repo](#consumidores-de-ejemplo-en-este-repo)
-15. [Resumen De Rendimiento](#resumen-de-rendimiento)
-16. [Historial Breve](#historial-breve)
+2. [Arquitectura](#arquitectura)
+3. [Estado Actual](#estado-actual)
+4. [Estructura Del Repositorio](#estructura-del-repositorio)
+5. [Requisitos](#requisitos)
+6. [Bootstrap De Dependencias Verificatum](#bootstrap-de-dependencias-verificatum)
+7. [Artefactos Canonicos](#artefactos-canonicos)
+8. [Compilacion](#compilacion)
+9. [Integracion Externa Como Libreria](#integracion-externa-como-libreria)
+10. [Uso Del Cifrador Desde CLI](#uso-del-cifrador-desde-cli)
+11. [RNG Y Soporte De Hardware](#rng-y-soporte-de-hardware)
+12. [Layout Nativo Y Carga De JNI](#layout-nativo-y-carga-de-jni)
+13. [Empaquetado Y Distribucion](#empaquetado-y-distribucion)
+14. [Pruebas Y Validaciones](#pruebas-y-validaciones)
+15. [Consumidores De Ejemplo En Este Repo](#consumidores-de-ejemplo-en-este-repo)
+16. [Resumen De Rendimiento](#resumen-de-rendimiento)
+17. [Historial Breve](#historial-breve)
 
 ## Resumen
 
@@ -41,6 +42,40 @@ La regla general del proyecto es:
 - el cifrador debe poder ser consumido por cualquier interfaz externa
 - las interfaces ubicadas en `workflow/` son solo consumidores de ejemplo
 - ninguna aplicacion externa debe depender del codigo fuente interno del cifrador
+
+## Arquitectura
+
+```mermaid
+flowchart TB
+    Repo["Repositorio cifradorM"]
+
+    Repo --> Core["Nucleo comun del cifrador<br/>src/ + native/"]
+    Repo --> Prebuilt["Artefactos canonicos<br/>prebuilt/"]
+    Repo --> Workflow["Interfaces de ejemplo<br/>workflow/"]
+
+    Core --> WinLib["Windows<br/>jar + DLL JNI"]
+    Core --> UbuntuLib["Ubuntu<br/>jar + .so JNI"]
+    Core --> AndroidLib["Android<br/>AAR + jniLibs"]
+
+    WinLib --> WinExternal["Aplicacion externa en Windows<br/>API Java o proceso java"]
+    WinLib --> WinStation["Estacion Windows de ejemplo<br/>workflow/votante/windows"]
+
+    UbuntuLib --> UbuntuExternal["Aplicacion externa en Ubuntu<br/>API Java o proceso java"]
+    UbuntuLib --> UbuntuOps["Servicios o flujos externos<br/>mezcla / automatizacion"]
+
+    AndroidLib --> AndroidExternal["Aplicacion Android externa<br/>consume el AAR"]
+    AndroidLib --> AndroidStation["Estacion Android de ejemplo<br/>workflow/votante/android"]
+
+    WinStation --> Mixer["Mezcladora Verificatum<br/>descubrimiento + handshake + public-key + ciphertexts"]
+    AndroidStation --> Mixer
+```
+
+Lectura rapida del diagrama:
+
+- `Windows`: una app externa o la estacion de ejemplo consumen el mismo cifrador como `jar + DLL`
+- `Ubuntu`: una app o servicio externo consume el mismo cifrador como `jar + .so`
+- `Android`: una app externa o la estacion de ejemplo consumen el mismo cifrador como `AAR`
+- la mezcladora no forma parte del cifrador; es un servicio aparte al que las estaciones de voto se conectan
 
 ## Estado Actual
 
@@ -107,6 +142,12 @@ Ubuntu:
 ./scripts/ubuntu/entorno/bootstrap-verificatum.sh
 ```
 
+Android:
+
+- reutiliza el mismo repositorio Maven local del proyecto
+- no requiere un bootstrap Verificatum separado para consumir el `AAR`
+- la compilacion Android depende de que el bootstrap Maven del repo ya exista
+
 En Windows el bootstrap instala en `.mvn/local-repo`:
 
 - `com.verificatum:verificatum-vmgj:1.3.0`
@@ -160,9 +201,9 @@ Android:
 ./scripts/android/compilacion/build-cifrador.sh
 ```
 
-### Compilacion Nativa Windows
+### Compilacion Nativa Por Plataforma
 
-Para recompilar las DLL JNI de Windows x64:
+Windows:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\build-native-windows.ps1
@@ -173,6 +214,27 @@ Salida esperada:
 - `prebuilt/windows-x64/vecj-2.2.0.dll`
 - `prebuilt/windows-x64/vmgj-1.3.0.dll`
 
+Ubuntu:
+
+```bash
+./scripts/ubuntu/compilacion/build-native-linux.sh
+```
+
+Salida esperada:
+
+- `prebuilt/linux-x64/`
+
+Android:
+
+```bash
+./scripts/android/compilacion/build-jni.sh
+```
+
+Salida esperada:
+
+- `prebuilt/android/jniLibs/arm64-v8a/`
+- `prebuilt/android/jniLibs/x86_64/`
+
 ## Integracion Externa Como Libreria
 
 ### Filosofia General
@@ -182,16 +244,35 @@ Salida esperada:
 - el cifrador es la libreria
 - las interfaces de votacion son consumidores separados
 
-### API Java Principal
+### Modos De Integracion Segun Plataforma
 
-API reusable para consumidores Java o escritorio:
+En `Windows` y `Ubuntu` existen dos formas validas de integracion:
+
+- como API Java embebida dentro de una aplicacion propia
+- como proceso externo lanzando `java` contra el `jar`
+
+Ambas opciones usan el mismo cifrador y ambas siguen requiriendo las bibliotecas JNI nativas de la plataforma.
+
+En `Android` el modelo canonico es distinto:
+
+- la integracion se hace consumiendo el `AAR` como libreria dentro de la app Android
+- no se considera un uso externo por CLI ni lanzando un proceso `java` separado
+- la API publica Android vive dentro del propio `AAR`
+
+### API Java Comun Para Windows Y Ubuntu
+
+Esta API aplica a consumidores Java externos en `Windows` y `Ubuntu`.
+
+No aplica directamente a `Android`, porque en Android el punto de integracion canonico es el `AAR`.
+
+Clases principales:
 
 - `pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService`
 - `pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest`
 - `pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode`
 - `pe.gob.onpe.votodigital.elgamalcipher.LogConfig`
 
-Ejemplo minimo:
+Ejemplo minimo para una aplicacion Java que luego se ejecuta en `Windows` o `Ubuntu` con las librerias JNI correctas:
 
 ```java
 import java.nio.file.Path;
@@ -230,7 +311,7 @@ public final class DemoCifrado {
 }
 ```
 
-### Windows
+### Integracion Externa En Windows
 
 Una aplicacion externa en Windows debe consumir:
 
@@ -252,7 +333,7 @@ Importante:
 - el artefacto canonico Windows es libreria, no `.exe`
 - no copies solo el `jar`; copia tambien las DLL JNI
 
-### Ubuntu
+### Integracion Externa En Ubuntu
 
 Una aplicacion externa en Ubuntu debe enlazar el `jar` y exponer `libvecj` y `libvmgj`.
 
@@ -265,9 +346,11 @@ java \
   com.ejemplo.Main
 ```
 
-### Android
+### Integracion Externa En Android
 
-Una app Android externa debe consumir el `AAR` compilado:
+En `Android` no se usa el cifrador como proceso externo ni como CLI independiente.
+
+La forma correcta de integracion es consumir el `AAR` compilado dentro de la app Android, es decir, usar la API publica del cifrador como libreria embebida:
 
 ```kotlin
 dependencies {
@@ -279,12 +362,20 @@ API Android principal:
 
 - `pe.gob.onpe.votodigital.cifrador.android.AndroidCipherRunner`
 - `pe.gob.onpe.votodigital.cifrador.android.AndroidCipherLibraryInfo`
+- `pe.gob.onpe.votodigital.cifrador.android.AndroidTrueRngSupport`
 
 El `AAR` ya empaqueta:
 
 - bridge Android
 - `jniLibs` para `arm64-v8a`
 - `jniLibs` para `x86_64`
+- soporte TrueRNG USB para Android
+
+Resumen por plataforma:
+
+- `Windows`: usa la API Java comun mas `jar + DLL`
+- `Ubuntu`: usa la API Java comun mas `jar + .so`
+- `Android`: usa el `AAR` y su API Android publica
 
 ## Uso Del Cifrador Desde CLI
 
@@ -324,6 +415,14 @@ Parametros:
   - autodeteccion `VID:PID 04D8:F5FE`
   - propiedad JVM `-Delgamal.rng.device=COMx`
   - variable `ELGAMAL_RNG_DEVICE=COMx`
+
+### Android
+
+- `-sw` usa `SecureRandom`
+- `-hw` usa TrueRNG USB cuando el dispositivo esta conectado por OTG, Android detecta un driver serial compatible y la app ya tiene permiso USB
+- el `AAR` ya incluye `AndroidTrueRngSupport` y `AndroidUsbTrueRngRandomSource`; no hace falta que la app consumidora implemente por su cuenta la lectura del TrueRNG
+- si no hay dispositivo, driver o permiso USB, la ejecucion en modo hardware falla de forma explicita; no se degrada silenciosamente a `SecureRandom`
+- la app consumidora si debe manejar permisos USB, diagnostico del dispositivo y ciclo de vida Android alrededor del uso del TrueRNG
 
 ### Otros Sistemas
 
@@ -429,15 +528,15 @@ Prueba remota automatizada:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\pruebas\test-remote-verificatum-mix.ps1 `
-    -SshHost CHUWIN11 `
-    -Password "123456." `
+    -SshHost <host-verificatum> `
+    -Password "<password-ssh>" `
     -RebuildBundle
 ```
 
 Wrapper `.bat`:
 
 ```bat
-.\scripts\windows\pruebas\test-remote-verificatum-mix.bat -Password "123456." -SshHost CHUWIN11
+.\scripts\windows\pruebas\test-remote-verificatum-mix.bat -Password "<password-ssh>" -SshHost <host-verificatum>
 ```
 
 Resultado esperado:
@@ -453,6 +552,15 @@ Scripts relevantes:
 - `scripts/android/pruebas/test-connected.sh`
 - `scripts/android/pruebas/test-hybrid-mix.sh`
 
+### Ubuntu
+
+Validaciones relevantes:
+
+- `scripts/ubuntu/entorno/bootstrap-verificatum.sh`
+- `scripts/ubuntu/compilacion/build-cifrador.sh`
+- `scripts/ubuntu/ejecucion/run-cifrador.sh`
+- `scripts/ubuntu/empaquetado/build-cifrador-portable.sh`
+
 ## Consumidores De Ejemplo En Este Repo
 
 ### Votante Windows
@@ -467,6 +575,11 @@ Scripts relevantes:
 - codigo: `workflow/votante/android`
 - consume el cifrador Android como libreria
 - la interfaz en este repo es solo un ejemplo de uso
+
+### Ubuntu
+
+- no hay una estacion de votacion Ubuntu en `workflow/`
+- Ubuntu se usa en este repositorio como entorno de ejecucion CLI, empaquetado y validacion tecnica del cifrador
 
 ## Resumen De Rendimiento
 
