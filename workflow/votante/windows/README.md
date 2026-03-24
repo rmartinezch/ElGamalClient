@@ -7,8 +7,8 @@ Shell didactica para `Windows` con UI web y bridge local al
 
 - recoger un `BallotBundle` del elector
 - serializarlo al esquema `CodedVote`
-- invocar directamente `runtime\bin\java.exe + app\ElGamalCipher-1.1.0.jar`
-- no depender de `Cifrador.exe`
+- invocar directamente `java.exe + app\ElGamalCipher-1.1.0.jar + DLL nativas`
+- no depender de `Cifrador.exe` ni de ningun launcher del cifrador
 - consultar `GET /api/emission-context` antes de emitir
 - remitir `ciphertexts_ext` al servicio externo en `wsantivanez-hm:7040`
 
@@ -18,8 +18,8 @@ El cifrador Windows queda desacoplado de esta UI:
 
 - puede ser invocado o consumido por cualquier interfaz de votación para Windows
 - la interfaz ubicada en `workflow/votante/windows` es solo un ejemplo de uso dentro de este repositorio
-- el punto estable de integración es el flujo compilado `runtime\bin\java.exe + ElGamalCipher-1.1.0.jar + DLL nativas`
-- la estación no consume fuentes del cifrador; consume el portable compilado en `dist/windows/image/Cifrador`
+- el punto estable de integración es el flujo compilado `ElGamalCipher-1.1.0.jar + DLL nativas`
+- la estación no consume fuentes del cifrador; consume el bundle compilado en `dist/windows/library/Cifrador`
 
 ## Arranque
 
@@ -79,8 +79,12 @@ La estación Windows queda alineada al backend:
 
 `package-votante-windows-portable.ps1` toma el cifrador ya compilado desde:
 
-- `dist/windows/image/Cifrador/runtime`
-- `dist/windows/image/Cifrador/app/ElGamalCipher-1.1.0.jar`
-- `dist/windows/image/Cifrador/libs/windows-x64`
+- `dist/windows/library/Cifrador/app/ElGamalCipher-1.1.0.jar`
+- `dist/windows/library/Cifrador/libs/windows-x64`
 
-Si esa imagen no existe, la reconstruye llamando a `scripts/windows/empaquetado/build-cifrador-portable.ps1`.
+El runtime Java portable de la estación se empaqueta por separado para ejecutar:
+
+- el servidor local del votante
+- el `jar` del cifrador consumido como librería
+
+Si ese bundle no existe, lo reconstruye llamando a `scripts/windows/empaquetado/build-cifrador-portable.ps1`.

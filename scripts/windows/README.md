@@ -24,4 +24,5 @@ solo contiene las DLL nativas JNI específicas de esa plataforma.
 
 - usar siempre las rutas categorizadas
 - `build-cifrador.ps1` es el punto de entrada de compilación del cifrador Windows
-- `build-cifrador-portable.ps1` arma la imagen portable en `dist/windows/image/Cifrador`
+- `build-cifrador-portable.ps1` arma el bundle de librería en `dist/windows/library/Cifrador`
+- en Windows, el artefacto canónico de integración externa es `jar + DLL`, no `exe`

@@ -2,6 +2,10 @@ const form = document.getElementById("ballotForm");
 const eventMonitor = document.getElementById("eventMonitor");
 const receiptSummary = document.getElementById("receiptSummary");
 const submitButton = document.getElementById("submitButton");
+const infoButton = document.getElementById("infoButton");
+const infoModal = document.getElementById("infoModal");
+const infoModalBody = document.getElementById("infoModalBody");
+const infoCloseButton = document.getElementById("infoCloseButton");
 
 const state = {
   config: null,
@@ -121,6 +125,15 @@ function serializeForm() {
   return new URLSearchParams(new FormData(form)).toString();
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function text(id, value) {
   document.getElementById(id).textContent = value;
 }
@@ -231,6 +244,64 @@ function renderReceiptSummary(submitResult) {
   ].join("");
 }
 
+function infoRow(label, value) {
+  return `<div class="info-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || "No informado")}</strong></div>`;
+}
+
+function renderBuildInfo(config) {
+  infoModalBody.innerHTML = [
+    `<section class="info-section"><h3>Interfaz</h3><div class="info-grid">${
+      [
+        infoRow("Nombre", config.interfaceDisplayName),
+        infoRow("Version", config.interfaceVersion),
+        infoRow("Fecha/Hora build", config.interfaceBuildTimestamp)
+      ].join("")
+    }</div></section>`,
+    `<section class="info-section"><h3>Cifrador Windows</h3><div class="info-grid">${
+      [
+        infoRow("Nombre", config.cipherDisplayName),
+        infoRow("Version", config.cipherVersion),
+        infoRow("Fecha/Hora build", config.cipherBuildTimestamp),
+        infoRow("RNG soportado", config.cipherRngSupport)
+      ].join("")
+    }</div></section>`,
+    `<section class="info-section"><h3>Configuracion</h3><div class="info-grid">${
+      [
+        infoRow("Esquema de voto", config.voteSchemaVersion),
+        infoRow("Java", config.javaExe),
+        infoRow("Jar", config.jarPath),
+        infoRow("Usa EXE", config.usesExe ? "Si" : "No"),
+        infoRow("Servicio semilla", config.serviceBaseUrl || "Descubrimiento en red local")
+      ].join("")
+    }</div></section>`
+  ].join("");
+}
+
+async function ensureBuildInfoLoaded() {
+  if (!state.config?.interfaceDisplayName) {
+    state.config = await api("/api/config");
+  }
+  renderBuildInfo(state.config);
+  return state.config;
+}
+
+async function openInfoModal() {
+  if (!infoModalBody.innerHTML.trim()) {
+    infoModalBody.innerHTML = '<section class="info-section"><div class="info-grid"><div class="info-row"><span>Estado</span><strong>Cargando informacion de build...</strong></div></div></section>';
+  }
+  infoModal.hidden = false;
+  try {
+    await ensureBuildInfoLoaded();
+  } catch (error) {
+    infoModalBody.innerHTML = `<section class="info-section"><div class="info-grid">${infoRow("Estado", `No se pudo recuperar la informacion de build: ${error.message}`)}</div></section>`;
+    throw error;
+  }
+}
+
+function closeInfoModal() {
+  infoModal.hidden = true;
+}
+
 function getSelectValue(id) {
   return document.getElementById(id).value;
 }
@@ -289,6 +360,26 @@ document.getElementById("previewButton").addEventListener("click", async () => {
     await previewBallot(true);
   } catch (error) {
     appendEvent(`Validacion rechazada: ${error.message}`);
+  }
+});
+
+infoButton.addEventListener("click", () => {
+  openInfoModal().catch((error) => {
+    appendEvent(`No se pudo abrir Info: ${error.message}`);
+  });
+});
+
+infoCloseButton.addEventListener("click", closeInfoModal);
+
+infoModal.addEventListener("click", (event) => {
+  if (event.target === infoModal) {
+    closeInfoModal();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !infoModal.hidden) {
+    closeInfoModal();
   }
 });
 
@@ -377,6 +468,7 @@ async function refreshOperationalState(logChanges = false) {
 
 async function bootstrap() {
   appendEvent("Inicializando padron local.");
+  await ensureBuildInfoLoaded();
   state.catalog = await api("/api/catalog");
   initSelects();
   const data = await refreshOperationalState(false);

@@ -104,6 +104,17 @@ h1 {
   line-height: 1.6;
 }
 
+.masthead-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
+.info-button {
+  min-height: 42px;
+  padding: 0 18px;
+}
+
 .service-card {
   border-radius: 24px;
   padding: 22px;
@@ -450,6 +461,101 @@ button:not(.secondary) {
   font-size: 13px;
   line-height: 1.6;
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(7, 24, 36, 0.5);
+  backdrop-filter: blur(3px);
+}
+
+.modal-backdrop[hidden] {
+  display: none !important;
+}
+
+.modal-card {
+  width: min(640px, 100%);
+  max-height: min(88vh, 760px);
+  overflow: auto;
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  padding: 22px 22px 18px;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-family: "Palatino Linotype", "Book Antiqua", serif;
+  font-size: 28px;
+}
+
+.modal-close {
+  min-height: 40px;
+  width: 40px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(18, 50, 74, 0.08);
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.modal-body {
+  display: grid;
+  gap: 18px;
+}
+
+.info-section {
+  display: grid;
+  gap: 10px;
+}
+
+.info-section h3 {
+  margin: 0;
+  font-family: "Palatino Linotype", "Book Antiqua", serif;
+  font-size: 22px;
+}
+
+.info-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: start;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid rgba(18, 50, 74, 0.08);
+}
+
+.info-row span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.info-row strong {
+  font-size: 13px;
+  text-align: right;
+  word-break: break-word;
 }
 
 @keyframes rise {

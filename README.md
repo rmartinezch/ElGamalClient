@@ -128,6 +128,12 @@ El cifrador se consume distinto según plataforma:
 
 #### Cómo producir los artefactos
 
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\build-cifrador.ps1
+```
+
 ```bash
 ./scripts/ubuntu/compilacion/build-cifrador.sh
 ./scripts/android/compilacion/build-cifrador.sh
@@ -135,12 +141,22 @@ El cifrador se consume distinto según plataforma:
 
 Si el objetivo es distribuir un bundle portable a otra aplicación o a otro equipo:
 
+Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\build-cifrador-portable.ps1
+```
+
 ```bash
 ./scripts/ubuntu/empaquetado/build-cifrador-portable.sh
 ./scripts/android/empaquetado/build-cifrador-portable.sh
 ```
 
 Y si además se requiere comprimir el bundle final:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\package-cifrador-portable.ps1
+```
 
 ```bash
 ./scripts/ubuntu/empaquetado/package-cifrador-portable.sh
@@ -172,6 +188,27 @@ mi-app/
       libvecj-2.2.0.so
       libvmgj-1.3.0.so
 ```
+
+En Windows, el conjunto canónico de librería para integración externa es:
+
+*   `prebuilt/java/ElGamalCipher-1.1.0.jar`
+*   `prebuilt/windows-x64/vecj-2.2.0.dll`
+*   `prebuilt/windows-x64/vmgj-1.3.0.dll`
+
+Una aplicación externa en Windows debe consumir ese `jar` y esas DLL JNI, por ejemplo:
+
+```powershell
+java `
+  -Djava.library.path=D:\ruta\prebuilt\windows-x64 `
+  -cp D:\ruta\prebuilt\java\ElGamalCipher-1.1.0.jar;mi-app.jar `
+  com.ejemplo.Main
+```
+
+El bundle `dist/windows/library/Cifrador/` es el artefacto canónico de librería en Windows y contiene:
+*   `dist/windows/library/Cifrador/app/ElGamalCipher-1.1.0.jar`
+*   `dist/windows/library/Cifrador/libs/windows-x64/*.dll`
+
+No existe `.exe` como parte del artefacto canónico de integración en Windows. La interfaz o launcher que consuma el cifrador debe vivir fuera de esa librería.
 
 API principal para consumo programático:
 
@@ -497,8 +534,8 @@ Detalles de la fase:
 *   [tools/android/README.md](/home/willy/cifradorM/tools/android/README.md)
 *   [docs/plan-fase2-android.md](/home/willy/cifradorM/docs/plan-fase2-android.md)
 
-### Build reproducible de `Cifrador.exe`
-Para compilar el ejecutable Windows portable desde este repo:
+### Build reproducible del bundle de librería Windows
+Para compilar el bundle canónico del cifrador Windows desde este repo:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\build-cifrador-portable.ps1
@@ -506,87 +543,83 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\build-cif
 
 Salida esperada:
 
-*   `dist/windows/image/Cifrador/Cifrador.exe`
-*   `dist/windows/image/Cifrador/runtime`
-*   `dist/windows/image/Cifrador/app`
-*   `dist/windows/image/Cifrador/libs/windows-x64`
+*   `dist/windows/library/Cifrador/app`
+*   `dist/windows/library/Cifrador/libs/windows-x64`
 
 El script:
 
 *   compila el JAR con Maven
 *   reconstruye las DLL JNI de Windows si faltan
-*   copia un runtime Java 21 embebido
-*   genera un launcher nativo `Cifrador.exe`
-*   deja una carpeta autocontenida en `dist/windows/image/Cifrador`
+*   deja un bundle de librería en `dist/windows/library/Cifrador`
 
-### Uso del ejecutable generado
-El ejecutable se invoca asi:
+### Uso del bundle generado
+La librería Windows se invoca así:
 
 ```powershell
-.\dist\windows\image\Cifrador\Cifrador.exe `
+java `
+    -Djava.library.path=.\dist\windows\library\Cifrador\libs\windows-x64 `
+    -jar .\dist\windows\library\Cifrador\app\ElGamalCipher-1.1.0.jar `
     .\recursos\publicKey `
     .\recursos\shuffled_votes.txt `
     .\salida\ciphertexts_ext `
     -sw
 ```
 
-### Portabilidad de la carpeta Windows
-El artefacto portable actual es esta carpeta completa:
+### Portabilidad del bundle Windows
+El artefacto de librería actual es esta carpeta:
 
-*   `dist/windows/image/Cifrador`
+*   `dist/windows/library/Cifrador`
 
-Si copias **toda** esa carpeta a otra ruta de un Windows x64 compatible,
-el ejecutable se puede usar sin reinstalar Java ni volver a compilar,
-porque el launcher busca todo de forma relativa:
+Si copias esa carpeta a otra ruta de un Windows x64 compatible,
+otra aplicación puede consumirla mientras provea su propio runtime Java
+o ejecute con un JDK/JRE ya instalado. La librería busca:
 
-*   `runtime\bin\java.exe`
 *   `app\ElGamalCipher-1.1.0.jar`
 *   `libs\windows-x64\vecj-2.2.0.dll`
 *   `libs\windows-x64\vmgj-1.3.0.dll`
 
 Importante:
 
-*   lo portable es `Cifrador`, no `ElGamalCipher`
-*   no copies solo `Cifrador.exe`; copia la carpeta completa
-*   si existe una carpeta `dist/windows/image/ElGamalCipher`, corresponde
-    al empaquetado viejo con `jpackage` y no es el flujo principal actual
+*   lo portable como librería es `Cifrador`, no `Cifrador.exe`
+*   no copies solo el `jar`; copia también las DLL nativas
+*   la interfaz de votación Windows de este repo es solo un consumidor de ejemplo de esa librería
 
 ### Empaquetado ZIP portable
 Para generar un `.zip` portable del ejecutable autocontenido:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\package-cifrador-portable.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\package-cifrador-portable.ps1
 ```
 
 Salida esperada:
 
-*   `dist/windows/Cifrador-1.1.0-windows-x64-portable.zip`
+*   `dist/windows/Cifrador-1.1.0-windows-x64-library.zip`
 
-Si quieres forzar la reconstrucción de `Cifrador.exe` antes de crear el
+Si quieres forzar la reconstrucción del bundle de librería antes de crear el
 ZIP:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\package-cifrador-portable.ps1 -RebuildExe
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\package-cifrador-portable.ps1 -RebuildBundle
 ```
 
 ### Prueba remota automatizada con Verificatum Linux
-La prueba completa de mezcla de `1` party usando `Cifrador.exe` se puede
+La prueba completa de mezcla de `1` party usando el bundle `jar + DLL` de Windows se puede
 ejecutar con:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-remote-verificatum-mix.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\pruebas\test-remote-verificatum-mix.ps1 `
     -SshHost CHUWIN11 `
     -Password "123456." `
-    -RebuildExe
+    -RebuildBundle
 ```
 
 El script:
 
 *   usa `OpenSSH` nativo de Windows
-*   recompila `Cifrador.exe` si hace falta o si se pasa `-RebuildExe`
+*   recompila el bundle de librería si hace falta o si se pasa `-RebuildBundle`
 *   genera una eleccion temporal en Linux
 *   descarga `publicKey`
-*   cifra `recursos/shuffled_votes.txt` usando `Cifrador.exe`
+*   cifra `recursos/shuffled_votes.txt` usando `java -jar ElGamalCipher-1.1.0.jar` con `java.library.path`
 *   sube `ciphertexts_ext` al Linux
 *   ejecuta `shuffle`, `decrypt` y `vmnv`
 *   descarga `plaintexts`
@@ -596,7 +629,7 @@ El script:
 Ejemplo validado:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-remote-verificatum-mix.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\pruebas\test-remote-verificatum-mix.ps1 `
     -Password "123456." `
     -SshHost CHUWIN11
 ```
@@ -604,7 +637,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-remot
 Para ejecutar la misma prueba remota usando TrueRNG en Windows:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-remote-verificatum-mix.ps1 `
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\pruebas\test-remote-verificatum-mix.ps1 `
     -Password "123456." `
     -SshHost CHUWIN11 `
     -RngMode hw `

@@ -11,7 +11,7 @@ param(
     [ValidateSet("sw", "hw")]
     [string]$RngMode = "sw",
     [string]$RngDevice,
-    [switch]$RebuildExe
+    [Alias("RebuildExe")][switch]$RebuildBundle
 )
 
 Set-StrictMode -Version Latest
@@ -385,31 +385,37 @@ else {
     $VotesPath = (Resolve-Path $VotesPath).Path
 }
 
-$ExePath = Join-Path $ProjectRoot ("dist\windows\image\{0}\{0}.exe" -f $AppName)
-$BuildExeScript = Join-Path $ProjectRoot "scripts\windows\empaquetado\build-cifrador-portable.ps1"
+$BuildBundleScript = Join-Path $ProjectRoot "scripts\windows\empaquetado\build-cifrador-portable.ps1"
+$CipherLibraryRoot = Join-Path $ProjectRoot ("dist\windows\library\{0}" -f $AppName)
+$JarPath = Join-Path $CipherLibraryRoot ("app\ElGamalCipher-{0}.jar" -f $AppVersion)
+$NativeLibPath = Join-Path $CipherLibraryRoot "libs\windows-x64"
 $HostLabel = ($SshHost -replace '[^A-Za-z0-9._-]', '_')
 $script:WorkRoot = Join-Path $ProjectRoot (".build\remote-mix-test-" + $HostLabel)
 New-Item -ItemType Directory -Force -Path $script:WorkRoot | Out-Null
 
 $RemoteSetupLogPath = Join-Path $script:WorkRoot "remote-setup.log"
 $RemoteMixLogPath = Join-Path $script:WorkRoot "remote-mix.log"
-$ExeLogPath = Join-Path $script:WorkRoot "cifrador.log"
-$ExeStdOutLogPath = Join-Path $script:WorkRoot "cifrador.stdout.log"
-$ExeStdErrLogPath = Join-Path $script:WorkRoot "cifrador.stderr.log"
+$CipherLogPath = Join-Path $script:WorkRoot "cifrador.log"
+$CipherStdOutLogPath = Join-Path $script:WorkRoot "cifrador.stdout.log"
+$CipherStdErrLogPath = Join-Path $script:WorkRoot "cifrador.stderr.log"
 $SummaryPath = Join-Path $script:WorkRoot "summary.json"
 $PublicKeyPath = Join-Path $script:WorkRoot "publicKey"
 $CiphertextsExtPath = Join-Path $script:WorkRoot "ciphertexts_ext"
 $PlaintextsPath = Join-Path $script:WorkRoot "plaintexts"
 
-if ($RebuildExe.IsPresent -or -not (Test-Path $ExePath)) {
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $BuildExeScript -ProjectRoot $ProjectRoot -AppName $AppName -AppVersion $AppVersion
+if ($RebuildBundle.IsPresent -or -not (Test-Path $JarPath) -or -not (Test-Path $NativeLibPath)) {
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $BuildBundleScript -ProjectRoot $ProjectRoot -AppName $AppName -AppVersion $AppVersion
     if ($LASTEXITCODE -ne 0) {
-        throw "No se pudo generar $AppName.exe."
+        throw "No se pudo generar el bundle de libreria de $AppName."
     }
 }
 
-if (-not (Test-Path $ExePath)) {
-    throw "No se encontro el ejecutable esperado: $ExePath"
+if (-not (Test-Path $JarPath)) {
+    throw "No se encontro el jar esperado: $JarPath"
+}
+
+if (-not (Test-Path $NativeLibPath)) {
+    throw "No se encontro la carpeta de DLL nativas esperada: $NativeLibPath"
 }
 
 $script:SshExe = Resolve-SshExecutable
@@ -456,8 +462,8 @@ Assert-RemoteSuccess -Label "La preparacion remota" -Result $remoteSetupResult
 Write-Host "[2/6] Descargando publicKey"
 Receive-RemoteBinaryFile -RemotePath ($RemoteDir + "/publicKey") -LocalPath $PublicKeyPath -TimeoutMs 120000
 
-Write-Host "[3/6] Ejecutando $AppName.exe"
-foreach ($path in @($CiphertextsExtPath, $ExeLogPath, $ExeStdOutLogPath, $ExeStdErrLogPath, $PlaintextsPath, $SummaryPath)) {
+Write-Host "[3/6] Ejecutando $AppName como libreria Windows"
+foreach ($path in @($CiphertextsExtPath, $CipherLogPath, $CipherStdOutLogPath, $CipherStdErrLogPath, $PlaintextsPath, $SummaryPath)) {
     if (Test-Path $path) {
         Remove-Item $path -Force -ErrorAction SilentlyContinue
     }
@@ -470,14 +476,14 @@ if ($RngDevice -and -not [string]::IsNullOrWhiteSpace($RngDevice)) {
 }
 
 try {
-    $exeProcess = Start-Process `
-        -FilePath $ExePath `
-        -ArgumentList @($PublicKeyPath, $VotesPath, $CiphertextsExtPath, $rngFlag) `
+    $cipherProcess = Start-Process `
+        -FilePath "java" `
+        -ArgumentList @("-Djava.library.path=$NativeLibPath", "-jar", $JarPath, $PublicKeyPath, $VotesPath, $CiphertextsExtPath, $rngFlag) `
         -NoNewWindow `
         -Wait `
         -PassThru `
-        -RedirectStandardOutput $ExeStdOutLogPath `
-        -RedirectStandardError $ExeStdErrLogPath
+        -RedirectStandardOutput $CipherStdOutLogPath `
+        -RedirectStandardError $CipherStdErrLogPath
 } finally {
     if ($null -eq $previousRngDevice) {
         Remove-Item Env:ELGAMAL_RNG_DEVICE -ErrorAction SilentlyContinue
@@ -487,24 +493,24 @@ try {
 }
 
 $exeLogContent = ""
-if (Test-Path $ExeStdOutLogPath) {
-    $exeLogContent += (Get-Content $ExeStdOutLogPath -Raw)
+if (Test-Path $CipherStdOutLogPath) {
+    $exeLogContent += (Get-Content $CipherStdOutLogPath -Raw)
 }
-if (Test-Path $ExeStdErrLogPath) {
-    $exeLogContent += (Get-Content $ExeStdErrLogPath -Raw)
+if (Test-Path $CipherStdErrLogPath) {
+    $exeLogContent += (Get-Content $CipherStdErrLogPath -Raw)
 }
-Write-TextFile -PathValue $ExeLogPath -Content $exeLogContent
+Write-TextFile -PathValue $CipherLogPath -Content $exeLogContent
 
-if ($exeProcess.ExitCode -ne 0) {
-    throw "$AppName.exe fallo. Revisa $ExeLogPath"
+if ($cipherProcess.ExitCode -ne 0) {
+    throw "$AppName fallo. Revisa $CipherLogPath"
 }
 
 if (-not (Test-Path $CiphertextsExtPath) -or (Get-Item $CiphertextsExtPath).Length -eq 0) {
     throw "ciphertexts_ext no fue generado correctamente."
 }
 
-if (Test-Path $ExeLogPath) {
-    Get-Content $ExeLogPath -Tail 5 | ForEach-Object { Write-Host $_ }
+if (Test-Path $CipherLogPath) {
+    Get-Content $CipherLogPath -Tail 5 | ForEach-Object { Write-Host $_ }
 }
 
 Write-Host "[4/6] Subiendo ciphertexts_ext"

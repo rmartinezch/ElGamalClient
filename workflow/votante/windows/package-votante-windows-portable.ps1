@@ -1,6 +1,7 @@
 param(
     [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot/../../..").Path,
     [string]$OutputDir = "",
+    [string]$JavaHome = "",
     [switch]$NoZip
 )
 
@@ -38,7 +39,56 @@ function Assert-FileExists {
     }
 }
 
+function Resolve-JavaHome {
+    param([string]$PreferredJavaHome)
+
+    $knownHomes = @(
+        $PreferredJavaHome,
+        "C:\Users\soett\.antigravity\extensions\redhat.java-1.51.0-win32-x64\jre\21.0.9-win32-x86_64",
+        $env:JAVA_HOME
+    ) | Where-Object { $_ }
+
+    foreach ($candidate in $knownHomes | Select-Object -Unique) {
+        $javacPath = Join-Path $candidate "bin\javac.exe"
+        if ((Test-Path $javacPath) -and (Test-Java21OrNewer -JavaHomePath $candidate)) {
+            return (Resolve-Path $candidate).Path
+        }
+    }
+
+    $javacCommand = Get-Command javac.exe -ErrorAction SilentlyContinue
+    if ($javacCommand) {
+        $javaHomeFromPath = Split-Path (Split-Path $javacCommand.Source -Parent) -Parent
+        if (Test-Java21OrNewer -JavaHomePath $javaHomeFromPath) {
+            return $javaHomeFromPath
+        }
+    }
+
+    throw "No se encontro un JDK 21 o superior con javac.exe para empaquetar la estacion."
+}
+
+function Test-Java21OrNewer {
+    param([string]$JavaHomePath)
+
+    $javacPath = Join-Path $JavaHomePath "bin\javac.exe"
+    if (-not (Test-Path $javacPath)) {
+        return $false
+    }
+
+    try {
+        $versionOutput = (& $javacPath -version 2>&1 | Select-Object -First 1)
+        if ($versionOutput -match '(\d+)(?:\.\d+)?') {
+            return [int]$matches[1] -ge 21
+        }
+    }
+    catch {
+        return $false
+    }
+
+    return $false
+}
+
 $ProjectRoot = (Resolve-Path $ProjectRoot).Path
+$JavaHome = Resolve-JavaHome -PreferredJavaHome $JavaHome
 if (-not $OutputDir) {
     $OutputDir = Join-Path $ProjectRoot "dist\windows\VotanteWindowsPortable"
 }
@@ -54,20 +104,20 @@ $SourceDir = Join-Path $ProjectRoot "workflow\votante\windows\app\src"
 $PublicDir = Join-Path $ProjectRoot "workflow\votante\windows\app\public"
 $SharedDir = Join-Path $ProjectRoot "workflow\votante\shared"
 $BuildCifradorScript = Join-Path $ProjectRoot "scripts\windows\empaquetado\build-cifrador-portable.ps1"
-$CifradorImageDir = Join-Path $ProjectRoot "dist\windows\image\Cifrador"
-$RuntimeSourceDir = Join-Path $CifradorImageDir "runtime"
-$JarSource = Join-Path $CifradorImageDir "app\ElGamalCipher-1.1.0.jar"
-$VmgjSource = Join-Path $CifradorImageDir "libs\windows-x64\vmgj-1.3.0.dll"
-$VecjSource = Join-Path $CifradorImageDir "libs\windows-x64\vecj-2.2.0.dll"
+$CifradorLibraryDir = Join-Path $ProjectRoot "dist\windows\library\Cifrador"
+$RuntimeSourceDir = $JavaHome
+$JarSource = Join-Path $CifradorLibraryDir "app\ElGamalCipher-1.1.0.jar"
+$VmgjSource = Join-Path $CifradorLibraryDir "libs\windows-x64\vmgj-1.3.0.dll"
+$VecjSource = Join-Path $CifradorLibraryDir "libs\windows-x64\vecj-2.2.0.dll"
 $CatalogSource = Join-Path $SharedDir "catalogo-opciones.json"
 $SchemaSource = Join-Path $SharedDir "vote-schema.md"
-$PortableJavac = Join-Path $RuntimeSourceDir "bin\javac.exe"
+$PortableJavac = Join-Path $JavaHome "bin\javac.exe"
 
 if (-not (Test-Path $PortableJavac) -or -not (Test-Path $JarSource) -or -not (Test-Path $VmgjSource) -or -not (Test-Path $VecjSource)) {
-    Write-Host "[portable] No se encontro el cifrador Windows portable. Reconstruyendo..."
+    Write-Host "[portable] No se encontro el bundle de libreria del cifrador Windows. Reconstruyendo..."
     & powershell -NoProfile -ExecutionPolicy Bypass -File $BuildCifradorScript -ProjectRoot $ProjectRoot
     if ($LASTEXITCODE -ne 0) {
-        throw "No se pudo preparar el cifrador Windows portable."
+        throw "No se pudo preparar el cifrador Windows como libreria."
     }
 }
 
@@ -82,12 +132,10 @@ $ClassesDir = Join-Path $OutputDir "workflow\votante\windows\app\classes"
 $PortablePublicDir = Join-Path $OutputDir "workflow\votante\windows\app\public"
 $PortableRuntimeDir = Join-Path $OutputDir "workflow\votante\windows\runtime"
 $PortableSharedDir = Join-Path $OutputDir "workflow\votante\shared"
-$PortableCifradorDir = Join-Path $OutputDir "dist\windows\image\Cifrador"
+$PortableCifradorDir = Join-Path $OutputDir "dist\windows\library\Cifrador"
 $PortableAppDir = Join-Path $PortableCifradorDir "app"
 $PortableLibDir = Join-Path $PortableCifradorDir "libs\windows-x64"
-$PortableJavaDir = Join-Path $PortableCifradorDir "runtime"
-$PortableLogsDir = Join-Path $PortableCifradorDir "logs"
-$PortableRecursosDir = Join-Path $PortableCifradorDir "recursos"
+$PortableJavaDir = Join-Path $OutputDir "runtime\java"
 
 Write-Host "[portable] Preparando carpeta portable en $OutputDir"
 New-CleanDirectory $OutputDir
@@ -97,15 +145,14 @@ New-Item -ItemType Directory -Force -Path $PortableRuntimeDir | Out-Null
 New-Item -ItemType Directory -Force -Path $PortableSharedDir | Out-Null
 New-Item -ItemType Directory -Force -Path $PortableAppDir | Out-Null
 New-Item -ItemType Directory -Force -Path $PortableLibDir | Out-Null
-New-Item -ItemType Directory -Force -Path $PortableLogsDir | Out-Null
-New-Item -ItemType Directory -Force -Path $PortableRecursosDir | Out-Null
+New-Item -ItemType Directory -Force -Path $PortableJavaDir | Out-Null
 
 Write-Host "[portable] Copiando UI y catalogos"
 Copy-DirectoryContent -Source $PublicDir -Destination $PortablePublicDir
 Copy-Item -Path $CatalogSource -Destination (Join-Path $PortableSharedDir "catalogo-opciones.json") -Force
 Copy-Item -Path $SchemaSource -Destination (Join-Path $PortableSharedDir "vote-schema.md") -Force
 
-Write-Host "[portable] Copiando runtime Java del cifrador"
+Write-Host "[portable] Copiando runtime Java de la estacion"
 Copy-DirectoryContent -Source $RuntimeSourceDir -Destination $PortableJavaDir
 
 Write-Host "[portable] Copiando jar y DLL nativas"
@@ -157,7 +204,7 @@ function Test-PortAvailable {
 }
 
 $PortableRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '.'))
-$JavaExe = Join-Path $PortableRoot 'dist\windows\image\Cifrador\runtime\bin\java.exe'
+$JavaExe = Join-Path $PortableRoot 'runtime\java\bin\java.exe'
 $ClassesDir = Join-Path $PortableRoot 'workflow\votante\windows\app\classes'
 $MainClass = 'pe.gob.onpe.votodigital.votante.windows.DidacticWindowsVoterServer'
 
@@ -210,7 +257,7 @@ $Readme = @'
 Estacion de votacion Windows portable
 
 Contenido:
-- runtime Java portable
+- runtime Java portable de la estacion
 - servidor local de la estacion de votacion
 - UI web local
 - ElGamalCipher-1.1.0.jar

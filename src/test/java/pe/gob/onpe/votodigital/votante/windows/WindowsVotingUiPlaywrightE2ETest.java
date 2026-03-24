@@ -110,6 +110,14 @@ class WindowsVotingUiPlaywrightE2ETest {
             assertThat(page.getByTestId("service-session")).containsText("Servidor E2E 20260320");
             assertThat(page.getByTestId("submit-button")).isEnabled();
 
+            page.getByTestId("info-button").click();
+            assertThat(page.getByTestId("info-modal")).isVisible();
+            assertThat(page.getByTestId("info-modal-body")).containsText("Estacion de votacion Windows");
+            assertThat(page.getByTestId("info-modal-body")).containsText("Cifrador Windows");
+            assertThat(page.getByTestId("info-modal-body")).containsText("Software y hardware");
+            assertThat(page.getByTestId("info-modal-body")).containsText("Esquema de voto");
+            page.getByLabel("Cerrar").click();
+
             page.selectOption("#presidentialParty", "07");
             page.selectOption("#senatorsNationalParty", "08");
             page.selectOption("#senatorsNationalPv1", "03");
@@ -230,6 +238,7 @@ class WindowsVotingUiPlaywrightE2ETest {
                         + "\"handshake_url\":\"http://127.0.0.1:" + SERVICE_PORT + "/api/handshake\","
                         + "\"public_key_url\":\"http://127.0.0.1:" + SERVICE_PORT + "/api/public-key\","
                         + "\"ciphertexts_url\":\"http://127.0.0.1:" + SERVICE_PORT + "/api/ciphertexts\","
+                        + "\"emission_context_url\":\"http://127.0.0.1:" + SERVICE_PORT + "/api/emission-context\","
                         + "\"has_active_session\":true,\"keygen_ready\":true,\"accepting_votes\":true,"
                         + "\"current_operation\":null,\"handshake_ttl_seconds\":90,\"registered_station_count\":0},"
                         + "\"session\":{\"session_id\":\"srv-e2e-001\",\"session_name\":\"servidor-e2e-20260320\","
@@ -258,6 +267,12 @@ class WindowsVotingUiPlaywrightE2ETest {
                 "{\"ok\":true,\"used_auxsids\":[\"default\"],\"reserved_auxsids\":[\"default\",\""
                         + auxsid + "\"],\"pending_ciphertexts\":[\"" + auxsid + "\"],\"next_shuffle\":\""
                         + auxsid + "\",\"next_decrypt\":null,\"next_verify\":null,\"suggested_auxsid\":\"" + auxsid + "\"}"));
+        mockService.createContext("/api/emission-context", exchange -> sendJson(exchange, 200,
+                "{\"ok\":true,\"session_id\":\"srv-e2e-001\",\"session_name\":\"servidor-e2e-20260320\","
+                        + "\"session_label\":\"Servidor E2E 20260320\",\"election_name\":\"Elecciones Generales 2026\","
+                        + "\"sid\":\"ONPE\",\"requested_auxsid\":\"" + auxsid + "\",\"resolved_auxsid\":\"" + auxsid + "\","
+                        + "\"auxsid\":\"" + auxsid + "\",\"auxsid_changed\":false,\"accumulated\":false,"
+                        + "\"accumulated_from_auxsid\":null,\"accepting_votes\":true}"));
         mockService.createContext("/api/public-key", exchange -> sendJson(exchange, 200,
                 "{\"ok\":true,\"session_id\":\"srv-e2e-001\",\"session_name\":\"servidor-e2e-20260320\","
                         + "\"session_label\":\"Servidor E2E 20260320\",\"election_name\":\"Elecciones Generales 2026\","

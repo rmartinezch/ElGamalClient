@@ -12,6 +12,9 @@
     <section class="masthead">
       <div class="masthead-copy">
         <p class="eyebrow">Padron Electoral Digital</p>
+        <div class="masthead-actions">
+          <button id="infoButton" type="button" class="info-button secondary" data-testid="info-button">Info</button>
+        </div>
         <h1>Cabina de emision de voto</h1>
         <p class="lede">Registro de sufragio para la jornada general 2026. La llave publica se obtiene en linea y la remision del voto cifrado se ejecuta de forma automatica al confirmar la cedula.</p>
       </div>
@@ -246,13 +249,23 @@
     </section>
 
     <section class="panel monitor-panel">
-        <div class="panel-head">
-          <p class="panel-kicker">Monitor de eventos</p>
-          <span class="panel-note">Trazabilidad local de llave, cifrado, llamada API y respuesta de la GUI Verificatum.</span>
-        </div>
+      <div class="panel-head">
+        <p class="panel-kicker">Monitor de eventos</p>
+        <span class="panel-note">Trazabilidad local de llave, cifrado, llamada API y respuesta de la GUI Verificatum.</span>
+      </div>
       <pre id="eventMonitor" class="event-monitor" data-testid="event-monitor">Inicializando estacion de voto...</pre>
     </section>
   </main>
+
+  <div id="infoModal" class="modal-backdrop" data-testid="info-modal" hidden>
+    <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="infoModalTitle">
+      <div class="modal-head">
+        <h2 id="infoModalTitle">Info de build</h2>
+        <button id="infoCloseButton" type="button" class="modal-close" aria-label="Cerrar">×</button>
+      </div>
+      <div id="infoModalBody" class="modal-body" data-testid="info-modal-body"></div>
+    </section>
+  </div>
 
   <script src="/app.js"></script>
 </body>

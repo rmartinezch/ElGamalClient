@@ -11,9 +11,11 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Instant;
-import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,8 +29,15 @@ import java.util.regex.Pattern;
 public final class DidacticWindowsVoterServer {
 
     private static final String SCHEMA_VERSION = "1.0.0-test";
+    private static final String INTERFACE_DISPLAY_NAME = "Estacion de votacion Windows";
+    private static final String INTERFACE_VERSION = "0.1.0";
+    private static final String CIPHER_DISPLAY_NAME = "Cifrador Windows";
+    private static final String CIPHER_RNG_SUPPORT = "Software y hardware (TrueRNG USB/COM)";
     private static final int VERIFICATUM_WIDTH = 1;
     private static final String DEFAULT_SERVICE_BASE_URL = "";
+    private static final DateTimeFormatter BUILD_TIMESTAMP_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                    .withZone(ZoneId.systemDefault());
     private static final Pattern JSON_STRING_FIELD =
             Pattern.compile("\"([^\"]+)\"\\s*:\\s*(null|\"([^\"]*)\")");
     private static final Pattern JSON_BOOLEAN_FIELD =
@@ -53,7 +62,7 @@ public final class DidacticWindowsVoterServer {
 
         System.out.println("WindowsVoterServer escuchando en http://"
                 + config.bindHost + ":" + config.port);
-        System.out.println("Cifrador desacoplado del .exe usando " + config.javaExePath());
+        System.out.println("Cifrador Windows consumido como libreria usando " + config.javaExePath());
         if (config.serviceBaseUrl != null && !config.serviceBaseUrl.isBlank()) {
             System.out.println("Semilla de descubrimiento configurada: " + config.serviceBaseUrl);
         } else {
@@ -72,7 +81,7 @@ public final class DidacticWindowsVoterServer {
                 .resolve("shared").resolve("catalogo-opciones.json");
         Path schemaPath = rootDir.resolve("workflow").resolve("votante")
                 .resolve("shared").resolve("vote-schema.md");
-        Path cifradorDir = rootDir.resolve("dist").resolve("windows").resolve("image").resolve("Cifrador");
+        Path cifradorDir = rootDir.resolve("dist").resolve("windows").resolve("library").resolve("Cifrador");
         Files.createDirectories(submissionsDir);
         return new AppConfig(
                 rootDir,
@@ -200,8 +209,84 @@ public final class DidacticWindowsVoterServer {
         payload.put("jarPath", config.jarPath().toString());
         payload.put("usesExe", false);
         payload.put("electionName", "Elecciones Generales 2026");
+        payload.put("interfaceDisplayName", INTERFACE_DISPLAY_NAME);
+        payload.put("interfaceVersion", INTERFACE_VERSION);
+        payload.put("interfaceBuildTimestamp", resolveInterfaceBuildTimestamp(config));
+        payload.put("cipherDisplayName", CIPHER_DISPLAY_NAME);
+        payload.put("cipherVersion", resolveCipherVersion(config.jarPath()));
+        payload.put("cipherBuildTimestamp", formatTimestamp(lastModified(config.jarPath())));
+        payload.put("cipherRngSupport", CIPHER_RNG_SUPPORT);
+        payload.put("voteSchemaVersion", SCHEMA_VERSION);
         payload.put("voterProfile", config.voterProfile.toMap());
         return payload;
+    }
+
+    private static String resolveInterfaceBuildTimestamp(AppConfig config) {
+        Path appDir = config.publicDir.getParent();
+        List<Path> candidates = List.of(
+                appDir.resolve("classes"),
+                appDir.resolve("src"),
+                config.publicDir
+        );
+        FileTime latest = null;
+        for (Path candidate : candidates) {
+            latest = maxTime(latest, lastModifiedRecursive(candidate));
+        }
+        return formatTimestamp(latest);
+    }
+
+    private static String resolveCipherVersion(Path jarPath) {
+        String fileName = jarPath.getFileName().toString();
+        Matcher matcher = Pattern.compile("ElGamalCipher-([0-9][^.]*(?:\\.[0-9A-Za-z_-]+)*)\\.jar")
+                .matcher(fileName);
+        if (matcher.matches()) {
+            return matcher.group(1);
+        }
+        return "no-informada";
+    }
+
+    private static String formatTimestamp(FileTime value) {
+        if (value == null) {
+            return "no-informada";
+        }
+        return BUILD_TIMESTAMP_FORMATTER.format(value.toInstant());
+    }
+
+    private static FileTime lastModified(Path path) {
+        try {
+            if (path != null && Files.exists(path)) {
+                return Files.getLastModifiedTime(path);
+            }
+        } catch (Exception ignored) {
+            // Si no se puede leer el timestamp, se mantiene null.
+        }
+        return null;
+    }
+
+    private static FileTime lastModifiedRecursive(Path root) {
+        if (root == null || !Files.exists(root)) {
+            return null;
+        }
+        FileTime latest = null;
+        try (var stream = Files.walk(root)) {
+            for (Path path : (Iterable<Path>) stream::iterator) {
+                FileTime current = lastModified(path);
+                latest = maxTime(latest, current);
+            }
+        } catch (Exception ignored) {
+            return latest;
+        }
+        return latest;
+    }
+
+    private static FileTime maxTime(FileTime current, FileTime candidate) {
+        if (current == null) {
+            return candidate;
+        }
+        if (candidate == null) {
+            return current;
+        }
+        return candidate.compareTo(current) > 0 ? candidate : current;
     }
 
     static SubmissionResult submitBundle(AppConfig config, HttpClient httpClient,
@@ -262,7 +347,7 @@ public final class DidacticWindowsVoterServer {
                 ciphertextsPath.toString(),
                 "-sw"
         );
-        pb.directory(config.cifradorDir.toFile());
+        pb.directory(submissionDir.toFile());
         pb.redirectErrorStream(true);
         events.add(event("Invocando cifrador desacoplado del ejecutable."));
 
@@ -750,7 +835,8 @@ public final class DidacticWindowsVoterServer {
             MixerDiscoveryCoordinator mixerCoordinator
     ) {
         Path javaExePath() {
-            return cifradorDir.resolve("runtime").resolve("bin").resolve("java.exe");
+            Path currentJavaHome = Path.of(System.getProperty("java.home"));
+            return currentJavaHome.resolve("bin").resolve("java.exe");
         }
 
         Path nativeLibDirPath() {
