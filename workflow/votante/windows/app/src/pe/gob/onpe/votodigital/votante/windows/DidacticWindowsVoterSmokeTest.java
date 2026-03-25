@@ -20,6 +20,7 @@ final class DidacticWindowsVoterSmokeTest {
         String auxsid = System.getProperty("votante.windows.auxsid", "");
         DidacticWindowsVoterServer.AppConfig config = DidacticWindowsVoterServer.loadConfig(
                 "127.0.0.1",
+                "127.0.0.1",
                 Integer.parseInt(System.getProperty("votante.windows.smokePort", "8790")),
                 System.getProperty("votante.windows.serviceBaseUrl", ""),
                 auxsid

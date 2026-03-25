@@ -3,7 +3,11 @@ package pe.gob.onpe.votodigital.votante.windows;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.net.ConnectException;
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -48,7 +52,8 @@ public final class DidacticWindowsVoterServer {
 
     public static void main(String[] args) throws Exception {
         AppConfig config = loadConfig(
-                readStringProperty("votante.windows.bindHost", "127.0.0.1"),
+                readStringProperty("votante.windows.bindHost", "0.0.0.0"),
+                readStringProperty("votante.windows.publicHost", ""),
                 Integer.parseInt(readStringProperty("votante.windows.port", "8788")),
                 readStringProperty("votante.windows.serviceBaseUrl", DEFAULT_SERVICE_BASE_URL),
                 readStringProperty("votante.windows.auxsid", "")
@@ -62,6 +67,10 @@ public final class DidacticWindowsVoterServer {
 
         System.out.println("WindowsVoterServer escuchando en http://"
                 + config.bindHost + ":" + config.port);
+        System.out.println("Acceso local: " + config.localBaseUrl());
+        if (!config.publicBaseUrl().equals(config.localBaseUrl())) {
+            System.out.println("Acceso red local: " + config.publicBaseUrl());
+        }
         System.out.println("Cifrador Windows consumido como libreria usando " + config.javaExePath());
         if (config.serviceBaseUrl != null && !config.serviceBaseUrl.isBlank()) {
             System.out.println("Semilla de descubrimiento configurada: " + config.serviceBaseUrl);
@@ -70,7 +79,7 @@ public final class DidacticWindowsVoterServer {
         }
     }
 
-    static AppConfig loadConfig(String bindHost, int port, String serviceBaseUrl, String defaultAuxsid)
+    static AppConfig loadConfig(String bindHost, String publicHost, int port, String serviceBaseUrl, String defaultAuxsid)
             throws java.io.IOException {
         Path rootDir = resolveRootDir();
         Path appDir = rootDir.resolve("workflow").resolve("votante").resolve("windows").resolve("app");
@@ -92,6 +101,7 @@ public final class DidacticWindowsVoterServer {
                 schemaPath,
                 cifradorDir,
                 bindHost,
+                resolvePublicHost(bindHost, publicHost),
                 port,
                 trimTrailingSlash(serviceBaseUrl),
                 defaultAuxsid,
@@ -198,7 +208,10 @@ public final class DidacticWindowsVoterServer {
     private static Map<String, Object> configPayload(AppConfig config) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("bindHost", config.bindHost);
+        payload.put("publicHost", config.publicHost);
         payload.put("port", config.port);
+        payload.put("localBaseUrl", config.localBaseUrl());
+        payload.put("publicBaseUrl", config.publicBaseUrl());
         payload.put("serviceBaseUrl", activeServiceBaseUrl(config));
         payload.put("defaultAuxsid", config.defaultAuxsid);
         payload.put("stationId", "mesa-" + config.voterProfile.mesa());
@@ -525,6 +538,58 @@ public final class DidacticWindowsVoterServer {
         return firstNonBlank(config.mixerCoordinator.activeBaseUrl(), config.serviceBaseUrl);
     }
 
+    private static String resolvePublicHost(String bindHost, String configuredPublicHost) {
+        if (configuredPublicHost != null && !configuredPublicHost.isBlank()) {
+            return configuredPublicHost.trim();
+        }
+        if (bindHost != null && !bindHost.isBlank()
+                && !"0.0.0.0".equals(bindHost)
+                && !"::".equals(bindHost)
+                && !"*".equals(bindHost)) {
+            if ("localhost".equalsIgnoreCase(bindHost)) {
+                return "127.0.0.1";
+            }
+            return bindHost;
+        }
+        String lanHost = findPreferredLanIpv4();
+        return firstNonBlank(lanHost, "127.0.0.1");
+    }
+
+    private static String findPreferredLanIpv4() {
+        try {
+            for (NetworkInterface networkInterface : java.util.Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!networkInterface.isUp() || networkInterface.isLoopback() || networkInterface.isVirtual()) {
+                    continue;
+                }
+                String name = firstNonBlank(
+                        firstNonBlank(networkInterface.getDisplayName(), networkInterface.getName()),
+                        ""
+                )
+                        .toLowerCase();
+                if (name.contains("hyper-v")
+                        || name.contains("vmware")
+                        || name.contains("virtualbox")
+                        || name.contains("docker")
+                        || name.contains("wsl")
+                        || name.contains("bluetooth")
+                        || name.contains("loopback")) {
+                    continue;
+                }
+                for (InetAddress address : java.util.Collections.list(networkInterface.getInetAddresses())) {
+                    if (address instanceof Inet4Address ipv4
+                            && !ipv4.isLoopbackAddress()
+                            && !ipv4.isLinkLocalAddress()
+                            && ipv4.isSiteLocalAddress()) {
+                        return ipv4.getHostAddress();
+                    }
+                }
+            }
+        } catch (SocketException ignored) {
+            return null;
+        }
+        return null;
+    }
+
     private static byte[] fetchPublicKey(HttpClient httpClient, String serviceBaseUrl, String format) throws Exception {
         return fetchPublicKeyPayload(httpClient, serviceBaseUrl, format).contentBytes;
     }
@@ -828,12 +893,27 @@ public final class DidacticWindowsVoterServer {
             Path schemaPath,
             Path cifradorDir,
             String bindHost,
+            String publicHost,
             int port,
             String serviceBaseUrl,
             String defaultAuxsid,
             VoterProfile voterProfile,
             MixerDiscoveryCoordinator mixerCoordinator
     ) {
+        String localBaseUrl() {
+            if ("0.0.0.0".equals(bindHost) || "::".equals(bindHost) || "*".equals(bindHost)) {
+                return "http://127.0.0.1:" + port;
+            }
+            if ("localhost".equalsIgnoreCase(bindHost)) {
+                return "http://127.0.0.1:" + port;
+            }
+            return "http://" + bindHost + ":" + port;
+        }
+
+        String publicBaseUrl() {
+            return "http://" + publicHost + ":" + port;
+        }
+
         Path javaExePath() {
             Path currentJavaHome = Path.of(System.getProperty("java.home"));
             return currentJavaHome.resolve("bin").resolve("java.exe");

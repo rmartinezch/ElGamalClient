@@ -1,6 +1,8 @@
 param(
     [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot/../../..").Path,
     [int]$Port = 8788,
+    [string]$BindHost = "0.0.0.0",
+    [string]$PublicHost = "",
     [Alias("MixBaseUrl")][string]$ServiceBaseUrl = "",
     [string]$Auxsid = "",
     [string]$SessionId = ""
@@ -10,11 +12,15 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 function Test-PortAvailable {
-    param([int]$PortNumber)
+    param(
+        [string]$BindHostValue,
+        [int]$PortNumber
+    )
 
     $listener = $null
     try {
-        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $PortNumber)
+        $address = Resolve-BindAddress -BindHostValue $BindHostValue
+        $listener = [System.Net.Sockets.TcpListener]::new($address, $PortNumber)
         $listener.Start()
         return $true
     }
@@ -26,6 +32,34 @@ function Test-PortAvailable {
             $listener.Stop()
         }
     }
+}
+
+function Resolve-BindAddress {
+    param([string]$BindHostValue)
+
+    if ([string]::IsNullOrWhiteSpace($BindHostValue) -or $BindHostValue -eq "0.0.0.0" -or $BindHostValue -eq "*") {
+        return [System.Net.IPAddress]::Any
+    }
+    if ($BindHostValue -eq "::") {
+        return [System.Net.IPAddress]::IPv6Any
+    }
+    if ($BindHostValue -eq "localhost") {
+        return [System.Net.IPAddress]::Loopback
+    }
+
+    $parsed = $null
+    if ([System.Net.IPAddress]::TryParse($BindHostValue, [ref]$parsed)) {
+        return $parsed
+    }
+
+    $candidate = [System.Net.Dns]::GetHostAddresses($BindHostValue) |
+        Where-Object { $_.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork } |
+        Select-Object -First 1
+    if ($candidate) {
+        return $candidate
+    }
+
+    throw "No se pudo resolver la direccion de escucha: $BindHostValue"
 }
 
 $ProjectRoot = (Resolve-Path $ProjectRoot).Path
@@ -51,11 +85,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "Fallo la compilacion del votante Windows."
 }
 
-if (-not (Test-PortAvailable -PortNumber $Port)) {
-    throw "El puerto $Port ya esta ocupado. Si el votante Windows ya esta corriendo, usa esa instancia. Si no, libera el puerto o arranca con -Port <otro_puerto>."
+if (-not (Test-PortAvailable -BindHostValue $BindHost -PortNumber $Port)) {
+    throw "La combinacion $BindHost`:$Port ya esta ocupada. Si el votante Windows ya esta corriendo, usa esa instancia. Si no, libera el puerto o arranca con -Port <otro_puerto>."
 }
 
-Write-Host "[votante-windows] Iniciando servidor en http://127.0.0.1:$Port"
+Write-Host "[votante-windows] Iniciando servidor en http://$BindHost:$Port"
 if ($ServiceBaseUrl) {
     Write-Host "[votante-windows] Semilla de descubrimiento configurada: $ServiceBaseUrl"
 }
@@ -64,8 +98,12 @@ else {
 }
 $javaArgs = @(
     "-Dvotante.windows.root=$ProjectRoot",
+    "-Dvotante.windows.bindHost=$BindHost",
     "-Dvotante.windows.port=$Port"
 )
+if ($PublicHost) {
+    $javaArgs += "-Dvotante.windows.publicHost=$PublicHost"
+}
 if ($ServiceBaseUrl) {
     $javaArgs += "-Dvotante.windows.serviceBaseUrl=$ServiceBaseUrl"
 }

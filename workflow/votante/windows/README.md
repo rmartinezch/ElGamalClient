@@ -31,6 +31,13 @@ UI:
 
 ```text
 http://127.0.0.1:8788
+http://<ip-local-de-la-estacion>:8788
+```
+
+Por defecto la estacion escucha en `0.0.0.0`, por lo que queda accesible desde la red local. Si desea restringirla solo a la maquina local, use:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\workflow\votante\windows\run-votante-windows.ps1 -BindHost 127.0.0.1
 ```
 
 Si desea fijar un `auxsid` por defecto:

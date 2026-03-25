@@ -265,7 +265,13 @@ Contenido:
 
 Ejecucion recomendada:
 1. run-votante-windows.cmd
-2. abrir http://127.0.0.1:8788
+2. abrir http://127.0.0.1:8788 o http://<ip-local-de-la-estacion>:8788
+
+Comportamiento de red:
+- por defecto la estacion escucha en 0.0.0.0
+- queda accesible desde la red local
+- para restringirla a la misma maquina:
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\run-votante-windows.ps1 -BindHost 127.0.0.1
 
 Opcional:
 - fijar semilla de descubrimiento:
