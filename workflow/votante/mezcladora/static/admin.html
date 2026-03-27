@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mezcladora 7040</title>
+  <link id="appFavicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f0b15e'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-size='32' font-family='Arial' font-weight='700' fill='%230d1824'%3EM%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div class="window-bar">
+        <span class="dot red"></span>
+        <span class="dot amber"></span>
+        <span class="dot green"></span>
+      </div>
+      <div class="hero-copy">
+        <p class="eyebrow">Puerto 7040</p>
+        <h1>Servidor 1 define las parties y crea la llave</h1>
+        <p class="lede">
+          Este panel controla toda la operación. Las ventanas de las parties se consultan en los puertos
+          <code>70xx</code> y muestran el monitor de consola de Verificatum por party.
+        </p>
+      </div>
+      <div class="hero-status" id="heroStatus">Sin sesión activa</div>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <div class="panel-head">
+          <h2>Etapa preliminar</h2>
+          <p>Define variables iniciales. Cada clic crea una nueva sesión de trabajo y vuelve a ejecutar <code>keygen</code>.</p>
+        </div>
+        <form id="setupForm" class="form-grid">
+          <label>
+            <span>Etiqueta</span>
+            <input id="label" type="text" placeholder="Servidor 1" />
+          </label>
+          <label>
+            <span>Nombre de elección</span>
+            <input id="election_name" type="text" placeholder="Elección Verificatum" />
+          </label>
+          <label>
+            <span>SID</span>
+            <input id="sid" type="text" placeholder="ONPE" />
+          </label>
+          <label>
+            <span>Host/IP</span>
+            <input id="host" type="text" placeholder="127.0.0.1" />
+          </label>
+          <label>
+            <span>Número de parties</span>
+            <input id="parties" type="number" min="1" max="9" value="3" />
+          </label>
+          <label>
+            <span>Umbral mínimo</span>
+            <input id="threshold" type="number" min="1" max="9" value="2" />
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Nueva sesión y ejecutar keygen</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section id="dynamicFrames"></section>
+
+    <section class="panel two-col">
+      <div class="full-col">
+        <div class="panel-head">
+          <h2>Monitor general</h2>
+          <p>Captura errores y eventos globales, incluyendo fallos durante la creación de la sesión o de la llave.</p>
+        </div>
+        <pre id="eventLog" class="logbox">Sin eventos.</pre>
+      </div>
+    </section>
+
+    <section class="flash" id="flash"></section>
+  </main>
+
+  <script src="/static/admin.js"></script>
+</body>
+</html>

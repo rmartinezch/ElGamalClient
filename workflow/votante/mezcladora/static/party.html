@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Party</title>
+  <link id="appFavicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234d7ea8'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-size='28' font-family='Arial' font-weight='700' fill='white'%3EP%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="party-shell">
+    <div class="party-window">
+      <div class="window-head">
+        <div class="window-lights">
+          <span class="light red"></span>
+          <span class="light amber"></span>
+          <span class="light green"></span>
+        </div>
+        <div class="window-title" id="partyTitle">Monitor de party</div>
+        <div class="window-status" id="partyStatus">Sin sesión activa</div>
+      </div>
+
+      <div class="window-body">
+        <section class="row">
+          <div class="label" id="partyEyebrow">Ventana party</div>
+          <div class="field" id="partySubtitle">Esperando configuración inicial.</div>
+        </section>
+
+        <section class="row">
+          <div class="label">Parámetros generales</div>
+          <div class="field chips" id="partySummary">Esperando que el puerto 7040 cree la sesión.</div>
+        </section>
+
+        <section class="row">
+          <div class="label">Participantes conectados</div>
+          <div class="field chips" id="partyPeers">Sin participantes.</div>
+        </section>
+
+        <section class="row" id="partyActionsRow" hidden>
+          <div class="label">Acciones disponibles</div>
+          <div class="party-actions">
+            <div class="inline-note" id="precompNote">
+              La precomputación es opcional. La mezcla requiere que existan <code>ciphertexts</code> válidos.
+            </div>
+            <label class="inline-field">
+              <span>AuxSID / sesión de mezcla</span>
+              <input id="auxsidInput" type="text" value="default" />
+            </label>
+            <div class="auxsid-status" id="auxsidStatus">AuxSID sugerido: default</div>
+            <div class="op-buttons">
+              <button class="btn primary" data-action="precomp">Precomputación</button>
+              <button class="btn secondary" data-action="ciphertexts">Ciphertexts demo</button>
+              <button class="btn secondary" data-action="shuffle">Mezclar</button>
+              <button class="btn secondary" data-action="decrypt">Descifrar</button>
+              <button class="btn secondary" data-action="verify">Verificar</button>
+            </div>
+            <div class="download-row" id="plaintextsDownloadRow" hidden>
+              <button id="downloadPlaintextsBtn" type="button" class="btn secondary">Descargar votos descifrados</button>
+              <div class="download-status" id="downloadStatus">Los plaintexts aparecerán para descarga cuando termine el descifrado del AuxSID seleccionado.</div>
+            </div>
+            <div id="partyCurrentOperation" class="operation-box muted">Sin operación lanzada.</div>
+          </div>
+        </section>
+
+        <section class="row">
+          <div class="label">Estado secuencial por fase</div>
+          <div class="phase-grid" id="phaseTimeline">Sin fases activas.</div>
+        </section>
+
+        <section class="row">
+          <div class="label">Artefactos locales</div>
+          <div class="field chips" id="artifactChips">Sin artefactos.</div>
+        </section>
+
+        <section class="row">
+          <div class="label">Eventos globales</div>
+          <div class="logbox short"><pre id="partyEvents">Sin eventos.</pre></div>
+        </section>
+
+        <section class="row">
+          <div class="label">Monitor de eventos</div>
+          <div class="logbox console"><pre id="partyConsole">Sin salida todavía.</pre></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/party.js"></script>
+</body>
+</html>

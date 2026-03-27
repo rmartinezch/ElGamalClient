@@ -68,6 +68,7 @@ flowchart TB
 
     WinStation --> Mixer["Mezcladora Verificatum<br/>descubrimiento + handshake + public-key + ciphertexts"]
     AndroidStation --> Mixer
+    Mixer -. GUI local .-> MixGUI["GUI Mezcladora<br/>workflow/votante/mezcladora"]
 ```
 
 Lectura rapida del diagrama:
@@ -110,6 +111,7 @@ Puntos principales del estado actual:
   - herramientas auxiliares separadas del flujo principal
 - `workflow/`
   - estaciones de votacion y consumidores de ejemplo del cifrador
+  - incluye la GUI de la mezcladora Verificatum en `workflow/votante/mezcladora`
 
 ## Requisitos
 
@@ -575,6 +577,14 @@ Validaciones relevantes:
 - codigo: `workflow/votante/android`
 - consume el cifrador Android como libreria
 - la interfaz en este repo es solo un ejemplo de uso
+
+### GUI Mezcladora Verificatum
+
+- codigo: `workflow/votante/mezcladora`
+- GUI web local para operar varias `parties` de Verificatum en una sola PC
+- expone panel principal en el puerto `7040` y una ventana por `party` en `70xx`
+- las estaciones de voto (`windows`, `android`) se conectan a esta mezcladora via su API REST
+- arranque: `cd workflow/votante/mezcladora && ./start_gui.sh`
 
 ### Ubuntu
 

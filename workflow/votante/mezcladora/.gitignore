@@ -1,0 +1,7 @@
+__pycache__/
+node_modules/
+test-results/
+playwright-report/
+runtime/
+runtime-e2e/
+dist/
