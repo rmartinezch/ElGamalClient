@@ -115,7 +115,7 @@ Ejemplos:
 
 ```bash
 ./start_gui.sh
-PUBLIC_HOST=wsantivanez-hm ./start_gui.sh
+PUBLIC_HOST=mixserver-host ./start_gui.sh
 HOST=127.0.0.1 PUBLIC_HOST=127.0.0.1 ./start_gui.sh
 ./start_gui.sh 7140
 ```
@@ -242,7 +242,7 @@ Uso recomendado desde la estación:
 Ejemplo:
 
 ```bash
-curl http://wsantivanez-hm:7040/api/discovery
+curl http://mixserver-host:7040/api/discovery
 ```
 
 Respuesta típica:
@@ -251,16 +251,16 @@ Respuesta típica:
 {
   "ok": true,
   "server": {
-    "instance_id": "wsantivanez-hm-20260320-131612",
-    "hostname": "wsantivanez-hm",
-    "public_host": "wsantivanez-hm",
+    "instance_id": "mixserver-host-20260320-131612",
+    "hostname": "mixserver-host",
+    "public_host": "mixserver-host",
     "base_ui_port": 7040,
-    "ui_url": "http://wsantivanez-hm:7040/",
-    "api_url": "http://wsantivanez-hm:7040",
-    "discovery_url": "http://wsantivanez-hm:7040/api/discovery",
-    "handshake_url": "http://wsantivanez-hm:7040/api/handshake",
-    "public_key_url": "http://wsantivanez-hm:7040/api/public-key",
-    "ciphertexts_url": "http://wsantivanez-hm:7040/api/ciphertexts",
+    "ui_url": "http://mixserver-host:7040/",
+    "api_url": "http://mixserver-host:7040",
+    "discovery_url": "http://mixserver-host:7040/api/discovery",
+    "handshake_url": "http://mixserver-host:7040/api/handshake",
+    "public_key_url": "http://mixserver-host:7040/api/public-key",
+    "ciphertexts_url": "http://mixserver-host:7040/api/ciphertexts",
     "has_active_session": true,
     "keygen_ready": true,
     "accepting_votes": true,
@@ -290,7 +290,7 @@ Registra o renueva un handshake de una estación de votación contra la mezclado
 Ejemplo:
 
 ```bash
-curl -X POST http://wsantivanez-hm:7040/api/handshake \
+curl -X POST http://mixserver-host:7040/api/handshake \
   -H "Content-Type: application/json" \
   -d '{
     "station_id": "mesa-01",
@@ -309,7 +309,7 @@ Respuesta típica:
   "reason": "ok",
   "station_id": "mesa_01",
   "requested_auxsid": "default",
-  "lease_id": "wsantivanez-hm-20260320-131612:mesa_01",
+  "lease_id": "mixserver-host-20260320-131612:mesa_01",
   "expires_at": "2026-03-20T13:18:04-05:00",
   "session": {
     "session_id": "servidor-1-20260320-092533",
@@ -331,7 +331,7 @@ Reglas:
 Devuelve la lista de estaciones con handshake vigente.
 
 ```bash
-curl http://wsantivanez-hm:7040/api/handshakes
+curl http://mixserver-host:7040/api/handshakes
 ```
 
 ### `GET /api/state`
@@ -345,13 +345,13 @@ Entrega la llave pública de la sesión activa junto con el identificador y el n
 Llave nativa:
 
 ```bash
-curl http://wsantivanez-hm:7040/api/public-key
+curl http://mixserver-host:7040/api/public-key
 ```
 
 Llave en formato Verificatum:
 
 ```bash
-curl "http://wsantivanez-hm:7040/api/public-key?format=verificatum"
+curl "http://mixserver-host:7040/api/public-key?format=verificatum"
 ```
 
 Respuesta típica:
@@ -383,8 +383,8 @@ Uso típico desde la estación:
 Ejemplo:
 
 ```bash
-curl http://wsantivanez-hm:7040/api/emission-context
-curl "http://wsantivanez-hm:7040/api/emission-context?auxsid=default"
+curl http://mixserver-host:7040/api/emission-context
+curl "http://mixserver-host:7040/api/emission-context?auxsid=default"
 ```
 
 Respuesta típica:
@@ -421,7 +421,7 @@ Interpretación:
 Devuelve `auxsid` usados, reservados, pendientes y el sugerido para la próxima mezcla.
 
 ```bash
-curl http://wsantivanez-hm:7040/api/auxsids
+curl http://mixserver-host:7040/api/auxsids
 ```
 
 Respuesta típica:
@@ -457,13 +457,13 @@ Comportamiento:
 #### Enviar formato interno de Verificatum
 
 ```bash
-curl -X POST http://wsantivanez-hm:7040/api/ciphertexts \
+curl -X POST http://mixserver-host:7040/api/ciphertexts \
   -H "Content-Type: application/json" \
   -d '{
     "session_id": "servidor-1-20260320-092533",
     "session_name": "Servidor 1",
     "station_id": "mesa-01",
-    "lease_id": "wsantivanez-hm-20260320-131612:mesa_01",
+    "lease_id": "mixserver-host-20260320-131612:mesa_01",
     "auxsid": "default",
     "format": "raw",
     "ciphertexts": "....contenido del archivo ciphertexts...."
@@ -473,13 +473,13 @@ curl -X POST http://wsantivanez-hm:7040/api/ciphertexts \
 #### Enviar formato nativo
 
 ```bash
-curl -X POST http://wsantivanez-hm:7040/api/ciphertexts \
+curl -X POST http://mixserver-host:7040/api/ciphertexts \
   -H "Content-Type: application/json" \
   -d '{
     "session_id": "servidor-1-20260320-092533",
     "session_name": "Servidor 1",
     "station_id": "mesa-01",
-    "lease_id": "wsantivanez-hm-20260320-131612:mesa_01",
+    "lease_id": "mixserver-host-20260320-131612:mesa_01",
     "auxsid": "default",
     "format": "native",
     "ciphertexts_ext": "....contenido del archivo ciphertexts_ext....",
@@ -509,7 +509,7 @@ Respuesta típica:
   "accumulated": false,
   "handshake_validated": true,
   "station_id": "mesa_01",
-  "lease_id": "wsantivanez-hm-20260320-131612:mesa_01",
+  "lease_id": "mixserver-host-20260320-131612:mesa_01",
   "slots": {
     "auxsid": "default",
     "ciphertexts": "ciphertexts",
@@ -575,9 +575,9 @@ Entrega los votos mezclados y descifrados de un `auxsid` ya procesado. Se puede 
 Ejemplos:
 
 ```bash
-curl "http://wsantivanez-hm:7040/api/plaintexts?auxsid=default"
-curl "http://wsantivanez-hm:7042/api/plaintexts?auxsid=default"
-curl "http://wsantivanez-hm:7043/api/plaintexts?auxsid=default&format=verificatum"
+curl "http://mixserver-host:7040/api/plaintexts?auxsid=default"
+curl "http://mixserver-host:7042/api/plaintexts?auxsid=default"
+curl "http://mixserver-host:7043/api/plaintexts?auxsid=default&format=verificatum"
 ```
 
 Parámetros:
@@ -593,8 +593,8 @@ Descarga el archivo de plaintexts como adjunto HTTP.
 Ejemplos:
 
 ```bash
-curl -OJ "http://wsantivanez-hm:7040/api/plaintexts/download?auxsid=default"
-curl -OJ "http://wsantivanez-hm:7042/api/plaintexts/download?auxsid=default"
+curl -OJ "http://mixserver-host:7040/api/plaintexts/download?auxsid=default"
+curl -OJ "http://mixserver-host:7042/api/plaintexts/download?auxsid=default"
 ```
 
 En la GUI, cada ventana de `party` expone este mismo flujo con el botón `Descargar votos descifrados` después de que el `AuxSID` indicado ya haya sido descifrado.
