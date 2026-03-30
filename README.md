@@ -98,7 +98,8 @@ Puntos principales del estado actual:
 - `docs/`
   - documentacion tecnica adicional
 - `native/`
-  - fuentes compartidas de `vec`, `gmpmee`, `vecj` y `vmgj`
+  - `verificatum-jars/` repositorio Maven file-based con JARs precompilados de Verificatum (resuelto automaticamente por Maven y Gradle)
+  - `verificatum-src/` fuentes de `vcr`, `vec`, `gmpmee`, `vecj` y `vmgj` (solo necesarios si se quiere recompilar desde cero)
 - `prebuilt/`
   - artefactos canonicos compilados para consumo posterior
 - `recursos/`
@@ -116,7 +117,7 @@ Puntos principales del estado actual:
 ## Requisitos
 
 - `Java 21` o superior
-- `Maven 3.x`
+- `Maven 3.x` (opcional: el proyecto incluye Maven Wrapper `mvnw` / `mvnw.cmd`)
 
 Requisitos adicionales por plataforma:
 
@@ -149,25 +150,47 @@ Para evitar ambiguedades, en este documento se usan estos placeholders:
 
 ## Bootstrap De Dependencias Verificatum
 
-Las dependencias `com.verificatum` no viven en Maven Central. Este repo usa bootstrap local.
+Las dependencias `com.verificatum` no viven en Maven Central.
 
-### Que se necesita antes de ejecutar el bootstrap
+### Proyecto autocontenido (desde marzo 2026)
 
-El script de bootstrap compila los fuentes de Verificatum y los instala en el repo Maven local
-del proyecto (`.mvn/local-repo`). Para eso **necesita tener los fuentes descargados** en
-alguna de las rutas que detecta automaticamente.
+El proyecto ahora incluye los JARs precompilados de Verificatum en `native/verificatum-jars/`,
+organizados como un repositorio Maven file-based. Tanto `pom.xml` (Maven) como
+`platform/android/settings.gradle` (Gradle) apuntan a este directorio.
 
-Los tres paquetes fuente necesarios son:
+**Ya no es necesario ejecutar el bootstrap para compilar.** Despues de clonar:
 
-| Paquete | Version | Repositorio oficial |
-|---------|---------|---------------------|
-| `verificatum-vcr` | 3.1.0 | https://www.verificatum.org / releases GitHub |
-| `verificatum-vecj` | 2.2.0 | https://www.verificatum.org / releases GitHub |
-| `verificatum-vmgj` | 1.3.0 | https://www.verificatum.org / releases GitHub (solo el `.jar`) |
+```bash
+# Ubuntu/Linux
+./mvnw clean package
 
-Descarga los tarballs o clona los repositorios y descomprimelos de forma que la carpeta raiz
-sea exactamente `verificatum-vcr-3.1.0`, `verificatum-vecj-2.2.0` y
-`verificatum-vmgj-1.3.0` respectivamente.
+# Windows (sin necesidad de instalar Maven)
+mvnw.cmd clean package
+```
+
+JARs incluidos en `native/verificatum-jars/`:
+
+| Artefacto | Version | Tamaño |
+|-----------|---------|--------|
+| `verificatum-vcr-vmgj-vecj` | 3.1.0 | 1.7 MB |
+| `verificatum-vecj` | 2.2.0 | 6.8 KB |
+| `verificatum-vmgj` | 1.3.0 | 9.8 KB |
+
+Fuentes incluidos en `native/verificatum-src/`:
+
+| Paquete | Version | Uso |
+|---------|---------|-----|
+| `verificatum-vcr` | 3.1.0 | Solo si se necesita recompilar VCR desde fuentes |
+| `verificatum-vecj` | 2.2.0 | Solo si se necesita recompilar VECJ desde fuentes |
+| `verificatum-vmgj` | 1.3.0 | Solo si se necesita recompilar VMGJ desde fuentes |
+| `verificatum-gmpmee` | 2.1.0 | Dependencia nativa de VCR |
+| `verificatum-vec` | 2.5.0 | Dependencia nativa de VECJ |
+
+### Bootstrap (solo si se necesita recompilar desde fuentes)
+
+El bootstrap solo es necesario si se quiere recompilar los JARs de Verificatum desde codigo
+fuente (por ejemplo, para aplicar parches o actualizar versiones). En uso normal,
+los JARs de `native/verificatum-jars/` son suficientes.
 
 ### Rutas buscadas automaticamente (Windows)
 
@@ -200,8 +223,9 @@ D:\_Proyectos\mixnet\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar
 > este clonado el repositorio (puede ser `C:`, `D:`, etc.).
 
 Si el error dice `No se pudo ubicar verificatum-vcr-3.1.0. Rutas probadas: ...` significa
-que los fuentes no estan en ninguna de esas ubicaciones. La solucion mas rapida es colocarlos
-en `native\verificatum-src\` dentro del repo o en `D:\Projects\ONPE\mixnet\` (o equivalente).
+que los fuentes no estan en ninguna de esas ubicaciones. Con la version actual del proyecto,
+los fuentes ya estan incluidos en `native\verificatum-src\` y los JARs precompilados en
+`native\verificatum-jars\`, por lo que este error no deberia ocurrir despues de un `git pull`.
 
 ### Dependencias esperadas para Windows
 
@@ -253,11 +277,11 @@ Ubuntu:
 
 Android:
 
-- reutiliza el mismo repositorio Maven local del proyecto
+- reutiliza el mismo repositorio `native/verificatum-jars/` del proyecto
 - no requiere un bootstrap Verificatum separado para consumir el `AAR`
-- la compilacion Android depende de que el bootstrap Maven del repo ya exista
+- la compilacion Android resuelve dependencias directamente de `native/verificatum-jars/`
 
-En Windows el bootstrap instala en `.mvn/local-repo`:
+Los tres artefactos Verificatum resueltos automaticamente son:
 
 - `com.verificatum:verificatum-vmgj:1.3.0`
 - `com.verificatum:verificatum-vecj:2.2.0`
@@ -290,7 +314,25 @@ Bundle de libreria distribuible:
 
 ## Compilacion
 
-### Compilacion Base Del Cifrador
+### Compilacion Rapida (Maven Wrapper)
+
+La forma mas directa de compilar el cifrador, sin necesidad de scripts adicionales:
+
+Ubuntu/Linux:
+
+```bash
+./mvnw clean package
+```
+
+Windows:
+
+```cmd
+mvnw.cmd clean package
+```
+
+Esto genera `target/ElGamalCipher-1.1.0.jar` (fat-JAR con todas las dependencias).
+
+### Compilacion Base Del Cifrador (via scripts)
 
 Windows:
 
@@ -748,3 +790,7 @@ Mejoras clave:
 - soporte multiplataforma
 - empaquetado nativo por plataforma
 - consolidacion del cifrador como libreria reusable
+- proyecto autocontenido: JARs Verificatum en `native/verificatum-jars/` (ya no requiere bootstrap)
+- Maven Wrapper incluido (`mvnw` / `mvnw.cmd`)
+- fuentes VCR 3.1.0 incluidos en `native/verificatum-src/`
+- verificado en Ubuntu, Windows 11 y Android (emulador API 34)
