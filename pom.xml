@@ -13,6 +13,15 @@
         <maven.compiler.release>21</maven.compiler.release>
     </properties>
 
+    <repositories>
+        <repository>
+            <id>verificatum-local</id>
+            <url>file://${project.basedir}/native/verificatum-jars</url>
+            <releases><enabled>true</enabled></releases>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+    </repositories>
+
     <dependencies>
         <!-- Dependencias de Verificatum -->
         <dependency>

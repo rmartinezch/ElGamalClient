@@ -28,6 +28,7 @@ android {
     defaultConfig {
         minSdk 26
         targetSdk 34
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField 'String', 'CIPHER_LIBRARY_VERSION', "\"${cipherLibraryVersion}\""
         buildConfigField 'String', 'CIPHER_LIBRARY_BUILD_TIMESTAMP', "\"${cipherLibraryBuildTimestamp}\""

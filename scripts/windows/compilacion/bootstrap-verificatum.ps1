@@ -94,12 +94,19 @@ function Resolve-MixnetRoots {
     )
 
     $projectParent = Split-Path $ProjectRoot -Parent
+    $projectDrive = [System.IO.Path]::GetPathRoot($ProjectRoot)
     $roots = New-Object System.Collections.Generic.List[string]
 
     Add-Candidate -Target $roots -Value $ExplicitMixnetRoot
     Add-Candidate -Target $roots -Value $env:MIXNET_ROOT
+    Add-Candidate -Target $roots -Value $env:VERIFICATUM_MIXNET_ROOT
     Add-Candidate -Target $roots -Value $env:VERIFICATUM_SOURCE_ROOT
     Add-Candidate -Target $roots -Value (Join-Path $projectParent "mixnet")
+
+    if ($projectDrive) {
+        Add-Candidate -Target $roots -Value (Join-Path $projectDrive "Projects\ONPE\mixnet")
+        Add-Candidate -Target $roots -Value (Join-Path $projectDrive "_Proyectos\mixnet")
+    }
 
     return $roots
 }

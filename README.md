@@ -151,6 +151,58 @@ Para evitar ambiguedades, en este documento se usan estos placeholders:
 
 Las dependencias `com.verificatum` no viven en Maven Central. Este repo usa bootstrap local.
 
+### Que se necesita antes de ejecutar el bootstrap
+
+El script de bootstrap compila los fuentes de Verificatum y los instala en el repo Maven local
+del proyecto (`.mvn/local-repo`). Para eso **necesita tener los fuentes descargados** en
+alguna de las rutas que detecta automaticamente.
+
+Los tres paquetes fuente necesarios son:
+
+| Paquete | Version | Repositorio oficial |
+|---------|---------|---------------------|
+| `verificatum-vcr` | 3.1.0 | https://www.verificatum.org / releases GitHub |
+| `verificatum-vecj` | 2.2.0 | https://www.verificatum.org / releases GitHub |
+| `verificatum-vmgj` | 1.3.0 | https://www.verificatum.org / releases GitHub (solo el `.jar`) |
+
+Descarga los tarballs o clona los repositorios y descomprimelos de forma que la carpeta raiz
+sea exactamente `verificatum-vcr-3.1.0`, `verificatum-vecj-2.2.0` y
+`verificatum-vmgj-1.3.0` respectivamente.
+
+### Rutas buscadas automaticamente (Windows)
+
+El script busca los paquetes en este orden de prioridad. **Basta con que una sola ruta exista**;
+no es necesario configurar nada mas si usas alguna de las rutas predefinidas:
+
+```
+# Prioridad 1 – dentro del propio repositorio (opcion recomendada)
+<raiz-repo>\native\verificatum-src\verificatum-vcr-3.1.0
+<raiz-repo>\native\verificatum-src\verificatum-vecj-2.2.0
+<raiz-repo>\native\verificatum-src\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar
+
+# Prioridad 2 – directorio mixnet hermano del proyecto
+<carpeta-padre-del-repo>\mixnet\verificatum-vcr-3.1.0
+<carpeta-padre-del-repo>\mixnet\verificatum-vecj-2.2.0
+<carpeta-padre-del-repo>\mixnet\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar
+
+# Prioridad 3 – convenciones de estructura de proyectos ONPE (auto-detectado por unidad)
+D:\Projects\ONPE\mixnet\verificatum-vcr-3.1.0
+D:\Projects\ONPE\mixnet\verificatum-vecj-2.2.0
+D:\Projects\ONPE\mixnet\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar
+
+# Prioridad 4 – convencion alternativa (guion bajo)
+D:\_Proyectos\mixnet\verificatum-vcr-3.1.0
+D:\_Proyectos\mixnet\verificatum-vecj-2.2.0
+D:\_Proyectos\mixnet\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar
+```
+
+> **Nota:** las rutas de Prioridad 3 y 4 se generan dinamicamente segun la unidad donde
+> este clonado el repositorio (puede ser `C:`, `D:`, etc.).
+
+Si el error dice `No se pudo ubicar verificatum-vcr-3.1.0. Rutas probadas: ...` significa
+que los fuentes no estan en ninguna de esas ubicaciones. La solucion mas rapida es colocarlos
+en `native\verificatum-src\` dentro del repo o en `D:\Projects\ONPE\mixnet\` (o equivalente).
+
 ### Dependencias esperadas para Windows
 
 Para que `scripts/windows/compilacion/bootstrap-verificatum.ps1` funcione, debe existir al menos una de estas opciones:
@@ -159,10 +211,11 @@ Para que `scripts/windows/compilacion/bootstrap-verificatum.ps1` funcione, debe 
   - `native/verificatum-src/verificatum-vcr-3.1.0`
   - `native/verificatum-src/verificatum-vecj-2.2.0`
   - `native/verificatum-src/verificatum-vmgj-1.3.0/verificatum-vmgj-1.3.0.jar`
-- Opcion B: un directorio externo `mixnet` con esos subdirectorios
-  - `<MIXNET_ROOT>\verificatum-vcr-3.1.0`
-  - `<MIXNET_ROOT>\verificatum-vecj-2.2.0`
-  - `<MIXNET_ROOT>\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar`
+- Opcion B: directorio externo `mixnet` en ruta convencional
+  - `D:\Projects\ONPE\mixnet\verificatum-vcr-3.1.0`
+  - `D:\Projects\ONPE\mixnet\verificatum-vecj-2.2.0`
+  - `D:\Projects\ONPE\mixnet\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar`
+- Opcion C: directorio externo con ruta personalizada via variable de entorno o parametro
 
 Importante:
 
@@ -179,14 +232,17 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap
 Windows (forzando una raiz externa unica):
 
 ```powershell
-$env:MIXNET_ROOT = '<MIXNET_ROOT>'
+$env:MIXNET_ROOT = 'D:\ruta\a\tu\mixnet'
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1
 ```
 
 Windows (rutas explicitas por parametro):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1 -VcrSourceRoot '<MIXNET_ROOT>\verificatum-vcr-3.1.0' -VecjSourceRoot '<MIXNET_ROOT>\verificatum-vecj-2.2.0' -VmgjJarPath '<MIXNET_ROOT>\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar'
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1 `
+    -VcrSourceRoot  'D:\ruta\a\tu\mixnet\verificatum-vcr-3.1.0' `
+    -VecjSourceRoot 'D:\ruta\a\tu\mixnet\verificatum-vecj-2.2.0' `
+    -VmgjJarPath    'D:\ruta\a\tu\mixnet\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar'
 ```
 
 Ubuntu:
