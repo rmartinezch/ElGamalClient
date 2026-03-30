@@ -1,0 +1,61 @@
+#!/bin/sh
+
+# Copyright 2008-2019 Douglas Wikstrom
+#
+# This file is part of Verificatum Core Routines (VCR).
+#
+# Permission is hereby granted, free of charge, to any person
+# obtaining a copy of this software and associated documentation
+# files (the "Software"), to deal in the Software without
+# restriction, including without limitation the rights to use, copy,
+# modify, merge, publish, distribute, sublicense, and/or sell copies
+# of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+# BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+# ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+y
+# The authors of PMD have not provided any installation program, so we
+# need this wrapper to give a clean Makefile.am. You can simply unpack
+# the pmd directory in your home directory.
+
+pmd_run_in_dir() {
+    RES=`ls -1 $2 | grep -v zip | grep -v tar.gz | sort | grep -E "pmd-bin-?\.?\.?" | tail -n 1`
+    eval "$1=\$2/\$RES/bin/run.sh"
+}
+
+
+pmd_run_in_dir PMD_RUN $PWD
+
+if test -f $PMD_RUN;
+then
+
+    $PMD_RUN pmd $@
+
+else
+
+    pmd_run_in_dir PMD_RUN $HOME
+
+    if test -f $PMD_RUN;
+    then
+
+	$PMD_RUN pmd $@
+
+    else
+
+	echo "Failed to find any pmd binary! Please consult Makefile.am for more information."
+
+	exit 1
+    fi
+fi
+
+exit 0

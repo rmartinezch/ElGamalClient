@@ -1,0 +1,167 @@
+#!/bin/sh
+
+# Copyright 2008-2019 Douglas Wikstrom
+#
+# This file is part of Verificatum Core Routines (VCR).
+#
+# Permission is hereby granted, free of charge, to any person
+# obtaining a copy of this software and associated documentation
+# files (the "Software"), to deal in the Software without
+# restriction, including without limitation the rights to use, copy,
+# modify, merge, publish, distribute, sublicense, and/or sell copies
+# of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+# BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+# ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# Remark. To us it seems obvious that some applications need access to
+# information about the hardware of a system, but apparently the
+# people implementing the various Un*xes have agreed to not agree on
+# anything when it comes to providing this information. Below we do
+# our best to compile readable strings for the CPU and OS. Needless to
+# say, these are horrible hacks and we expect to have to add another
+# section of hacks for each new system.
+#
+# WARNING! Only use this command for best effort information purposes.
+
+ERRORFILE=`date | sed "s/[[:space:]][[:space:]]*//g"`
+{
+
+UNAME=`uname -a`
+
+set $UNAME
+
+OSNAME=$1
+KERNEL=$3
+
+linux_count_cpuinfo_fields() {
+    FIELD=`cat /proc/cpuinfo | grep -E "$2" | wc -l`
+    eval "$1=\"\$FIELD\""
+}
+
+linux_get_cpuinfo_field() {
+    FIELD=`cat /proc/cpuinfo | grep "$2" | head -n 1 | sed "s/.*:[^0123456789]*\([0123456789][0123456789]*\)[^0123456].*/\1/"`
+    eval "$1=\"\$FIELD\""
+}
+
+linux_get_lscpu_field() {
+    FIELD=`lscpu | grep "$2" | sed "s/.*:[^0123456789]*\([0123456789][0123456789]*\)[^0123456].*/\1/"`
+    eval "$1=\"\$FIELD\""
+}
+
+if test $OSNAME = "Linux";
+then
+
+    ENDSTRING="\\n \\\l"
+    DISTR=`cat /etc/issue | grep "$ENDSTRING" | sed -e "s/.\{6\}\$//"`
+    OS="GNU/Linux ($DISTR)"
+
+    MODELRAW=`cat /proc/cpuinfo | grep "model name" | uniq | sed -e "s/.*: //"`
+    MODEL=`echo $MODELRAW | sed -e "s/@.*//" | sed "s/ CPU//"`
+    
+    linux_count_cpuinfo_fields PROC "processor"
+    linux_count_cpuinfo_fields CORES "core id"
+
+    MULT=`echo "${PROC} / ${CORES}" | bc`
+    if ! ( test ${MULT} = 1 );
+    then
+	CORESxTHREADS="${CORES}"
+    else
+	CORESxTHREADS="${CORES}x2"
+    fi
+    
+    linux_get_lscpu_field CPUFREQMHz "CPU max MHz"
+    if test x$CPUFREQMHz = x;
+    then
+	linux_get_lscpu_field CPUFREQMHz "CPU .*MHz"
+    fi
+
+    if test x$CPUFREQMHz = x;
+    then
+       	linux_get_cpuinfo_field CPUFREQMHz "cpu .*MHz"
+    fi
+    
+    CPUFREQGHz=`echo "${CPUFREQMHz} / 1000" | bc -l | sed "s/\([[:digit:]][[:digit:]]*\.[[:digit:]][[:digit:]]\).*/\1/"`
+    
+elif test $OSNAME = "FreeBSD";
+then
+
+    OS="FreeBSD $KERNEL"
+    MODELRAW=`sysctl -n hw.model`
+    MODEL=`echo $MODELRAW | sed -e "s/@.*//" | sed "s/ CPU//"`
+    FREQUENCYRAW=`sysctl -n dev.cpu.0.freq 2> /dev/null`
+    if test x$FREQUENCYRAW = x;
+    then
+	FREQUENCYRAW=`sysctl -n hw.model | sed "s/.*@ \(.*\)GHz/\1/"`
+	if ! ( test x$FREQUENCYRAW = x );
+	then
+	    FREQUENCYRAW=`echo "$FREQUENCYRAW * 1000" | bc -l`
+	fi
+    fi
+    if test x$FREQUENCYRAW = x;
+    then
+	FREQUENCYRAW=0
+    fi
+    CPUFREQGHz=`echo "scale=2; $FREQUENCYRAW / 1000" | bc`
+    CORES=`sysctl -n hw.ncpu`
+    CHECKHTT=`cat /var/run/dmesg.boot | grep SMT`
+    if test x$CHECKHTT = x;
+    then
+	CORESxTHREADS="${CORES}"
+    else
+	CORESxTHREADS="${CORES}x2"
+    fi
+
+elif test $OSNAME = "OpenBSD";
+then
+
+    OS="OpenBSD $KERNEL"
+    MODELRAW=`sysctl -n hw.model`
+    MODEL=`echo $MODELRAW | sed -e "s/@.*//" | sed "s/ CPU//"`
+    FREQUENCYRAW=`sysctl -n hw.cpuspeed`
+    if test x$FREQUENCYRAW = x;
+    then
+	FREQUENCYRAW=0
+    fi
+    CPUFREQGHz=`echo "scale=2; $FREQUENCYRAW / 1000" | bc`
+    CORES=`sysctl -n hw.ncpu`
+    CHECKHTT=`cat /var/run/dmesg.boot | grep SMT`
+    if test x$CHECKHTT = x;
+    then
+	CORESxTHREADS="${CORES}"
+    else
+	CORESxTHREADS="${CORES}x2"
+    fi 
+fi
+
+if test "x${OS}" = x;
+then
+    COMPUTER="Unknown model"
+    OS="Unknown operating system"
+else
+    COMPUTER="${MODEL} X${CORESxTHREADS} (${CPUFREQGHz}GHz)"
+fi
+
+} 2> /tmp/${ERRORFILE}
+
+ERRORS=`cat /tmp/${ERRORFILE}`
+
+if test "x${ERRORS}" = x;
+then
+
+    VERSION=3.1.0
+    printf "%s###%s###%s" "$COMPUTER" "$OS" "${VERSION}"
+else
+
+    printf "%s###%s###%s" "Unknown model" "Unknown operating system" "${VERSION}"
+fi

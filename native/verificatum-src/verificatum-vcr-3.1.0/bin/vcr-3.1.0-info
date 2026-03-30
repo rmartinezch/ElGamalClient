@@ -1,0 +1,20 @@
+#!/bin/sh
+
+if test x$1 = x"bin";
+then
+    printf "/usr/local/bin"
+elif test x$1 = x"lib";
+then
+    printf "::/usr/local/lib"
+elif test x$1 = x"jar";
+then
+    printf "/usr/local/share/java/verificatum-vcr-3.1.0.jar::"
+elif test x$1 = x"version";
+then
+    printf "3.1.0"
+elif test x$1 = x"complete";
+then
+    printf "vcr-3.1.0"
+else
+    printf "Illegal parameter! (%s)\n" $1
+fi
