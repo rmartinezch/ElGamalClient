@@ -2,6 +2,7 @@ param(
     [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot/../../..").Path,
     [string]$JavaHome,
     [string]$MavenCmd,
+    [string]$MixnetRoot,
     [string]$VcrSourceRoot,
     [string]$VecjSourceRoot,
     [string]$VmgjJarPath
@@ -69,6 +70,89 @@ function Resolve-PreferredPath {
 
     $candidateList = ($Candidates | Where-Object { $_ }) -join "; "
     throw "No se pudo ubicar $Label. Rutas probadas: $candidateList"
+}
+
+function Add-Candidate {
+    param(
+        [System.Collections.Generic.List[string]]$Target,
+        [string]$Value
+    )
+
+    if (-not $Value) {
+        return
+    }
+
+    if (-not $Target.Contains($Value)) {
+        [void]$Target.Add($Value)
+    }
+}
+
+function Resolve-MixnetRoots {
+    param(
+        [string]$ProjectRoot,
+        [string]$ExplicitMixnetRoot
+    )
+
+    $projectParent = Split-Path $ProjectRoot -Parent
+    $roots = New-Object System.Collections.Generic.List[string]
+
+    Add-Candidate -Target $roots -Value $ExplicitMixnetRoot
+    Add-Candidate -Target $roots -Value $env:MIXNET_ROOT
+    Add-Candidate -Target $roots -Value $env:VERIFICATUM_SOURCE_ROOT
+    Add-Candidate -Target $roots -Value (Join-Path $projectParent "mixnet")
+
+    return $roots
+}
+
+function Resolve-SourceCandidates {
+    param(
+        [string]$ProjectRoot,
+        [string]$PackageName,
+        [System.Collections.Generic.List[string]]$MixnetRoots
+    )
+
+    $candidates = New-Object System.Collections.Generic.List[string]
+    Add-Candidate -Target $candidates -Value (Join-Path $ProjectRoot "native\verificatum-src\$PackageName")
+
+    foreach ($mixnetRoot in $MixnetRoots) {
+        $leafName = Split-Path $mixnetRoot -Leaf
+        if ($leafName -eq $PackageName) {
+            Add-Candidate -Target $candidates -Value $mixnetRoot
+        }
+        else {
+            Add-Candidate -Target $candidates -Value (Join-Path $mixnetRoot $PackageName)
+        }
+    }
+
+    return $candidates
+}
+
+function Resolve-VmgjJarCandidates {
+    param(
+        [string]$ProjectRoot,
+        [System.Collections.Generic.List[string]]$MixnetRoots
+    )
+
+    $candidates = New-Object System.Collections.Generic.List[string]
+    Add-Candidate -Target $candidates -Value (Join-Path $ProjectRoot ".mvn\local-repo\com\verificatum\verificatum-vmgj\1.3.0\verificatum-vmgj-1.3.0.jar")
+    Add-Candidate -Target $candidates -Value (Join-Path $ProjectRoot "native\verificatum-src\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar")
+
+    foreach ($mixnetRoot in $MixnetRoots) {
+        $leafName = Split-Path $mixnetRoot -Leaf
+        if ($mixnetRoot -like "*.jar") {
+            Add-Candidate -Target $candidates -Value $mixnetRoot
+            continue
+        }
+
+        if ($leafName -eq "verificatum-vmgj-1.3.0") {
+            Add-Candidate -Target $candidates -Value (Join-Path $mixnetRoot "verificatum-vmgj-1.3.0.jar")
+            continue
+        }
+
+        Add-Candidate -Target $candidates -Value (Join-Path $mixnetRoot "verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar")
+    }
+
+    return $candidates
 }
 
 function Reset-Directory {
@@ -247,29 +331,18 @@ $resolvedJavaHome = Resolve-JavaHome -Candidate $JavaHome
 $resolvedMavenCmd = Resolve-MavenCmd -Candidate $MavenCmd
 $javacPath = Join-Path $resolvedJavaHome "bin\javac.exe"
 $jarToolPath = Join-Path $resolvedJavaHome "bin\jar.exe"
+$mixnetRoots = Resolve-MixnetRoots -ProjectRoot $ProjectRoot -ExplicitMixnetRoot $MixnetRoot
 $VcrSourceRoot = Resolve-PreferredPath `
     -ExplicitPath $VcrSourceRoot `
-    -Candidates @(
-        (Join-Path $ProjectRoot "native\verificatum-src\verificatum-vcr-3.1.0"),
-        (Join-Path (Split-Path $ProjectRoot -Parent) "mixnet\verificatum-vcr-3.1.0"),
-        "D:\_Proyectos\mixnet\verificatum-vcr-3.1.0"
-    ) `
+    -Candidates (Resolve-SourceCandidates -ProjectRoot $ProjectRoot -PackageName "verificatum-vcr-3.1.0" -MixnetRoots $mixnetRoots) `
     -Label "verificatum-vcr-3.1.0"
 $VecjSourceRoot = Resolve-PreferredPath `
     -ExplicitPath $VecjSourceRoot `
-    -Candidates @(
-        (Join-Path $ProjectRoot "native\verificatum-src\verificatum-vecj-2.2.0"),
-        (Join-Path (Split-Path $ProjectRoot -Parent) "mixnet\verificatum-vecj-2.2.0"),
-        "D:\_Proyectos\mixnet\verificatum-vecj-2.2.0"
-    ) `
+    -Candidates (Resolve-SourceCandidates -ProjectRoot $ProjectRoot -PackageName "verificatum-vecj-2.2.0" -MixnetRoots $mixnetRoots) `
     -Label "verificatum-vecj-2.2.0"
 $VmgjJarPath = Resolve-PreferredPath `
     -ExplicitPath $VmgjJarPath `
-    -Candidates @(
-        (Join-Path $ProjectRoot ".mvn\local-repo\com\verificatum\verificatum-vmgj\1.3.0\verificatum-vmgj-1.3.0.jar"),
-        (Join-Path $ProjectRoot "native\verificatum-src\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar"),
-        "C:\Users\soett\verificatum-vmn-3.1.0-full\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar"
-    ) `
+    -Candidates (Resolve-VmgjJarCandidates -ProjectRoot $ProjectRoot -MixnetRoots $mixnetRoots) `
     -Label "verificatum-vmgj-1.3.0.jar"
 
 foreach ($requiredPath in @($VcrSourceRoot, $VecjSourceRoot, $VmgjJarPath, $javacPath, $jarToolPath, $resolvedMavenCmd)) {

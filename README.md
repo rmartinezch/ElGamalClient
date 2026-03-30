@@ -128,14 +128,65 @@ Requisitos adicionales por plataforma:
 - `Android`
   - Android SDK / Gradle para compilar el `AAR` o el consumidor Android
 
+### Convencion De Placeholders
+
+Para evitar ambiguedades, en este documento se usan estos placeholders:
+
+- `<PROJECT_ROOT>`: carpeta raiz del repo `ElGamalClient` en su maquina
+- `<MIXNET_ROOT>`: carpeta raiz que contiene fuentes Verificatum externas
+- `<APP_JAR>`: artefacto JAR de la aplicacion consumidora
+- `<PUBLIC_KEY_PATH>`: ruta del archivo `publicKey`
+- `<PLAINTEXT_VOTES_PATH>`: ruta del archivo de votos planos
+- `<CIPHERTEXT_OUTPUT_PATH>`: ruta de salida para `ciphertexts_ext`
+
+### Shell Y Classpath Por Plataforma
+
+| Plataforma | Shell recomendado | Separador de classpath |
+| --- | --- | --- |
+| Windows | PowerShell | `;` |
+| Ubuntu/Linux | Bash | `:` |
+| Android | Gradle/AGP | No aplica |
+
 ## Bootstrap De Dependencias Verificatum
 
 Las dependencias `com.verificatum` no viven en Maven Central. Este repo usa bootstrap local.
+
+### Dependencias esperadas para Windows
+
+Para que `scripts/windows/compilacion/bootstrap-verificatum.ps1` funcione, debe existir al menos una de estas opciones:
+
+- Opcion A (recomendada): fuentes dentro del repo
+  - `native/verificatum-src/verificatum-vcr-3.1.0`
+  - `native/verificatum-src/verificatum-vecj-2.2.0`
+  - `native/verificatum-src/verificatum-vmgj-1.3.0/verificatum-vmgj-1.3.0.jar`
+- Opcion B: un directorio externo `mixnet` con esos subdirectorios
+  - `<MIXNET_ROOT>\verificatum-vcr-3.1.0`
+  - `<MIXNET_ROOT>\verificatum-vecj-2.2.0`
+  - `<MIXNET_ROOT>\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar`
+
+Importante:
+
+- use una sola raiz `mixnet` para evitar confusiones
+- el script ya no depende de rutas fijas de una maquina en particular
+- si no usa `native/verificatum-src`, configure la raiz con `MIXNET_ROOT` o pase parametros explicitos
 
 Windows:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1
+```
+
+Windows (forzando una raiz externa unica):
+
+```powershell
+$env:MIXNET_ROOT = '<MIXNET_ROOT>'
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1
+```
+
+Windows (rutas explicitas por parametro):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1 -VcrSourceRoot '<MIXNET_ROOT>\verificatum-vcr-3.1.0' -VecjSourceRoot '<MIXNET_ROOT>\verificatum-vecj-2.2.0' -VmgjJarPath '<MIXNET_ROOT>\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar'
 ```
 
 Ubuntu:
@@ -324,9 +375,12 @@ Una aplicacion externa en Windows debe consumir:
 Ejemplo:
 
 ```powershell
+$PROJECT_ROOT = '<PROJECT_ROOT>'
+$APP_JAR = '<APP_JAR>'
+
 java `
-  -Djava.library.path=D:\ruta\prebuilt\windows-x64 `
-  -cp D:\ruta\prebuilt\java\ElGamalCipher-1.1.0.jar;mi-app.jar `
+  "-Djava.library.path=$PROJECT_ROOT\prebuilt\windows-x64" `
+  -cp "$PROJECT_ROOT\prebuilt\java\ElGamalCipher-1.1.0.jar;$APP_JAR" `
   com.ejemplo.Main
 ```
 
@@ -381,22 +435,35 @@ Resumen por plataforma:
 
 ## Uso Del Cifrador Desde CLI
 
-Ejecucion base:
+Ejecucion base en Windows (PowerShell):
+
+```powershell
+$PROJECT_ROOT = '<PROJECT_ROOT>'
+
+java -jar "$PROJECT_ROOT\prebuilt\java\ElGamalCipher-1.1.0.jar" `
+  '<PUBLIC_KEY_PATH>' `
+  '<PLAINTEXT_VOTES_PATH>' `
+  '<CIPHERTEXT_OUTPUT_PATH>' `
+  -sw `
+  -p
+```
+
+Ejecucion base en Ubuntu/Linux:
 
 ```bash
 java -jar prebuilt/java/ElGamalCipher-1.1.0.jar \
-     <ruta_publicKey> \
-     <ruta_votos_planos> \
-     <ruta_salida_cifrados> \
+  <PUBLIC_KEY_PATH> \
+  <PLAINTEXT_VOTES_PATH> \
+  <CIPHERTEXT_OUTPUT_PATH> \
      -sw \
      [-p]
 ```
 
 Parametros:
 
-1. `public_Key_file_name`: ruta a la llave publica
-2. `plain_votes_file_name`: archivo con votos planos
-3. `ciphered_votes_file_name`: salida `ciphertexts_ext`
+1. `ARG1_PUBLIC_KEY_PATH`: ruta a la llave publica
+2. `ARG2_PLAINTEXT_VOTES_PATH`: archivo con votos planos
+3. `ARG3_CIPHERTEXT_OUTPUT_PATH`: salida `ciphertexts_ext`
 4. `-sw` o `-hw`: modalidad RNG
 5. `-p`: barra de progreso opcional
 
