@@ -33,10 +33,10 @@ import java.util.regex.Pattern;
 public final class DidacticWindowsVoterServer {
 
     private static final String SCHEMA_VERSION = "1.0.0-test";
-    private static final String INTERFACE_DISPLAY_NAME = "Estacion de votacion Windows";
+    private static final String DEFAULT_INTERFACE_DISPLAY_NAME = "Estacion de votacion Windows";
     private static final String INTERFACE_VERSION = "0.1.0";
-    private static final String CIPHER_DISPLAY_NAME = "Cifrador Windows";
-    private static final String CIPHER_RNG_SUPPORT = "Software y hardware (TrueRNG USB/COM)";
+    private static final String DEFAULT_CIPHER_DISPLAY_NAME = "Cifrador Windows";
+    private static final String DEFAULT_CIPHER_RNG_SUPPORT = "Software y hardware (TrueRNG USB/COM)";
     private static final int VERIFICATUM_WIDTH = 1;
     private static final String DEFAULT_SERVICE_BASE_URL = "";
     private static final DateTimeFormatter BUILD_TIMESTAMP_FORMATTER =
@@ -51,12 +51,14 @@ public final class DidacticWindowsVoterServer {
     }
 
     public static void main(String[] args) throws Exception {
+        String stationId = readStringProperty("votante.station.id", "windows");
         AppConfig config = loadConfig(
-                readStringProperty("votante.windows.bindHost", "0.0.0.0"),
-                readStringProperty("votante.windows.publicHost", ""),
-                Integer.parseInt(readStringProperty("votante.windows.port", "8788")),
-                readStringProperty("votante.windows.serviceBaseUrl", DEFAULT_SERVICE_BASE_URL),
-                readStringProperty("votante.windows.auxsid", "")
+            stationId,
+            stationProperty("bindHost", "votante.windows.bindHost", "0.0.0.0"),
+            stationProperty("publicHost", "votante.windows.publicHost", ""),
+            Integer.parseInt(stationProperty("port", "votante.windows.port", "8788")),
+            stationProperty("serviceBaseUrl", "votante.windows.serviceBaseUrl", DEFAULT_SERVICE_BASE_URL),
+            stationProperty("auxsid", "votante.windows.auxsid", "")
         );
 
         HttpServer server = HttpServer.create(new InetSocketAddress(config.bindHost, config.port), 0);
@@ -71,7 +73,7 @@ public final class DidacticWindowsVoterServer {
         if (!config.publicBaseUrl().equals(config.localBaseUrl())) {
             System.out.println("Acceso red local: " + config.publicBaseUrl());
         }
-        System.out.println("Cifrador Windows consumido como libreria usando " + config.javaExePath());
+        System.out.println(config.cipherDisplayName + " consumido como libreria usando " + config.javaExePath());
         if (config.serviceBaseUrl != null && !config.serviceBaseUrl.isBlank()) {
             System.out.println("Semilla de descubrimiento configurada: " + config.serviceBaseUrl);
         } else {
@@ -79,18 +81,27 @@ public final class DidacticWindowsVoterServer {
         }
     }
 
-    static AppConfig loadConfig(String bindHost, String publicHost, int port, String serviceBaseUrl, String defaultAuxsid)
+    static AppConfig loadConfig(String stationId, String bindHost, String publicHost, int port, String serviceBaseUrl,
+                                String defaultAuxsid)
             throws java.io.IOException {
         Path rootDir = resolveRootDir();
-        Path appDir = rootDir.resolve("workflow").resolve("votante").resolve("windows").resolve("app");
-        Path publicDir = appDir.resolve("public");
-        Path runtimeDir = rootDir.resolve("workflow").resolve("votante").resolve("windows").resolve("runtime");
+        String normalizedStationId = firstNonBlank(stationId, "windows");
+        Path appDir = rootDir.resolve("workflow").resolve("votante").resolve(normalizedStationId).resolve("app");
+        Path defaultPublicDir = appDir.resolve("public");
+        String configuredPublicDir = readStringProperty("votante.station.publicDir", "");
+        Path publicDir = configuredPublicDir.isBlank()
+            ? defaultPublicDir
+            : Path.of(configuredPublicDir).toAbsolutePath().normalize();
+        Path runtimeDir = rootDir.resolve("workflow").resolve("votante").resolve(normalizedStationId).resolve("runtime");
         Path submissionsDir = runtimeDir.resolve("submissions");
         Path catalogPath = rootDir.resolve("workflow").resolve("votante")
                 .resolve("shared").resolve("catalogo-opciones.json");
         Path schemaPath = rootDir.resolve("workflow").resolve("votante")
                 .resolve("shared").resolve("vote-schema.md");
-        Path cifradorDir = rootDir.resolve("dist").resolve("windows").resolve("library").resolve("Cifrador");
+        String configuredCifradorDir = readStringProperty("votante.station.cifradorDir", "");
+        Path cifradorDir = configuredCifradorDir.isBlank()
+            ? rootDir.resolve("dist").resolve("windows").resolve("library").resolve("Cifrador")
+            : Path.of(configuredCifradorDir).toAbsolutePath().normalize();
         Files.createDirectories(submissionsDir);
         return new AppConfig(
                 rootDir,
@@ -105,6 +116,13 @@ public final class DidacticWindowsVoterServer {
                 port,
                 trimTrailingSlash(serviceBaseUrl),
                 defaultAuxsid,
+                normalizedStationId,
+                readStringProperty("votante.station.interfaceDisplayName", DEFAULT_INTERFACE_DISPLAY_NAME),
+                readStringProperty("votante.station.cipherDisplayName", DEFAULT_CIPHER_DISPLAY_NAME),
+                readStringProperty("votante.station.cipherRngSupport", DEFAULT_CIPHER_RNG_SUPPORT),
+                readStringProperty("votante.station.cifradorJarName", "ElGamalCipher-1.1.0.jar"),
+                readStringProperty("votante.station.cifradorNativeSubdir", "windows-x64"),
+                readStringProperty("votante.station.javaBinName", defaultJavaBinaryName()),
                 VoterProfile.demo(),
                 new MixerDiscoveryCoordinator(
                         trimTrailingSlash(serviceBaseUrl),
@@ -222,13 +240,13 @@ public final class DidacticWindowsVoterServer {
         payload.put("jarPath", config.jarPath().toString());
         payload.put("usesExe", false);
         payload.put("electionName", "Elecciones Generales 2026");
-        payload.put("interfaceDisplayName", INTERFACE_DISPLAY_NAME);
+        payload.put("interfaceDisplayName", config.interfaceDisplayName);
         payload.put("interfaceVersion", INTERFACE_VERSION);
         payload.put("interfaceBuildTimestamp", resolveInterfaceBuildTimestamp(config));
-        payload.put("cipherDisplayName", CIPHER_DISPLAY_NAME);
+        payload.put("cipherDisplayName", config.cipherDisplayName);
         payload.put("cipherVersion", resolveCipherVersion(config.jarPath()));
         payload.put("cipherBuildTimestamp", formatTimestamp(lastModified(config.jarPath())));
-        payload.put("cipherRngSupport", CIPHER_RNG_SUPPORT);
+        payload.put("cipherRngSupport", config.cipherRngSupport);
         payload.put("voteSchemaVersion", SCHEMA_VERSION);
         payload.put("voterProfile", config.voterProfile.toMap());
         return payload;
@@ -862,8 +880,24 @@ public final class DidacticWindowsVoterServer {
         return value.trim();
     }
 
+    private static String stationProperty(String key, String legacyKey, String fallback) {
+        String generic = readStringProperty("votante.station." + key, "");
+        if (!generic.isBlank()) {
+            return generic;
+        }
+        return readStringProperty(legacyKey, fallback);
+    }
+
+    private static String defaultJavaBinaryName() {
+        String osName = System.getProperty("os.name", "").toLowerCase();
+        if (osName.contains("win")) {
+            return "java.exe";
+        }
+        return "java";
+    }
+
     static Path resolveRootDir() {
-        String configured = System.getProperty("votante.windows.root");
+        String configured = readStringProperty("votante.root", readStringProperty("votante.windows.root", ""));
         if (configured != null && !configured.isBlank()) {
             return Path.of(configured).toAbsolutePath().normalize();
         }
@@ -897,6 +931,13 @@ public final class DidacticWindowsVoterServer {
             int port,
             String serviceBaseUrl,
             String defaultAuxsid,
+            String stationId,
+            String interfaceDisplayName,
+            String cipherDisplayName,
+            String cipherRngSupport,
+            String cifradorJarName,
+            String cifradorNativeSubdir,
+            String javaBinName,
             VoterProfile voterProfile,
             MixerDiscoveryCoordinator mixerCoordinator
     ) {
@@ -916,15 +957,15 @@ public final class DidacticWindowsVoterServer {
 
         Path javaExePath() {
             Path currentJavaHome = Path.of(System.getProperty("java.home"));
-            return currentJavaHome.resolve("bin").resolve("java.exe");
+            return currentJavaHome.resolve("bin").resolve(javaBinName);
         }
 
         Path nativeLibDirPath() {
-            return cifradorDir.resolve("libs").resolve("windows-x64");
+            return cifradorDir.resolve("libs").resolve(cifradorNativeSubdir);
         }
 
         Path jarPath() {
-            return cifradorDir.resolve("app").resolve("ElGamalCipher-1.1.0.jar");
+            return cifradorDir.resolve("app").resolve(cifradorJarName);
         }
     }
 

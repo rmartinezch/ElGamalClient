@@ -257,7 +257,7 @@ function renderBuildInfo(config) {
         infoRow("Fecha/Hora build", config.interfaceBuildTimestamp)
       ].join("")
     }</div></section>`,
-    `<section class="info-section"><h3>Cifrador Windows</h3><div class="info-grid">${
+    `<section class="info-section"><h3>${escapeHtml(config.cipherDisplayName || "Cifrador")}</h3><div class="info-grid">${
       [
         infoRow("Nombre", config.cipherDisplayName),
         infoRow("Version", config.cipherVersion),

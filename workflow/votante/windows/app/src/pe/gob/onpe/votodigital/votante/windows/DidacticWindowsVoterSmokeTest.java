@@ -17,12 +17,17 @@ final class DidacticWindowsVoterSmokeTest {
     }
 
     public static void main(String[] args) throws Exception {
-        String auxsid = System.getProperty("votante.windows.auxsid", "");
+        String stationId = System.getProperty("votante.station.id", "windows");
+        String auxsid = firstNonBlank(System.getProperty("votante.station.auxsid", ""),
+            System.getProperty("votante.windows.auxsid", ""));
         DidacticWindowsVoterServer.AppConfig config = DidacticWindowsVoterServer.loadConfig(
-                "127.0.0.1",
-                "127.0.0.1",
-                Integer.parseInt(System.getProperty("votante.windows.smokePort", "8790")),
-                System.getProperty("votante.windows.serviceBaseUrl", ""),
+            stationId,
+            firstNonBlank(System.getProperty("votante.station.bindHost", ""), "127.0.0.1"),
+            firstNonBlank(System.getProperty("votante.station.publicHost", ""), "127.0.0.1"),
+            Integer.parseInt(firstNonBlank(System.getProperty("votante.station.smokePort", ""),
+                System.getProperty("votante.windows.smokePort", "8790"))),
+            firstNonBlank(System.getProperty("votante.station.serviceBaseUrl", ""),
+                System.getProperty("votante.windows.serviceBaseUrl", "")),
                 auxsid
         );
 
@@ -79,5 +84,12 @@ final class DidacticWindowsVoterSmokeTest {
             builder.GET();
         }
         return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString()).body();
+    }
+
+    private static String firstNonBlank(String preferred, String fallback) {
+        if (preferred != null && !preferred.isBlank()) {
+            return preferred;
+        }
+        return fallback == null ? "" : fallback;
     }
 }

@@ -66,3 +66,5 @@ android/.cxx/
 workflow/votante/windows/runtime/
 workflow/votante/windows/remote-publicKey.bin
 workflow/votante/windows/tmp-ciphertexts-ext.txt
+workflow/votante/macos/runtime/
+workflow/votante/ios/runtime/
