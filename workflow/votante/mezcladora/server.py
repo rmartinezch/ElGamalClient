@@ -35,6 +35,7 @@ PROCESS_REGISTRY: dict[tuple[str, str, int], subprocess.Popen[str]] = {}
 
 TEST_MODE = os.environ.get("VERIFICATUM_GUI_TESTMODE", "").lower() in {"1", "true", "yes"}
 CLEAN_START = os.environ.get("VERIFICATUM_GUI_CLEAN_START", "").lower() in {"1", "true", "yes"}
+COMMAND_TIMEOUT_SECONDS = int(os.environ.get("VERIFICATUM_GUI_COMMAND_TIMEOUT", "120"))
 
 UI_HOST = "127.0.0.1"
 BIND_HOST = "0.0.0.0"
@@ -248,14 +249,23 @@ def run_with_safe_hostname(command: str, hostname_seed: str | None = None) -> st
     return f"unshare --user --map-root-user --uts bash -lc {shlex.quote(inner)}"
 
 
-def run_checked(command: str, cwd: Path, session_dir: Path) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        ["bash", "-lc", command],
-        cwd=str(cwd),
-        env=common_env(session_dir),
-        text=True,
-        capture_output=True,
-    )
+def run_checked(command: str, cwd: Path, session_dir: Path,
+                timeout_seconds: int | None = None) -> subprocess.CompletedProcess[str]:
+    effective_timeout = COMMAND_TIMEOUT_SECONDS if timeout_seconds is None else timeout_seconds
+    try:
+        result = subprocess.run(
+            ["bash", "-lc", command],
+            cwd=str(cwd),
+            env=common_env(session_dir),
+            text=True,
+            capture_output=True,
+            timeout=effective_timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"Comando excedió {effective_timeout}s en {cwd}:\n{command}\n\n"
+            f"STDOUT:\n{exc.stdout or ''}\n\nSTDERR:\n{exc.stderr or ''}"
+        ) from exc
     if result.returncode != 0:
         raise RuntimeError(
             f"Comando falló en {cwd}:\n{command}\n\nSTDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}"
@@ -1671,12 +1681,22 @@ def upload_ciphertexts(payload: dict) -> dict:
     slots = slot_paths(session, resolved_auxsid)
     width = int(payload.get("width", session["width"]))
     session_dir = Path(session["session_dir"])
+    validation_host = session.get("host") or None
 
     ciphertexts = payload.get("ciphertexts")
     ciphertexts_b64 = payload.get("ciphertexts_b64")
     ciphertexts_ext = payload.get("ciphertexts_ext")
     ciphertexts_ext_b64 = payload.get("ciphertexts_ext_b64")
     data_format = (payload.get("format") or ("native" if ciphertexts_ext is not None or ciphertexts_ext_b64 is not None else "native")).strip().lower()
+
+    append_event(
+        session_dir,
+        "Recepción API /api/ciphertexts:"
+        f" station_id={handshake_station_id or 'n/d'}"
+        f" requested_auxsid={requested_auxsid}"
+        f" resolved_auxsid={resolved_auxsid}"
+        f" format={data_format}",
+    )
 
     if not any([ciphertexts, ciphertexts_b64, ciphertexts_ext, ciphertexts_ext_b64]):
         raise RuntimeError("Debe enviar 'ciphertexts' o 'ciphertexts_ext' en el cuerpo JSON.")
@@ -1717,12 +1737,18 @@ def upload_ciphertexts(payload: dict) -> dict:
                 validated_files.append(str(temp_raw))
             else:
                 try:
-                    run_checked(
+                    append_event(session_dir, f"Validando ciphertexts nativos para AuxSID {resolved_auxsid} con vmnc en party01.")
+                    command = run_with_safe_hostname(
                         f"vmnc -ciphs -sloppy -ini native -width {width} protInfo.xml {temp_native.name} {temp_raw.name}",
+                        validation_host,
+                    )
+                    run_checked(
+                        command,
                         party1_dir,
                         session_dir,
                     )
                 except Exception as exc:  # noqa: BLE001
+                    append_event(session_dir, f"Fallo validando ciphertexts nativos para AuxSID {resolved_auxsid}: {exc}")
                     raise RuntimeError(
                         "Los votos cifrados recibidos por la API no son validos en formato native. "
                         "El endpoint rechazo la carga antes de replicarla."
@@ -1739,12 +1765,18 @@ def upload_ciphertexts(payload: dict) -> dict:
                 validated_files.append(str(temp_native))
             else:
                 try:
-                    run_checked(
+                    append_event(session_dir, f"Validando ciphertexts raw para AuxSID {resolved_auxsid} con vmnc en party01.")
+                    command = run_with_safe_hostname(
                         f"vmnc -ciphs -sloppy -outi native -width {width} protInfo.xml {temp_raw.name} {temp_native.name}",
+                        validation_host,
+                    )
+                    run_checked(
+                        command,
                         party1_dir,
                         session_dir,
                     )
                 except Exception as exc:  # noqa: BLE001
+                    append_event(session_dir, f"Fallo validando ciphertexts raw para AuxSID {resolved_auxsid}: {exc}")
                     raise RuntimeError(
                         "Los ciphertexts recibidos por la API no tienen un formato válido para Verificatum. "
                         "Si está enviando datos nativos, use 'format': 'native' o el campo 'ciphertexts_ext'. "

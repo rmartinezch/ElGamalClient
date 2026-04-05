@@ -68,3 +68,7 @@ workflow/votante/windows/remote-publicKey.bin
 workflow/votante/windows/tmp-ciphertexts-ext.txt
 workflow/votante/macos/runtime/
 workflow/votante/ios/runtime/
+workflow/votante/ios-live/runtime/
+workflow/votante/ios-autoprueba/runtime/
+workflow/votante/macos-autoprueba/runtime/
+platform/ios/.mvn/local-repo/

@@ -1,0 +1,260 @@
+{
+  "schemaVersion": "1.0.0-test",
+  "catalogMode": "demo",
+  "description": "Catalogo base para pruebas didacticas del flujo votante -> cifrador -> servicio externo -> Verificatum.",
+  "encoding": {
+    "lineLength": 10,
+    "fieldLength": 2,
+    "fieldOrder": ["EN", "ED", "PP", "PV1", "PV2"],
+    "fillerCode": "00",
+    "allowedPattern": "^[0-9]{10}$",
+    "bundleOrder": ["01", "02", "03", "04", "05"],
+    "expectedBundleSize": 5
+  },
+  "fields": {
+    "EN": {
+      "label": "Election Number",
+      "positions": [1, 2],
+      "type": "enum",
+      "values": {
+        "01": "Presidencial",
+        "02": "Senadores nacionales",
+        "03": "Senadores regionales",
+        "04": "Diputados regionales",
+        "05": "Parlamento Andino"
+      }
+    },
+    "ED": {
+      "label": "Electoral District",
+      "positions": [3, 4],
+      "type": "range",
+      "source": "padron_sesion",
+      "fillerWhenNotApplicable": "00",
+      "allowedRange": {
+        "from": "01",
+        "to": "27"
+      }
+    },
+    "PP": {
+      "label": "Political Party",
+      "positions": [5, 6],
+      "type": "range",
+      "allowedRange": {
+        "from": "01",
+        "to": "40"
+      }
+    },
+    "PV1": {
+      "label": "Preferential Vote 1",
+      "positions": [7, 8],
+      "type": "range_or_filler",
+      "fillerWhenNotApplicable": "00",
+      "allowedRange": {
+        "from": "01",
+        "to": "50"
+      }
+    },
+    "PV2": {
+      "label": "Preferential Vote 2",
+      "positions": [9, 10],
+      "type": "range_or_filler",
+      "fillerWhenNotApplicable": "00",
+      "allowedRange": {
+        "from": "01",
+        "to": "50"
+      }
+    }
+  },
+  "partyCatalog": {
+    "01": {"emoji": "🌳", "name": "Alianza del Sol"},
+    "02": {"emoji": "⭐", "name": "Renovacion Andina"},
+    "03": {"emoji": "🔵", "name": "Union Popular Costera"},
+    "04": {"emoji": "🟢", "name": "Frente Verde Nacional"},
+    "05": {"emoji": "🔴", "name": "Camino Republicano"},
+    "06": {"emoji": "🟠", "name": "Horizonte de los Pueblos"},
+    "07": {"emoji": "🟡", "name": "Pacto Ciudadano"},
+    "08": {"emoji": "🟣", "name": "Movimiento Nueva Sierra"},
+    "09": {"emoji": "⚪", "name": "Concertacion del Pacifico"},
+    "10": {"emoji": "🟤", "name": "Fuerza del Centro"},
+    "11": {"emoji": "🏛️", "name": "Acuerdo por la Republica"},
+    "12": {"emoji": "🕊️", "name": "Partido del Maiz"},
+    "13": {"emoji": "🌳", "name": "Convergencia Metropolitana"},
+    "14": {"emoji": "⭐", "name": "Vocacion Regional"},
+    "15": {"emoji": "🔵", "name": "Avance Productivo"},
+    "16": {"emoji": "🟢", "name": "Unidad de la Costa"},
+    "17": {"emoji": "🔴", "name": "Raices del Peru"},
+    "18": {"emoji": "🟠", "name": "Compromiso Federal"},
+    "19": {"emoji": "🟡", "name": "Voluntad del Sur"},
+    "20": {"emoji": "🟣", "name": "Accion Democratica Social"},
+    "21": {"emoji": "⚪", "name": "Rumbo Andino"},
+    "22": {"emoji": "🟤", "name": "Esperanza Popular"},
+    "23": {"emoji": "🏛️", "name": "Partido del Encuentro"},
+    "24": {"emoji": "🕊️", "name": "Nueva Generacion Republicana"},
+    "25": {"emoji": "🌳", "name": "Frente de Integracion Nacional"},
+    "26": {"emoji": "⭐", "name": "Movimiento del Valle"},
+    "27": {"emoji": "🔵", "name": "Peru del Futuro"},
+    "28": {"emoji": "🟢", "name": "Voz del Interior"},
+    "29": {"emoji": "🔴", "name": "Orden y Desarrollo"},
+    "30": {"emoji": "🟠", "name": "Agenda Regional Unida"},
+    "31": {"emoji": "🟡", "name": "Coalicion del Trabajo"},
+    "32": {"emoji": "🟣", "name": "Democracia Cercana"},
+    "33": {"emoji": "⚪", "name": "Primero la Ciudadania"},
+    "34": {"emoji": "🟤", "name": "Juntos por el Centro"},
+    "35": {"emoji": "🏛️", "name": "Partido del Litoral"},
+    "36": {"emoji": "🕊️", "name": "Red de la Montaña"},
+    "37": {"emoji": "🌳", "name": "Alianza de las Provincias"},
+    "38": {"emoji": "⭐", "name": "Impulso Republicano"},
+    "39": {"emoji": "🔵", "name": "Movimiento Horizonte Azul"},
+    "40": {"emoji": "🟢", "name": "Union por la Libertad"}
+  },
+  "candidateCatalog": {
+    "01": {"name": "Alma Quispe Rojas"},
+    "02": {"name": "Bruno Salazar Paredes"},
+    "03": {"name": "Cielo Huaman Flores"},
+    "04": {"name": "Dario Campos Neyra"},
+    "05": {"name": "Elisa Tacuri Mendoza"},
+    "06": {"name": "Fabian Rojas Cardenas"},
+    "07": {"name": "Gabriela Soto Llerena"},
+    "08": {"name": "Hector Poma Medina"},
+    "09": {"name": "Ines Cueva Arce"},
+    "10": {"name": "Jorge Yupanqui Rios"},
+    "11": {"name": "Karla Beltran Torres"},
+    "12": {"name": "Luciano Vera Ponce"},
+    "13": {"name": "Mariela Ochoa Arias"},
+    "14": {"name": "Nestor Abarca Rojas"},
+    "15": {"name": "Olga Paredes Lazo"},
+    "16": {"name": "Paolo Cusi Montalvo"},
+    "17": {"name": "Querubin Silva Paz"},
+    "18": {"name": "Rocio Huarcaya Leon"},
+    "19": {"name": "Samuel Vivanco Huerta"},
+    "20": {"name": "Teresa Cayo Palomino"},
+    "21": {"name": "Ulises Huerta Porras"},
+    "22": {"name": "Valeria Chacon Sosa"},
+    "23": {"name": "Walter Alanya Rivas"},
+    "24": {"name": "Ximena Luque Prieto"},
+    "25": {"name": "Yuri Ramos Carbajal"},
+    "26": {"name": "Zulema Peralta Ruiz"},
+    "27": {"name": "Adrian Salinas Soto"},
+    "28": {"name": "Bianca Tello Rosas"},
+    "29": {"name": "Cristian Mendiola Cruz"},
+    "30": {"name": "Daniela Huaman Gutierrez"},
+    "31": {"name": "Edgar Lozano Cueva"},
+    "32": {"name": "Fiorella Poma Villanueva"},
+    "33": {"name": "Gerardo Cardenas Rojas"},
+    "34": {"name": "Helena Chero Arana"},
+    "35": {"name": "Ivan Tineo Vargas"},
+    "36": {"name": "Jimena Pacheco Saldaña"},
+    "37": {"name": "Kevin Galvez Loayza"},
+    "38": {"name": "Lorena Zuñiga Pastor"},
+    "39": {"name": "Mauricio Loarte Calderon"},
+    "40": {"name": "Nadia Paredes Saenz"},
+    "41": {"name": "Oscar Quinto Almonte"},
+    "42": {"name": "Patricia Carpio Ureta"},
+    "43": {"name": "Renato Chavez Jara"},
+    "44": {"name": "Sonia Valdivia Prado"},
+    "45": {"name": "Tomas Arana Quinteros"},
+    "46": {"name": "Ursula Mego Farfan"},
+    "47": {"name": "Victor Quisbert Tapia"},
+    "48": {"name": "Wendy Millares Gamarra"},
+    "49": {"name": "Yessenia Reategui Pineda"},
+    "50": {"name": "Zacarías Quispe Tume"}
+  },
+  "reservedCodes": {
+    "notApplicable": "00",
+    "blankProposal": "98",
+    "nullProposal": "99"
+  },
+  "elections": [
+    {
+      "code": "01",
+      "slug": "presidencial",
+      "label": "Eleccion presidencial",
+      "uiOrder": 1,
+      "pattern": "01 00 PP 00 00",
+      "requiredFields": ["EN", "PP"],
+      "nonApplicableFields": ["ED", "PV1", "PV2"],
+      "preferentialVoteCount": 0
+    },
+    {
+      "code": "02",
+      "slug": "senadores_nacionales",
+      "label": "Eleccion de senadores nacionales",
+      "uiOrder": 2,
+      "pattern": "02 00 PP PV1 PV2",
+      "requiredFields": ["EN", "PP"],
+      "optionalFields": ["PV1", "PV2"],
+      "nonApplicableFields": ["ED"],
+      "preferentialVoteCount": 2
+    },
+    {
+      "code": "03",
+      "slug": "senadores_regionales",
+      "label": "Eleccion de senadores regionales",
+      "uiOrder": 3,
+      "pattern": "03 ED PP PV1 00",
+      "requiredFields": ["EN", "ED", "PP"],
+      "optionalFields": ["PV1"],
+      "nonApplicableFields": ["PV2"],
+      "preferentialVoteCount": 1,
+      "requiresDistrictContext": true
+    },
+    {
+      "code": "04",
+      "slug": "diputados_regionales",
+      "label": "Eleccion de diputados regionales",
+      "uiOrder": 4,
+      "pattern": "04 ED PP PV1 PV2",
+      "requiredFields": ["EN", "ED", "PP"],
+      "optionalFields": ["PV1", "PV2"],
+      "preferentialVoteCount": 2,
+      "requiresDistrictContext": true
+    },
+    {
+      "code": "05",
+      "slug": "parlamento_andino",
+      "label": "Eleccion de Parlamento Andino",
+      "uiOrder": 5,
+      "pattern": "05 00 PP PV1 PV2",
+      "requiredFields": ["EN", "PP"],
+      "optionalFields": ["PV1", "PV2"],
+      "nonApplicableFields": ["ED"],
+      "preferentialVoteCount": 2
+    }
+  ],
+  "uiRules": {
+    "districtIsDerived": true,
+    "districtManualEntryAllowedOnlyInContingencyMode": true,
+    "preventDuplicatePreferentialVotes": true,
+    "hideNonApplicableFields": true,
+    "showOnlyDistrictScopedOptionsForRegionalElections": true
+  },
+  "demoSamples": {
+    "validBundle": [
+      "0100030000",
+      "0200040102",
+      "0302040100",
+      "0402030104",
+      "0500050304"
+    ],
+    "validSingleVote": "0402030104",
+    "invalidExamples": [
+      {
+        "line": "0102030000",
+        "reason": "Presidencial no debe usar ED."
+      },
+      {
+        "line": "0302040104",
+        "reason": "Senadores regionales no debe usar PV2."
+      },
+      {
+        "line": "0402030202",
+        "reason": "PV1 y PV2 no deben repetir candidato."
+      }
+    ]
+  },
+  "notes": [
+    "Este catalogo es para pruebas y demostracion.",
+    "Los partidos, candidatos y distritos reales deben provenir de fuentes oficiales.",
+    "Los codigos 98 y 99 son solo propuesta y deben validarse antes de uso real."
+  ]
+}
