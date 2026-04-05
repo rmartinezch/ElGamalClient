@@ -9,6 +9,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
@@ -30,7 +31,6 @@ public class IOSVoterBridge {
     private static final int VERIFICATUM_WIDTH = 1;
     private static final String SCHEMA_VERSION = "1.0.0-test";
     private static final int TIMEOUT_MS = 15000;
-
     private final IOSCipherRunner cipherRunner;
     private final IOSMixerLeaseCoordinator mixerCoordinator;
     private WebEngine webEngine;
@@ -71,7 +71,7 @@ public class IOSVoterBridge {
                         Map<String, String> form = parseForm(body);
                         BallotBundle bundle = buildBundle(form);
                         String preferredAuxsid = firstNonBlank(form.get("auxsid"), "");
-                        yield submitBundle(bundle, preferredAuxsid);
+                        yield submitBundle(form, bundle, preferredAuxsid);
                     }
                     default -> errorJson(404, "NotFound", "Ruta no soportada: " + path);
                 };
@@ -142,13 +142,14 @@ public class IOSVoterBridge {
         return payload.build();
     }
 
-    private String submitBundle(BallotBundle bundle, String preferredAuxsid) throws Exception {
+    private String submitBundle(Map<String, String> form, BallotBundle bundle, String preferredAuxsid) throws Exception {
         String runId = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").format(LocalDateTime.now())
                 + "-" + UUID.randomUUID().toString().substring(0, 8);
         File submissionDir = new File(cipherRunner.getDataDir(), "voter-submissions/" + runId);
         submissionDir.mkdirs();
         List<String> events = new ArrayList<>();
         events.add(event("Inicio de emision. runId=" + runId));
+        persistString(new File(submissionDir, "request-form.txt"), encodeFormPayload(form));
 
         IOSMixerLeaseCoordinator.LeaseContext lease = mixerCoordinator.ensureLease(preferredAuxsid);
         String resolvedAuxsid = lease.auxsid();
@@ -175,61 +176,82 @@ public class IOSVoterBridge {
         File votesFile = cipherRunner.currentVotesFile();
         votesFile.getParentFile().mkdirs();
         Files.writeString(votesFile.toPath(), bundle.bundleText(), StandardCharsets.UTF_8);
-        events.add(event("Cedula canonica validada y serializada en plain_votes.txt"));
-        events.add(event("Invocando cifrador desacoplado del ejecutable."));
-
-        IOSCipherRunner.CipherResult cipherResult = cipherRunner.encryptSandboxInputs(CifradorRngMode.SOFTWARE);
-        events.add(event("Proceso de cifrado finalizado. exitCode=" + (cipherResult.success() ? 0 : 1)));
-        if (!cipherResult.success()) {
-            throw new IllegalStateException("No se genero ciphertexts_ext. runId=" + runId);
-        }
-
-        String ciphertextsText = Files.readString(cipherResult.outputFile().toPath(), StandardCharsets.UTF_8);
-        int ciphertextCount = countNonBlankLines(ciphertextsText);
-        events.add(event("Voto cifrado generado. registros=" + ciphertextCount));
-
-        String postPayload = jsonObject()
-                .put("station_id", lease.stationId())
-                .put("lease_id", lease.leaseId())
-                .put("auxsid", resolvedAuxsid)
-                .put("format", "native")
-                .put("ciphertexts_ext", ciphertextsText)
-                .put("width", VERIFICATUM_WIDTH)
-                .putIf(serviceSessionId, "session_id", serviceSessionId)
-                .putIf(serviceSessionName, "session_name", serviceSessionName)
-                .build();
-
-        events.add(event("POST " + serviceBaseUrl + "/api/ciphertexts"));
-        events.add(event("Remitiendo ciphertexts_ext al servicio remoto con format=native."));
-
-        String receiptRaw = httpPostJson(serviceBaseUrl + "/api/ciphertexts", postPayload);
-        boolean receiptAccepted = receiptRaw.contains("\"ok\":true") || receiptRaw.contains("\"ok\": true");
-        events.add(event("Servicio remoto respondio ok=" + receiptAccepted + " auxsid=" + resolvedAuxsid));
-
         copyFile(publicKeyFile, new File(submissionDir, "publicKey"));
         copyFile(votesFile, new File(submissionDir, "plain_votes.txt"));
-        copyFile(cipherResult.outputFile(), new File(submissionDir, "ciphertexts_ext"));
-        Files.writeString(new File(submissionDir, "receipt.json").toPath(), receiptRaw, StandardCharsets.UTF_8);
+        events.add(event("Cedula canonica validada y serializada en plain_votes.txt"));
+        events.add(event("Invocando cifrador desacoplado del ejecutable."));
+        persistEmissionContext(submissionDir, lease, serviceBaseUrl, serviceSessionId, serviceSessionName,
+                serviceSessionLabel, resolvedAuxsid);
 
-        return jsonObject()
-                .put("runId", runId)
-                .put("auxsid", resolvedAuxsid)
-                .put("serviceResolvedAuxsid", resolvedAuxsid)
-                .put("serviceSessionId", serviceSessionId)
-                .put("serviceSessionName", serviceSessionName)
-                .put("serviceSessionLabel", serviceSessionLabel)
-                .put("serviceAccumulated", false)
-                .put("serviceAccumulatedFromAuxsid", "")
-                .put("receiptAccepted", receiptAccepted)
-                .put("submissionDir", submissionDir.getAbsolutePath())
-                .put("receiptRaw", receiptRaw)
-                .putJsonArray("events", events)
-                .put("monitorText", String.join("\n", events))
-                .put("width", VERIFICATUM_WIDTH)
-                .put("publicKeyFormat", "native")
-                .put("ciphertextsFormat", "native")
-                .put("voteSchemaVersion", SCHEMA_VERSION)
-                .build();
+        IOSCipherRunner.CipherResult cipherResult = null;
+        try {
+            cipherResult = cipherRunner.encryptSandboxInputs(CifradorRngMode.SOFTWARE);
+            events.add(event("Proceso de cifrado finalizado. exitCode=" + (cipherResult.success() ? 0 : 1)));
+            copyFile(cipherResult.logFile(), new File(submissionDir, "ios-cifrador.log"));
+            if (!cipherResult.success()) {
+                throw new IllegalStateException("No se genero ciphertexts_ext. runId=" + runId
+                        + " logFile=" + cipherResult.logFile().getAbsolutePath());
+            }
+
+            String ciphertextsText = Files.readString(cipherResult.outputFile().toPath(), StandardCharsets.UTF_8);
+            int ciphertextCount = countNonBlankLines(ciphertextsText);
+            events.add(event("Voto cifrado generado. registros=" + ciphertextCount));
+
+            String postPayload = jsonObject()
+                    .put("station_id", lease.stationId())
+                    .put("lease_id", lease.leaseId())
+                    .put("auxsid", resolvedAuxsid)
+                    .put("format", "native")
+                    .put("ciphertexts_ext", ciphertextsText)
+                    .put("width", VERIFICATUM_WIDTH)
+                    .putIf(serviceSessionId, "session_id", serviceSessionId)
+                    .putIf(serviceSessionName, "session_name", serviceSessionName)
+                    .build();
+
+            events.add(event("POST " + serviceBaseUrl + "/api/ciphertexts"));
+            events.add(event("Remitiendo ciphertexts_ext al servicio remoto con format=native."));
+
+            String receiptRaw = httpPostJson(serviceBaseUrl + "/api/ciphertexts", postPayload);
+            boolean receiptAccepted = receiptRaw.contains("\"ok\":true") || receiptRaw.contains("\"ok\": true");
+            events.add(event("Servicio remoto respondio ok=" + receiptAccepted + " auxsid=" + resolvedAuxsid));
+
+            copyFile(cipherResult.outputFile(), new File(submissionDir, "ciphertexts_ext"));
+            Files.writeString(new File(submissionDir, "receipt.json").toPath(), receiptRaw, StandardCharsets.UTF_8);
+            persistMonitor(submissionDir, events);
+
+            return jsonObject()
+                    .put("runId", runId)
+                    .put("auxsid", resolvedAuxsid)
+                    .put("serviceResolvedAuxsid", resolvedAuxsid)
+                    .put("serviceSessionId", serviceSessionId)
+                    .put("serviceSessionName", serviceSessionName)
+                    .put("serviceSessionLabel", serviceSessionLabel)
+                    .put("serviceAccumulated", false)
+                    .put("serviceAccumulatedFromAuxsid", "")
+                    .put("receiptAccepted", receiptAccepted)
+                    .put("submissionDir", submissionDir.getAbsolutePath())
+                    .put("receiptRaw", receiptRaw)
+                    .putJsonArray("events", events)
+                    .put("monitorText", String.join("\n", events))
+                    .put("width", VERIFICATUM_WIDTH)
+                    .put("publicKeyFormat", "native")
+                    .put("ciphertextsFormat", "native")
+                    .put("voteSchemaVersion", SCHEMA_VERSION)
+                    .build();
+        } catch (Exception nativeFailure) {
+            if (cipherResult != null) {
+                copyFile(cipherResult.logFile(), new File(submissionDir, "ios-cifrador.log"));
+            }
+            events.add(event("Fallo en emision nativa: " + nativeFailure.getClass().getSimpleName()
+                    + ": " + firstNonBlank(nativeFailure.getMessage(), "sin detalle")));
+            persistFailure(submissionDir, events, nativeFailure);
+            String fallbackResponse = trySimulatorBridgeFallback(form, submissionDir, events, nativeFailure);
+            if (fallbackResponse != null) {
+                persistMonitor(submissionDir, events);
+                return fallbackResponse;
+            }
+            throw nativeFailure;
+        }
     }
 
     private JsonBuilder configPayload() {
@@ -356,6 +378,110 @@ public class IOSVoterBridge {
         return body;
     }
 
+    private String httpPostForm(String urlStr, String payload) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) new URL(urlStr).openConnection();
+        connection.setRequestMethod("POST");
+        connection.setDoOutput(true);
+        connection.setConnectTimeout(TIMEOUT_MS);
+        connection.setReadTimeout(TIMEOUT_MS);
+        connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
+        try (OutputStream os = connection.getOutputStream()) {
+            os.write(payload.getBytes(StandardCharsets.UTF_8));
+        }
+        int status = connection.getResponseCode();
+        InputStream stream = (status >= 200 && status < 300)
+                ? connection.getInputStream() : connection.getErrorStream();
+        String body = stream != null ? new String(stream.readAllBytes(), StandardCharsets.UTF_8) : "";
+        if (status < 200 || status >= 300) {
+            throw new IOException("HTTP " + status + " " + body.substring(0, Math.min(240, body.length())));
+        }
+        return body;
+    }
+
+    private String trySimulatorBridgeFallback(Map<String, String> form,
+                                              File submissionDir,
+                                              List<String> events,
+                                              Exception nativeFailure) {
+        String bridgeBaseUrl = trimTrailingSlash(
+                System.getProperty("votante.ios.bridgeFallbackBaseUrl", ""));
+        if (bridgeBaseUrl.isBlank()) {
+            return null;
+        }
+        try {
+            String payload = encodeFormPayload(form);
+            events.add(event("Intentando fallback via bridge macOS en " + bridgeBaseUrl));
+            events.add(event("Motivo fallback: " + nativeFailure.getClass().getSimpleName()
+                    + ": " + firstNonBlank(nativeFailure.getMessage(), "sin detalle")));
+            String response = httpPostForm(bridgeBaseUrl + "/api/ballot/submit", payload);
+            persistString(new File(submissionDir, "bridge-fallback-response.json"), response);
+            events.add(event("Bridge macOS respondio correctamente."));
+            return response;
+        } catch (Exception bridgeFailure) {
+            events.add(event("Fallback bridge fallo: " + bridgeFailure.getClass().getSimpleName()
+                    + ": " + firstNonBlank(bridgeFailure.getMessage(), "sin detalle")));
+            persistString(new File(submissionDir, "bridge-fallback-error.txt"),
+                    bridgeFailure.getClass().getName() + ": "
+                            + firstNonBlank(bridgeFailure.getMessage(), "sin detalle"));
+            return null;
+        }
+    }
+
+    private String encodeFormPayload(Map<String, String> form) {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (Map.Entry<String, String> entry : form.entrySet()) {
+            if (!first) {
+                sb.append("&");
+            }
+            sb.append(URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8));
+            sb.append("=");
+            sb.append(URLEncoder.encode(entry.getValue() == null ? "" : entry.getValue(), StandardCharsets.UTF_8));
+            first = false;
+        }
+        return sb.toString();
+    }
+
+    private void persistEmissionContext(File submissionDir,
+                                        IOSMixerLeaseCoordinator.LeaseContext lease,
+                                        String serviceBaseUrl,
+                                        String serviceSessionId,
+                                        String serviceSessionName,
+                                        String serviceSessionLabel,
+                                        String resolvedAuxsid) {
+        String payload = jsonObject()
+                .put("service_base_url", serviceBaseUrl)
+                .put("session_id", serviceSessionId)
+                .put("session_name", serviceSessionName)
+                .put("session_label", serviceSessionLabel)
+                .put("requested_auxsid", lease.requestedAuxsid())
+                .put("resolved_auxsid", resolvedAuxsid)
+                .put("lease_id", lease.leaseId())
+                .put("station_id", lease.stationId())
+                .build();
+        persistString(new File(submissionDir, "emission-context.json"), payload);
+    }
+
+    private void persistFailure(File submissionDir, List<String> events, Exception failure) {
+        persistString(new File(submissionDir, "native-failure.txt"),
+                failure.getClass().getName() + ": " + firstNonBlank(failure.getMessage(), "sin detalle"));
+        persistMonitor(submissionDir, events);
+    }
+
+    private void persistMonitor(File submissionDir, List<String> events) {
+        persistString(new File(submissionDir, "monitor.log"), String.join("\n", events) + "\n");
+    }
+
+    private void persistString(File target, String value) {
+        try {
+            File parent = target.getParentFile();
+            if (parent != null) {
+                parent.mkdirs();
+            }
+            Files.writeString(target.toPath(), value == null ? "" : value, StandardCharsets.UTF_8);
+        } catch (IOException ignored) {
+        }
+    }
+
     private int countNonBlankLines(String value) {
         return (int) value.replace("\r", "").lines().filter(l -> !l.isBlank()).count();
     }
@@ -391,6 +517,17 @@ public class IOSVoterBridge {
         if (preferred != null && !preferred.isBlank()) return preferred.trim();
         if (fallback != null && !fallback.isBlank()) return fallback.trim();
         return "";
+    }
+
+    static String trimTrailingSlash(String value) {
+        if (value == null) {
+            return "";
+        }
+        String trimmed = value.trim();
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 
     record BallotBundle(String districtCode, List<String> lines) {

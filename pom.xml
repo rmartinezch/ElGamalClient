@@ -10,7 +10,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>21</maven.compiler.release>
+        <maven.compiler.release>17</maven.compiler.release>
     </properties>
 
     <repositories>
@@ -26,18 +26,8 @@
         <!-- Dependencias de Verificatum -->
         <dependency>
             <groupId>com.verificatum</groupId>
-            <artifactId>verificatum-vcr-vmgj-vecj</artifactId>
+            <artifactId>verificatum-vcr</artifactId>
             <version>3.1.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.verificatum</groupId>
-            <artifactId>verificatum-vmgj</artifactId>
-            <version>1.3.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.verificatum</groupId>
-            <artifactId>verificatum-vecj</artifactId>
-            <version>2.2.0</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

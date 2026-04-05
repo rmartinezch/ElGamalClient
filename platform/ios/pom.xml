@@ -65,23 +65,27 @@
             <groupId>pe.gob.onpe.votodigital</groupId>
             <artifactId>ElGamalCipher</artifactId>
             <version>1.1.0</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.verificatum</groupId>
+                    <artifactId>verificatum-vcr-vmgj-vecj</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.verificatum</groupId>
+                    <artifactId>verificatum-vmgj</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.verificatum</groupId>
+                    <artifactId>verificatum-vecj</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Verificatum -->
         <dependency>
             <groupId>com.verificatum</groupId>
-            <artifactId>verificatum-vcr-vmgj-vecj</artifactId>
+            <artifactId>verificatum-vcr</artifactId>
             <version>3.1.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.verificatum</groupId>
-            <artifactId>verificatum-vmgj</artifactId>
-            <version>1.3.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.verificatum</groupId>
-            <artifactId>verificatum-vecj</artifactId>
-            <version>2.2.0</version>
         </dependency>
     </dependencies>
 
@@ -130,11 +134,11 @@
                         <list>pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode</list>
                         <list>pe.gob.onpe.votodigital.elgamalcipher.PlatformRandomSource</list>
                         <list>pe.gob.onpe.votodigital.elgamalcipher.RandomSourceFactory</list>
+                        <list>com.verificatum.eio.Marshalizer</list>
+                        <list>com.verificatum.arithm.ECqPGroup</list>
+                        <list>com.verificatum.arithm.ModPGroup</list>
+                        <list>com.verificatum.arithm.PPGroup</list>
                     </reflectionList>
-                    <jniList>
-                        <list>com.verificatum.vecj.VEC</list>
-                        <list>com.verificatum.vmgj.VMG</list>
-                    </jniList>
                     <bundlesList>
                     </bundlesList>
                 </configuration>
