@@ -44,6 +44,7 @@ MAX_UI_PARTIES = 9
 SEQUENTIAL_ACTIONS = ("precomp", "shuffle", "decrypt", "verify")
 HANDSHAKE_TTL_SECONDS = int(os.environ.get("VERIFICATUM_GUI_HANDSHAKE_TTL", "90"))
 SERVER_IDENTITY: dict = {}
+UNSHARE_HOSTNAME_SUPPORTED: bool | None = None
 
 
 def now_iso() -> str:
@@ -241,8 +242,40 @@ def namespace_hostname(seed: str | None = None) -> str:
     return "localhost"
 
 
-def run_with_safe_hostname(command: str, hostname_seed: str | None = None) -> str:
+def supports_safe_hostname_namespace() -> bool:
+    global UNSHARE_HOSTNAME_SUPPORTED
+    if UNSHARE_HOSTNAME_SUPPORTED is not None:
+        return UNSHARE_HOSTNAME_SUPPORTED
     if shutil.which("unshare") is None:
+        UNSHARE_HOSTNAME_SUPPORTED = False
+        return False
+    try:
+        probe = subprocess.run(
+            ["unshare", "--user", "--map-root-user", "--uts", "bash", "-lc", "hostname localhost >/dev/null"],
+            text=True,
+            capture_output=True,
+        )
+    except OSError as exc:
+        append_global_event(
+            "Deshabilitando aislamiento con unshare para hostname: "
+            f"{exc}. Se ejecutará sin namespace UTS/usuario."
+        )
+        UNSHARE_HOSTNAME_SUPPORTED = False
+        return False
+    if probe.returncode == 0:
+        UNSHARE_HOSTNAME_SUPPORTED = True
+        return True
+    reason = (probe.stderr or probe.stdout).strip() or f"codigo de salida {probe.returncode}"
+    append_global_event(
+        "Deshabilitando aislamiento con unshare para hostname: "
+        f"{reason}. Se ejecutará sin namespace UTS/usuario."
+    )
+    UNSHARE_HOSTNAME_SUPPORTED = False
+    return False
+
+
+def run_with_safe_hostname(command: str, hostname_seed: str | None = None) -> str:
+    if not supports_safe_hostname_namespace():
         return command
     safe_hostname = namespace_hostname(hostname_seed)
     inner = f"hostname {shlex.quote(safe_hostname)} && exec bash -lc {shlex.quote(command)}"
