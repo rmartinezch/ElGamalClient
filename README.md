@@ -25,8 +25,9 @@ El repositorio contiene tanto el cifrador como libreria reusable como estaciones
 13. [Empaquetado Y Distribucion](#empaquetado-y-distribucion)
 14. [Pruebas Y Validaciones](#pruebas-y-validaciones)
 15. [Consumidores De Ejemplo En Este Repo](#consumidores-de-ejemplo-en-este-repo)
-16. [Resumen De Rendimiento](#resumen-de-rendimiento)
-17. [Historial Breve](#historial-breve)
+16. [Instalacion De La Mezcladora En Windows Con WSL](#instalacion-de-la-mezcladora-en-windows-con-wsl)
+17. [Resumen De Rendimiento](#resumen-de-rendimiento)
+18. [Historial Breve](#historial-breve)
 
 ## Resumen
 
@@ -755,6 +756,136 @@ Validaciones relevantes:
 
 - no hay una estacion de votacion Ubuntu en `workflow/`
 - Ubuntu se usa en este repositorio como entorno de ejecucion CLI, empaquetado y validacion tecnica del cifrador
+
+## Instalacion De La Mezcladora En Windows Con WSL
+
+La GUI de la mezcladora vive en `workflow/votante/mezcladora`, pero su ejecucion real esta pensada para un entorno tipo Ubuntu. En Windows, la forma recomendada es correrla dentro de `WSL` y publicar los puertos hacia Windows.
+
+### Requisitos
+
+- `WSL 2` habilitado en Windows
+- una distribucion Ubuntu instalada en WSL
+- `python3` disponible dentro de WSL
+- herramientas Verificatum instaladas dentro de WSL: `vmn`, `vmni`, `vmnc`, `vmnd`, `vog`
+
+### 1. Instalar WSL y Ubuntu en Windows
+
+En PowerShell como administrador:
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+Despues reinicie Windows si el sistema lo solicita y complete la creacion del usuario Linux.
+
+### 2. Entrar a Ubuntu y preparar paquetes base
+
+```powershell
+wsl -d Ubuntu
+```
+
+Ya dentro de Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip
+```
+
+Si Verificatum ya esta instalado en su WSL, basta con validar que los binarios respondan:
+
+```bash
+which vmn vmni vmnc vmnd vog
+python3 --version
+```
+
+#### Si Verificatum no existe en WSL
+
+Para un entorno de pruebas, puede usar la instalacion `online` de Verificatum dentro de WSL. Esta variante descarga el paquete `verificatum-vmn-3.1.0-full.tar.gz` y deja disponibles los comandos requeridos por la mezcladora.
+
+Instale primero las dependencias base:
+
+```bash
+sudo apt-get update
+sudo apt-get install --yes m4 cpp gcc make libtool automake autoconf libgmp-dev openjdk-21-jdk wget
+```
+
+Luego descargue e instale Verificatum:
+
+```bash
+cd ~
+wget https://github.com/rmartinezch/mixnet/raw/main/installer/verificatum-vmn-3.1.0-full.tar.gz
+mkdir -p verificatum-vmn-3.1.0-full
+tar xvfz verificatum-vmn-3.1.0-full.tar.gz -C verificatum-vmn-3.1.0-full
+cd verificatum-vmn-3.1.0-full
+sudo make install
+```
+
+Validacion recomendada:
+
+```bash
+vmn -version
+which vmn vmni vmnc vmnd vog vmnv
+vog -rndinit RandomDevice /dev/urandom
+```
+
+Notas:
+
+- esta ruta `online` es adecuada para laboratorio o pruebas en WSL
+- `openssh-server` no es necesario si la mezcladora se usara solo de forma local en la misma PC
+- si desea un flujo mas controlado, puede compilar Verificatum desde `native/verificatum-src/`, pero no es obligatorio para levantar la GUI en WSL
+
+### 3. Ir a la carpeta de la mezcladora desde WSL
+
+Si el repo esta en `D:\_Proyectos\cifradorM`, en WSL normalmente se vera asi:
+
+```bash
+cd /mnt/d/_Proyectos/cifradorM/workflow/votante/mezcladora
+```
+
+### 4. Iniciar la GUI de la mezcladora
+
+```bash
+./start_gui.sh
+```
+
+El script arranca `server.py` con `python3`, escucha por defecto en `0.0.0.0` y publica:
+
+- panel principal en `7040`
+- ventanas de `party` en `7041` a `7049`
+
+Si desea forzar host o puerto base:
+
+```bash
+HOST=0.0.0.0 PUBLIC_HOST=127.0.0.1 ./start_gui.sh
+./start_gui.sh 7140
+```
+
+### 5. Publicar los puertos de WSL hacia Windows
+
+Abra otra consola PowerShell como administrador y ejecute:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\workflow\votante\mezcladora\scripts\configure_windows_portproxy.ps1
+```
+
+Ese script crea reglas `portproxy` y firewall para reenviar `7040-7049` desde la IP principal de Windows hacia la IP actual de WSL.
+
+### 6. Abrir la mezcladora desde Windows
+
+Con la mezcladora ya levantada en WSL, abra en Windows:
+
+```text
+http://127.0.0.1:7040
+```
+
+Si va a usar otra maquina de la red local, puede abrirla con la IP principal de Windows que haya detectado el script de `portproxy`.
+
+### Notas utiles
+
+- si reinicia WSL, la IP interna puede cambiar; en ese caso vuelva a ejecutar `configure_windows_portproxy.ps1`
+- para una ejecucion local simple en la misma PC, normalmente basta con WSL + `start_gui.sh` + `portproxy`
+- las pruebas E2E de esta GUI usan `node` y `npm`, pero no son necesarias solo para operar la mezcladora
+- para mas detalle operativo de la GUI y su API REST, revise `workflow/votante/mezcladora/README.md`
 
 ## Resumen De Rendimiento
 
