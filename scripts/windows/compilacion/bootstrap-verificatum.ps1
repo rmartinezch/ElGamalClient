@@ -142,6 +142,7 @@ function Resolve-VmgjJarCandidates {
 
     $candidates = New-Object System.Collections.Generic.List[string]
     Add-Candidate -Target $candidates -Value (Join-Path $ProjectRoot ".mvn\local-repo\com\verificatum\verificatum-vmgj\1.3.0\verificatum-vmgj-1.3.0.jar")
+    Add-Candidate -Target $candidates -Value (Join-Path $ProjectRoot "native\verificatum-jars\com\verificatum\verificatum-vmgj\1.3.0\verificatum-vmgj-1.3.0.jar")
     Add-Candidate -Target $candidates -Value (Join-Path $ProjectRoot "native\verificatum-src\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar")
 
     foreach ($mixnetRoot in $MixnetRoots) {
