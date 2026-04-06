@@ -15,19 +15,18 @@ El repositorio contiene tanto el cifrador como libreria reusable como estaciones
 3. [Estado Actual](#estado-actual)
 4. [Estructura Del Repositorio](#estructura-del-repositorio)
 5. [Requisitos](#requisitos)
-6. [Bootstrap De Dependencias Verificatum](#bootstrap-de-dependencias-verificatum)
-7. [Artefactos Canonicos](#artefactos-canonicos)
-8. [Compilacion](#compilacion)
+6. [Ruta Minima En Windows 10 Y 11](#ruta-minima-en-windows-10-y-11)
+7. [Ruta Minima En Ubuntu](#ruta-minima-en-ubuntu)
+8. [Ruta Minima En Android](#ruta-minima-en-android)
 9. [Integracion Externa Como Libreria](#integracion-externa-como-libreria)
-10. [Uso Del Cifrador Desde CLI](#uso-del-cifrador-desde-cli)
-11. [RNG Y Soporte De Hardware](#rng-y-soporte-de-hardware)
-12. [Layout Nativo Y Carga De JNI](#layout-nativo-y-carga-de-jni)
-13. [Empaquetado Y Distribucion](#empaquetado-y-distribucion)
-14. [Pruebas Y Validaciones](#pruebas-y-validaciones)
-15. [Consumidores De Ejemplo En Este Repo](#consumidores-de-ejemplo-en-este-repo)
-16. [Instalacion De La Mezcladora En Windows Con WSL](#instalacion-de-la-mezcladora-en-windows-con-wsl)
-17. [Resumen De Rendimiento](#resumen-de-rendimiento)
-18. [Historial Breve](#historial-breve)
+10. [RNG Y Soporte De Hardware](#rng-y-soporte-de-hardware)
+11. [Layout Nativo Y Carga De JNI](#layout-nativo-y-carga-de-jni)
+12. [Empaquetado Y Distribucion](#empaquetado-y-distribucion)
+13. [Guia Rapida: Levantar Estaciones Y Mezcladora](#guia-rapida-levantar-estaciones-y-mezcladora)
+14. [Instalacion De La Mezcladora En Windows Con WSL](#instalacion-de-la-mezcladora-en-windows-con-wsl)
+15. [Resumen De Rendimiento](#resumen-de-rendimiento)
+16. [Historial Breve](#historial-breve)
+17. [Anexo: Bootstrap (solo si se necesita recompilar desde fuentes)](#anexo-bootstrap-solo-si-se-necesita-recompilar-desde-fuentes)
 
 ## Resumen
 
@@ -130,44 +129,167 @@ Requisitos adicionales por plataforma:
 - `Android`
   - Android SDK / Gradle para compilar el `AAR` o el consumidor Android
 
-### Convencion De Placeholders
+## Ruta Minima En Windows 10 Y 11
 
-Para evitar ambiguedades, en este documento se usan estos placeholders:
+Ruta unica recomendada para instalar, probar y desplegar en `Windows 10 y 11`:
 
-- `<PROJECT_ROOT>`: carpeta raiz del repo `ElGamalClient` en su maquina
-- `<MIXNET_ROOT>`: carpeta raiz que contiene fuentes Verificatum externas
-- `<APP_JAR>`: artefacto JAR de la aplicacion consumidora
-- `<PUBLIC_KEY_PATH>`: ruta del archivo `publicKey`
-- `<PLAINTEXT_VOTES_PATH>`: ruta del archivo de votos planos
-- `<CIPHERTEXT_OUTPUT_PATH>`: ruta de salida para `ciphertexts_ext`
+- use `PowerShell`
+- en la primera ejecucion, abra PowerShell como administrador
+- mantenga acceso a Internet para instalar `Git`, `Java 21`, `Maven Wrapper` y `MSYS2 UCRT64`
 
-### Shell Y Classpath Por Plataforma
+Instalacion minima de dependencias y descarga del repo:
 
-| Plataforma | Shell recomendado | Separador de classpath |
-| --- | --- | --- |
-| Windows | PowerShell | `;` |
-| Ubuntu/Linux | Bash | `:` |
-| Android | Gradle/AGP | No aplica |
+Comprobacion minima de `winget`:
 
-## Bootstrap De Dependencias Verificatum
-
-Las dependencias `com.verificatum` no viven en Maven Central.
-
-### Proyecto autocontenido (desde marzo 2026)
-
-El proyecto ahora incluye los JARs precompilados de Verificatum en `native/verificatum-jars/`,
-organizados como un repositorio Maven file-based. Tanto `pom.xml` (Maven) como
-`platform/android/settings.gradle` (Gradle) apuntan a este directorio.
-
-**Ya no es necesario ejecutar el bootstrap para compilar.** Despues de clonar:
-
-```bash
-# Ubuntu/Linux
-./mvnw clean package
-
-# Windows (sin necesidad de instalar Maven)
-mvnw.cmd clean package
+```powershell
+Get-Command winget -All
+where.exe winget
+Test-Path "$env:LOCALAPPDATA\Microsoft\WindowsApps\winget.exe"
 ```
+
+Resultado esperado:
+
+- `Get-Command winget -All` encuentra el comando
+- `where.exe winget` devuelve una ruta valida
+
+Si `Get-Command winget -All` falla, pero `Test-Path "$env:LOCALAPPDATA\Microsoft\WindowsApps\winget.exe"` devuelve `True`, configure `PATH` asi:
+
+```powershell
+$env:Path += ";$env:LOCALAPPDATA\Microsoft\WindowsApps"
+winget --version
+```
+
+Si `winget --version` ya responde, deje el cambio permanente:
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+  "Path",
+  [Environment]::GetEnvironmentVariable("Path","User") + ";$env:LOCALAPPDATA\Microsoft\WindowsApps",
+  "User"
+)
+```
+
+Luego cierre PowerShell y abra una nueva consola antes de continuar.
+
+Verificacion directa opcional:
+
+```powershell
+& "$env:LOCALAPPDATA\Microsoft\WindowsApps\winget.exe" --version
+```
+
+Si ese comando directo funciona, el problema era solo el `PATH`.
+
+Una vez que `winget` responda correctamente, instale dependencias base y descargue la rama `cifradorM` asi:
+
+```powershell
+winget install --id Git.Git -e --accept-package-agreements --accept-source-agreements
+winget install --id Microsoft.OpenJDK.21 -e --accept-package-agreements --accept-source-agreements
+
+git clone -b cifradorM https://github.com/rmartinezch/ElGamalClient.git C:\cifradorM
+cd C:\cifradorM
+```
+
+Si ya tenia una version anterior de Java (por ejemplo Java 11), el `PATH` del sistema puede seguir apuntando a ella. Para forzar que la sesion actual use Java 21, ejecute:
+
+```powershell
+$jdk21 = Get-ChildItem "C:\Program Files\Microsoft\jdk-21*" -Directory | Select-Object -First 1
+$env:JAVA_HOME = $jdk21.FullName
+$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+```
+
+Para que el cambio sea permanente (sobreviva al cerrar la terminal):
+
+```powershell
+[System.Environment]::SetEnvironmentVariable("JAVA_HOME", $jdk21.FullName, "User")
+```
+
+Comprobaciones minimas del entorno instalado:
+
+```powershell
+git --version
+javac -version
+java -version
+Test-Path C:\cifradorM
+```
+
+Resultado esperado:
+
+- `git --version` responde sin error
+- `javac -version` y `java -version` muestran `21`
+- `Test-Path C:\cifradorM` devuelve `True`
+
+Si `javac -version` o `git --version` no responden despues de instalar con `winget`, cierre y abra una nueva consola PowerShell antes de continuar.
+
+Si ya tiene el repo descargado en otra ruta, muevalo o vuelva a clonarlo en `C:\cifradorM`.
+
+Comprobaciones minimas del repo clonado:
+
+```powershell
+cd C:\cifradorM
+git branch --show-current
+git remote get-url origin
+Test-Path .\native\verificatum-src\verificatum-vcr-3.1.0
+Test-Path .\native\verificatum-src\verificatum-vecj-2.2.0
+Test-Path .\native\verificatum-jars\com\verificatum\verificatum-vmgj\1.3.0\verificatum-vmgj-1.3.0.jar
+```
+
+Resultado esperado:
+
+- `git branch --show-current` devuelve `cifradorM`
+- `git remote get-url origin` devuelve `https://github.com/rmartinezch/ElGamalClient.git`
+- los tres `Test-Path` devuelven `True`
+
+Recompilacion minima de todos los artefactos Windows (`jar + DLL JNI`):
+
+```powershell
+cd C:\cifradorM
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\build-cifrador.ps1 `
+  -MavenCmd .\mvnw.cmd `
+  -ForceNativeBuild
+```
+
+Comprobaciones minimas del build:
+
+```powershell
+Test-Path .\prebuilt\java\ElGamalCipher-1.1.0.jar
+Test-Path .\prebuilt\windows-x64\vecj-2.2.0.dll
+Test-Path .\prebuilt\windows-x64\vmgj-1.3.0.dll
+Get-Item .\prebuilt\java\ElGamalCipher-1.1.0.jar
+Get-Item .\prebuilt\windows-x64\vecj-2.2.0.dll
+Get-Item .\prebuilt\windows-x64\vmgj-1.3.0.dll
+```
+
+Resultado esperado:
+
+- los tres `Test-Path` devuelven `True`
+- `Get-Item` muestra fecha y tamaño de archivos recientes en `prebuilt\java` y `prebuilt\windows-x64`
+
+Este flujo:
+
+- recompila el JAR principal del cifrador
+- fuerza la regeneracion de `vecj-2.2.0.dll` y `vmgj-1.3.0.dll`
+- ejecuta `bootstrap-verificatum.ps1` automaticamente si faltan artefactos de Verificatum en el repo local
+- instala y actualiza `MSYS2 UCRT64` automaticamente si hace falta para la compilacion nativa
+
+Artefactos recompilados para despliegue:
+
+- `C:\cifradorM\prebuilt\java\ElGamalCipher-1.1.0.jar`
+- `C:\cifradorM\prebuilt\windows-x64\vecj-2.2.0.dll`
+- `C:\cifradorM\prebuilt\windows-x64\vmgj-1.3.0.dll`
+
+Prueba minima por CLI:
+
+```powershell
+java -jar "C:\cifradorM\prebuilt\java\ElGamalCipher-1.1.0.jar" `
+  'C:\cifradorM\recursos\publicKey' `
+  'C:\cifradorM\recursos\shuffled_votes.txt' `
+  'C:\cifradorM\recursos\ciphertexts_ext' `
+  -sw `
+  -p
+```
+
+Si el uso final es desde otra aplicacion Java en Windows, despliegue siempre el `jar`
+junto con ambas DLL del directorio `prebuilt\windows-x64`.
 
 JARs incluidos en `native/verificatum-jars/`:
 
@@ -187,205 +309,184 @@ Fuentes incluidos en `native/verificatum-src/`:
 | `verificatum-gmpmee` | 2.1.0 | Dependencia nativa de VCR |
 | `verificatum-vec` | 2.5.0 | Dependencia nativa de VECJ |
 
-### Bootstrap (solo si se necesita recompilar desde fuentes)
+## Ruta Minima En Ubuntu
 
-El bootstrap solo es necesario si se quiere recompilar los JARs de Verificatum desde codigo
-fuente (por ejemplo, para aplicar parches o actualizar versiones). En uso normal,
-los JARs de `native/verificatum-jars/` son suficientes.
+Ruta unica recomendada para instalar, probar y desplegar en `Ubuntu 22.04+`:
 
-### Rutas buscadas automaticamente (Windows)
+- use `Bash`
+- mantenga acceso a Internet para instalar dependencias
 
-El script busca los paquetes en este orden de prioridad. **Basta con que una sola ruta exista**;
-no es necesario configurar nada mas si usas alguna de las rutas predefinidas:
-
-```
-# Prioridad 1 – dentro del propio repositorio (opcion recomendada)
-<raiz-repo>\native\verificatum-src\verificatum-vcr-3.1.0
-<raiz-repo>\native\verificatum-src\verificatum-vecj-2.2.0
-<raiz-repo>\native\verificatum-src\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar
-
-# Prioridad 2 – directorio mixnet hermano del proyecto
-<carpeta-padre-del-repo>\mixnet\verificatum-vcr-3.1.0
-<carpeta-padre-del-repo>\mixnet\verificatum-vecj-2.2.0
-<carpeta-padre-del-repo>\mixnet\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar
-
-# Prioridad 3 – convenciones de estructura de proyectos ONPE (auto-detectado por unidad)
-D:\Projects\ONPE\mixnet\verificatum-vcr-3.1.0
-D:\Projects\ONPE\mixnet\verificatum-vecj-2.2.0
-D:\Projects\ONPE\mixnet\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar
-
-# Prioridad 4 – convencion alternativa (guion bajo)
-D:\_Proyectos\mixnet\verificatum-vcr-3.1.0
-D:\_Proyectos\mixnet\verificatum-vecj-2.2.0
-D:\_Proyectos\mixnet\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar
-```
-
-> **Nota:** las rutas de Prioridad 3 y 4 se generan dinamicamente segun la unidad donde
-> este clonado el repositorio (puede ser `C:`, `D:`, etc.).
-
-Si el error dice `No se pudo ubicar verificatum-vcr-3.1.0. Rutas probadas: ...` significa
-que los fuentes no estan en ninguna de esas ubicaciones. Con la version actual del proyecto,
-los fuentes ya estan incluidos en `native\verificatum-src\` y los JARs precompilados en
-`native\verificatum-jars\`, por lo que este error no deberia ocurrir despues de un `git pull`.
-
-### Dependencias esperadas para Windows
-
-Para que `scripts/windows/compilacion/bootstrap-verificatum.ps1` funcione, debe existir al menos una de estas opciones:
-
-- Opcion A (recomendada): fuentes dentro del repo
-  - `native/verificatum-src/verificatum-vcr-3.1.0`
-  - `native/verificatum-src/verificatum-vecj-2.2.0`
-  - `native/verificatum-src/verificatum-vmgj-1.3.0/verificatum-vmgj-1.3.0.jar`
-- Opcion B: directorio externo `mixnet` en ruta convencional
-  - `D:\Projects\ONPE\mixnet\verificatum-vcr-3.1.0`
-  - `D:\Projects\ONPE\mixnet\verificatum-vecj-2.2.0`
-  - `D:\Projects\ONPE\mixnet\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar`
-- Opcion C: directorio externo con ruta personalizada via variable de entorno o parametro
-
-Importante:
-
-- use una sola raiz `mixnet` para evitar confusiones
-- el script ya no depende de rutas fijas de una maquina en particular
-- si no usa `native/verificatum-src`, configure la raiz con `MIXNET_ROOT` o pase parametros explicitos
-
-Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1
-```
-
-Windows (forzando una raiz externa unica):
-
-```powershell
-$env:MIXNET_ROOT = 'D:\ruta\a\tu\mixnet'
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1
-```
-
-Windows (rutas explicitas por parametro):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1 `
-    -VcrSourceRoot  'D:\ruta\a\tu\mixnet\verificatum-vcr-3.1.0' `
-    -VecjSourceRoot 'D:\ruta\a\tu\mixnet\verificatum-vecj-2.2.0' `
-    -VmgjJarPath    'D:\ruta\a\tu\mixnet\verificatum-vmgj-1.3.0\verificatum-vmgj-1.3.0.jar'
-```
-
-Ubuntu:
+Instalacion minima de dependencias y descarga del repo:
 
 ```bash
-./scripts/ubuntu/entorno/bootstrap-verificatum.sh
+sudo apt update
+sudo apt install -y git openjdk-21-jdk build-essential autoconf automake libtool libgmp-dev
 ```
 
-Android:
-
-- reutiliza el mismo repositorio `native/verificatum-jars/` del proyecto
-- no requiere un bootstrap Verificatum separado para consumir el `AAR`
-- la compilacion Android resuelve dependencias directamente de `native/verificatum-jars/`
-
-Los tres artefactos Verificatum resueltos automaticamente son:
-
-- `com.verificatum:verificatum-vmgj:1.3.0`
-- `com.verificatum:verificatum-vecj:2.2.0`
-- `com.verificatum:verificatum-vcr-vmgj-vecj:3.1.0`
-
-## Artefactos Canonicos
-
-### Windows
-
-- `prebuilt/java/ElGamalCipher-1.1.0.jar`
-- `prebuilt/windows-x64/vecj-2.2.0.dll`
-- `prebuilt/windows-x64/vmgj-1.3.0.dll`
-
-Bundle de libreria distribuible:
-
-- `dist/windows/library/Cifrador/app/ElGamalCipher-1.1.0.jar`
-- `dist/windows/library/Cifrador/libs/windows-x64/vecj-2.2.0.dll`
-- `dist/windows/library/Cifrador/libs/windows-x64/vmgj-1.3.0.dll`
-
-### Ubuntu
-
-- `prebuilt/java/ElGamalCipher-1.1.0.jar`
-- `prebuilt/linux-x64/`
-
-### Android
-
-- `prebuilt/android/aar/ElGamalCipher-android-debug.aar`
-- `prebuilt/android/jniLibs/arm64-v8a/`
-- `prebuilt/android/jniLibs/x86_64/`
-
-## Compilacion
-
-### Compilacion Rapida (Maven Wrapper)
-
-La forma mas directa de compilar el cifrador, sin necesidad de scripts adicionales:
-
-Ubuntu/Linux:
+Descarga del repositorio:
 
 ```bash
-./mvnw clean package
+git clone -b cifradorM https://github.com/rmartinezch/ElGamalClient.git ~/cifradorM
+cd ~/cifradorM
 ```
 
-Windows:
-
-```cmd
-mvnw.cmd clean package
-```
-
-Esto genera `target/ElGamalCipher-1.1.0.jar` (fat-JAR con todas las dependencias).
-
-### Compilacion Base Del Cifrador (via scripts)
-
-Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\build-cifrador.ps1
-```
-
-Ubuntu:
+Comprobaciones minimas del entorno instalado:
 
 ```bash
+git --version
+javac -version
+java -version
+test -d ~/cifradorM && echo "OK"
+```
+
+Resultado esperado:
+
+- `git --version` responde sin error
+- `javac -version` y `java -version` muestran `21`
+- el directorio `~/cifradorM` existe
+
+Comprobaciones minimas del repo clonado:
+
+```bash
+cd ~/cifradorM
+git branch --show-current
+git remote get-url origin
+test -d native/verificatum-src/verificatum-vcr-3.1.0 && echo "OK"
+test -d native/verificatum-src/verificatum-vecj-2.2.0 && echo "OK"
+test -f native/verificatum-jars/com/verificatum/verificatum-vmgj/1.3.0/verificatum-vmgj-1.3.0.jar && echo "OK"
+```
+
+Resultado esperado:
+
+- `git branch --show-current` devuelve `cifradorM`
+- `git remote get-url origin` devuelve `https://github.com/rmartinezch/ElGamalClient.git`
+- los tres `test` devuelven `OK`
+
+Recompilacion minima de todos los artefactos Ubuntu (`jar + .so JNI`):
+
+```bash
+cd ~/cifradorM
 ./scripts/ubuntu/compilacion/build-cifrador.sh
 ```
 
-Android:
+Comprobaciones minimas del build:
 
 ```bash
+test -f prebuilt/java/ElGamalCipher-1.1.0.jar && echo "OK"
+ls -la prebuilt/java/ElGamalCipher-1.1.0.jar
+ls -la prebuilt/linux-x64/
+```
+
+Resultado esperado:
+
+- el JAR existe en `prebuilt/java/`
+- las librerias nativas `.so` existen en `prebuilt/linux-x64/`
+
+Este flujo:
+
+- recompila el JAR principal del cifrador
+- compila `libvecj.so` y `libvmgj.so`
+- ejecuta `bootstrap-verificatum.sh` automaticamente si faltan artefactos de Verificatum
+
+Artefactos recompilados para despliegue:
+
+- `~/cifradorM/prebuilt/java/ElGamalCipher-1.1.0.jar`
+- `~/cifradorM/prebuilt/linux-x64/libvecj.so`
+- `~/cifradorM/prebuilt/linux-x64/libvmgj.so`
+
+Prueba minima por CLI:
+
+```bash
+java -jar ~/cifradorM/prebuilt/java/ElGamalCipher-1.1.0.jar \
+  ~/cifradorM/recursos/publicKey \
+  ~/cifradorM/recursos/shuffled_votes.txt \
+  ~/cifradorM/recursos/ciphertexts_ext \
+  -sw \
+  -p
+```
+
+Si el uso final es desde otra aplicacion Java en Ubuntu, despliegue siempre el `jar`
+junto con ambas `.so` del directorio `prebuilt/linux-x64`.
+
+## Ruta Minima En Android
+
+Ruta unica recomendada para compilar y probar en `Android`:
+
+- se ejecuta desde una maquina host `Ubuntu` o `Windows con WSL`
+- requiere Android SDK y NDK instalados
+
+Instalacion minima de dependencias en el host:
+
+```bash
+sudo apt update
+sudo apt install -y git openjdk-21-jdk build-essential autoconf automake libtool libgmp-dev
+```
+
+Si aun no tiene Android SDK, instale Android Studio o el SDK command-line tools
+y configure las variables de entorno:
+
+```bash
+export ANDROID_SDK_ROOT="$HOME/Android/Sdk"
+export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+```
+
+Descarga del repositorio (si aun no lo tiene):
+
+```bash
+git clone -b cifradorM https://github.com/rmartinezch/ElGamalClient.git ~/cifradorM
+cd ~/cifradorM
+```
+
+Comprobaciones minimas del entorno instalado:
+
+```bash
+git --version
+javac -version
+java -version
+test -d "$ANDROID_SDK_ROOT" && echo "SDK OK"
+test -d ~/cifradorM && echo "Repo OK"
+```
+
+Resultado esperado:
+
+- `git --version` responde sin error
+- `javac -version` y `java -version` muestran `21`
+- el SDK de Android existe
+- el directorio `~/cifradorM` existe
+
+Compilacion minima de todos los artefactos Android (`AAR + JNI`):
+
+```bash
+cd ~/cifradorM
 ./scripts/android/compilacion/build-cifrador.sh
 ```
 
-### Compilacion Nativa Por Plataforma
-
-Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\build-native-windows.ps1
-```
-
-Salida esperada:
-
-- `prebuilt/windows-x64/vecj-2.2.0.dll`
-- `prebuilt/windows-x64/vmgj-1.3.0.dll`
-
-Ubuntu:
+Comprobaciones minimas del build:
 
 ```bash
-./scripts/ubuntu/compilacion/build-native-linux.sh
+test -f prebuilt/android/aar/ElGamalCipher-android-debug.aar && echo "OK"
+ls -la prebuilt/android/jniLibs/arm64-v8a/
+ls -la prebuilt/android/jniLibs/x86_64/
 ```
 
-Salida esperada:
+Resultado esperado:
 
-- `prebuilt/linux-x64/`
+- el AAR existe en `prebuilt/android/aar/`
+- las librerias JNI existen para `arm64-v8a` y `x86_64`
 
-Android:
+Este flujo:
 
-```bash
-./scripts/android/compilacion/build-jni.sh
-```
+- compila las librerias JNI nativas para Android (`arm64-v8a`, `x86_64`)
+- genera el AAR del cifrador Android
 
-Salida esperada:
+Artefactos compilados para despliegue:
 
-- `prebuilt/android/jniLibs/arm64-v8a/`
-- `prebuilt/android/jniLibs/x86_64/`
+- `~/cifradorM/prebuilt/android/aar/ElGamalCipher-android-debug.aar`
+- `~/cifradorM/prebuilt/android/jniLibs/arm64-v8a/`
+- `~/cifradorM/prebuilt/android/jniLibs/x86_64/`
+
+Para consumir el AAR desde una app Android externa, agregue el `.aar` como dependencia
+en el `build.gradle` de su proyecto. No necesita las `.so` sueltas; ya estan dentro del AAR.
 
 ## Integracion Externa Como Libreria
 
@@ -474,8 +575,8 @@ Una aplicacion externa en Windows debe consumir:
 Ejemplo:
 
 ```powershell
-$PROJECT_ROOT = '<PROJECT_ROOT>'
-$APP_JAR = '<APP_JAR>'
+$PROJECT_ROOT = 'C:\cifradorM'
+$APP_JAR = 'C:\cifradorM\mi-app.jar'
 
 java `
   "-Djava.library.path=$PROJECT_ROOT\prebuilt\windows-x64" `
@@ -532,40 +633,6 @@ Resumen por plataforma:
 - `Ubuntu`: usa la API Java comun mas `jar + .so`
 - `Android`: usa el `AAR` y su API Android publica
 
-## Uso Del Cifrador Desde CLI
-
-Ejecucion base en Windows (PowerShell):
-
-```powershell
-$PROJECT_ROOT = '<PROJECT_ROOT>'
-
-java -jar "$PROJECT_ROOT\prebuilt\java\ElGamalCipher-1.1.0.jar" `
-  '<PUBLIC_KEY_PATH>' `
-  '<PLAINTEXT_VOTES_PATH>' `
-  '<CIPHERTEXT_OUTPUT_PATH>' `
-  -sw `
-  -p
-```
-
-Ejecucion base en Ubuntu/Linux:
-
-```bash
-java -jar prebuilt/java/ElGamalCipher-1.1.0.jar \
-  <PUBLIC_KEY_PATH> \
-  <PLAINTEXT_VOTES_PATH> \
-  <CIPHERTEXT_OUTPUT_PATH> \
-     -sw \
-     [-p]
-```
-
-Parametros:
-
-1. `ARG1_PUBLIC_KEY_PATH`: ruta a la llave publica
-2. `ARG2_PLAINTEXT_VOTES_PATH`: archivo con votos planos
-3. `ARG3_CIPHERTEXT_OUTPUT_PATH`: salida `ciphertexts_ext`
-4. `-sw` o `-hw`: modalidad RNG
-5. `-p`: barra de progreso opcional
-
 ## RNG Y Soporte De Hardware
 
 ### Ubuntu
@@ -619,6 +686,7 @@ Si el `jar` se ejecuta sin `java.library.path` y encuentra un layout local valid
 Build del bundle de libreria:
 
 ```powershell
+cd C:\cifradorM
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\build-cifrador-portable.ps1
 ```
 
@@ -631,6 +699,7 @@ Salida:
 ZIP del bundle:
 
 ```powershell
+cd C:\cifradorM
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\package-cifrador-portable.ps1
 ```
 
@@ -688,74 +757,80 @@ Salida:
 
 - `dist/android/Cifrador-1.1.0-android-portable.zip`
 
-## Pruebas Y Validaciones
+## Guia Rapida: Levantar Estaciones Y Mezcladora
 
-### Windows Contra Verificatum Linux
+Esta seccion muestra como arrancar cada componente del flujo de votacion
+electronica y verificar que funcionan en conjunto.
 
-Prueba remota automatizada:
+### 1. Mezcladora Verificatum (panel de control)
+
+La mezcladora opera las `parties` de Verificatum desde una GUI web local.
+
+```bash
+cd workflow/votante/mezcladora
+./start_gui.sh
+```
+
+Se abre el panel principal en `http://localhost:7040`:
+
+![Panel de control de la mezcladora](docs/img/mezcladora-login.png)
+
+Campos iniciales:
+
+| Campo | Descripcion |
+|-------|-------------|
+| Etiqueta | nombre visible de la eleccion |
+| Nombre de eleccion | identificador logico |
+| SID | session ID de Verificatum |
+| Host/IP | IP del servidor (por defecto `0.0.0.0`) |
+| Numero de parties | cuantas parties participan |
+| Umbral minimo | minimo de parties para descifrar |
+
+Cada party se levanta en su propia ventana (`http://localhost:7041`, `7042`, ...):
+
+![Ventana de Party 1](docs/img/mezcladora-party.png)
+
+Desde esta ventana se monitorean: parametros generales, participantes conectados,
+estado secuencial por fase, artefactos locales y eventos globales.
+
+### 2. Estacion votante — Windows
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\pruebas\test-remote-verificatum-mix.ps1 `
-    -SshHost <host-verificatum> `
-    -Password "<password-ssh>" `
-    -RebuildBundle
+cd workflow\votante\windows
+.\start.bat
 ```
 
-Wrapper `.bat`:
+Se abre la cabina de voto en `http://localhost:8788`:
 
-```bat
-.\scripts\windows\pruebas\test-remote-verificatum-mix.bat -Password "<password-ssh>" -SshHost <host-verificatum>
+![Cabina de emision de voto — Windows](docs/img/votante-windows.png)
+
+La interfaz muestra el estado operativo (conexion a mezcladora, sesion activa,
+llave publica, validacion, envio), el padron del elector y la cedula de votacion.
+
+### 3. Estacion votante — Android
+
+En Ubuntu con Waydroid:
+
+```bash
+cd workflow/votante/android
+SHOW_UI=1 CLEAN_START=0 bash run-votante-waydroid-weston.sh
 ```
 
-Resultado esperado:
+El script instala el APK en Waydroid y lanza la app automaticamente:
 
-- `ciphertexts_ext` generado localmente
-- `shuffle`, `decrypt` y `vmnv` completados en Linux
-- comparación final consistente entre originales y descifrados
+![Cabina de emision de voto — Android](docs/img/votante-android.png)
 
-### Android
+La app Android muestra la misma cabina de voto con el panel de estado operativo,
+padron del elector y cedula de votacion, adaptada al formato movil.
 
-Scripts relevantes:
+### Flujo basico de prueba
 
-- `scripts/android/pruebas/test-connected.sh`
-- `scripts/android/pruebas/test-hybrid-mix.sh`
-
-### Ubuntu
-
-Validaciones relevantes:
-
-- `scripts/ubuntu/entorno/bootstrap-verificatum.sh`
-- `scripts/ubuntu/compilacion/build-cifrador.sh`
-- `scripts/ubuntu/ejecucion/run-cifrador.sh`
-- `scripts/ubuntu/empaquetado/build-cifrador-portable.sh`
-
-## Consumidores De Ejemplo En Este Repo
-
-### Votante Windows
-
-- codigo: `workflow/votante/windows`
-- consume el cifrador Windows como libreria
-- empaqueta su propio runtime Java
-- no depende de `Cifrador.exe`
-
-### Votante Android
-
-- codigo: `workflow/votante/android`
-- consume el cifrador Android como libreria
-- la interfaz en este repo es solo un ejemplo de uso
-
-### GUI Mezcladora Verificatum
-
-- codigo: `workflow/votante/mezcladora`
-- GUI web local para operar varias `parties` de Verificatum en una sola PC
-- expone panel principal en el puerto `7040` y una ventana por `party` en `70xx`
-- las estaciones de voto (`windows`, `android`) se conectan a esta mezcladora via su API REST
-- arranque: `cd workflow/votante/mezcladora && ./start_gui.sh`
-
-### Ubuntu
-
-- no hay una estacion de votacion Ubuntu en `workflow/`
-- Ubuntu se usa en este repositorio como entorno de ejecucion CLI, empaquetado y validacion tecnica del cifrador
+1. Levantar la mezcladora (`start_gui.sh`) y configurar la eleccion desde el panel
+2. Arrancar al menos una estacion votante (Windows o Android)
+3. Desde la estacion, verificar que el estado operativo muestra `Mezcladora: Activa`
+4. Seleccionar candidatos en la cedula y confirmar el voto
+5. En el panel de la mezcladora, ejecutar `shuffle` y `decrypt`
+6. Comparar los votos descifrados con los originales
 
 ## Instalacion De La Mezcladora En Windows Con WSL
 
@@ -836,10 +911,10 @@ Notas:
 
 ### 3. Ir a la carpeta de la mezcladora desde WSL
 
-Si el repo esta en `D:\_Proyectos\cifradorM`, en WSL normalmente se vera asi:
+Si el repo esta en `C:\cifradorM`, en WSL normalmente se vera asi:
 
 ```bash
-cd /mnt/d/_Proyectos/cifradorM/workflow/votante/mezcladora
+cd /mnt/c/cifradorM/workflow/votante/mezcladora
 ```
 
 ### 4. Iniciar la GUI de la mezcladora
@@ -865,6 +940,7 @@ HOST=0.0.0.0 PUBLIC_HOST=127.0.0.1 ./start_gui.sh
 Abra otra consola PowerShell como administrador y ejecute:
 
 ```powershell
+cd C:\cifradorM
 powershell -ExecutionPolicy Bypass -File .\workflow\votante\mezcladora\scripts\configure_windows_portproxy.ps1
 ```
 
@@ -925,3 +1001,70 @@ Mejoras clave:
 - Maven Wrapper incluido (`mvnw` / `mvnw.cmd`)
 - fuentes VCR 3.1.0 incluidos en `native/verificatum-src/`
 - verificado en Ubuntu, Windows 11 y Android (emulador API 34)
+
+## Anexo: Bootstrap (solo si se necesita recompilar desde fuentes)
+
+El bootstrap solo es necesario si se quiere recompilar los JARs de Verificatum desde codigo
+fuente (por ejemplo, para aplicar parches o actualizar versiones). En uso normal,
+los JARs de `native/verificatum-jars/` son suficientes.
+
+### Ruta usada para bootstrap en Windows
+
+Para la ruta minima documentada en este README, use una sola raiz:
+
+- `C:\cifradorM`
+
+Si alguna vez necesita recompilar Verificatum desde fuentes en Windows, el bootstrap debe
+resolver los paquetes dentro del propio repo:
+
+```
+C:\cifradorM\native\verificatum-src\verificatum-vcr-3.1.0
+C:\cifradorM\native\verificatum-src\verificatum-vecj-2.2.0
+C:\cifradorM\native\verificatum-jars\com\verificatum\verificatum-vmgj\1.3.0\verificatum-vmgj-1.3.0.jar
+```
+
+Si el error dice `No se pudo ubicar verificatum-vcr-3.1.0. Rutas probadas: ...` significa
+que los fuentes no estan en ninguna de esas ubicaciones. Con la version actual del proyecto,
+los fuentes ya estan incluidos en `native\verificatum-src\` y los JARs precompilados en
+`native\verificatum-jars\`, por lo que este error no deberia ocurrir despues de un `git pull`
+si el repo esta en `C:\cifradorM`.
+
+### Dependencias esperadas para Windows
+
+Para que `scripts/windows/compilacion/bootstrap-verificatum.ps1` funcione dentro de la ruta
+minima de Windows, basta con que existan estas rutas dentro del repo:
+
+- `C:\cifradorM\native\verificatum-src\verificatum-vcr-3.1.0`
+- `C:\cifradorM\native\verificatum-src\verificatum-vecj-2.2.0`
+- `C:\cifradorM\native\verificatum-jars\com\verificatum\verificatum-vmgj\1.3.0\verificatum-vmgj-1.3.0.jar`
+
+Importante:
+
+- para la ruta minima de prueba en Windows, use una sola raiz: `C:\cifradorM`
+- el bootstrap es opcional; no hace falta para compilar ni para probar el cifrador normal
+- solo considere `MIXNET_ROOT` o rutas externas si esta saliendo del flujo minimo de este README
+
+Windows:
+
+```powershell
+cd C:\cifradorM
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1
+```
+
+Ubuntu:
+
+```bash
+./scripts/ubuntu/entorno/bootstrap-verificatum.sh
+```
+
+Android:
+
+- reutiliza el mismo repositorio `native/verificatum-jars/` del proyecto
+- no requiere un bootstrap Verificatum separado para consumir el `AAR`
+- la compilacion Android resuelve dependencias directamente de `native/verificatum-jars/`
+
+Los tres artefactos Verificatum resueltos automaticamente son:
+
+- `com.verificatum:verificatum-vmgj:1.3.0`
+- `com.verificatum:verificatum-vecj:2.2.0`
+- `com.verificatum:verificatum-vcr-vmgj-vecj:3.1.0`

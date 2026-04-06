@@ -256,6 +256,8 @@ mkdir -p "`$PROJECT/.build/native" "`$PREFIX/lib" "`$PREFIX/include"
 mkdir -p "`$BUILD"
 cp -a "`$SRC/." "`$BUILD"
 cd "`$BUILD"
+mkdir -p m4
+printf 'define(GMPMEE_VERSION_STRING, $GmpmeeVersion)dnl\n' > .macros.m4
 autoreconf -fi
 ./configure --prefix="`$PREFIX"
 make -j4 libgmpmee.la
