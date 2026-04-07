@@ -166,13 +166,17 @@ Assert-Administrator
 $listenAddress = Get-PrimaryListenAddress
 $connectAddress = Get-WslConnectAddress
 
+$listenAddresses = @($listenAddress, "127.0.0.1") | Select-Object -Unique
+
 $desiredEntries = @()
-foreach ($port in $BasePort..$LastPartyPort) {
-    $desiredEntries += [PSCustomObject]@{
-        ListenAddress  = $listenAddress
-        ListenPort     = $port
-        ConnectAddress = $connectAddress
-        ConnectPort    = $port
+foreach ($addr in $listenAddresses) {
+    foreach ($port in $BasePort..$LastPartyPort) {
+        $desiredEntries += [PSCustomObject]@{
+            ListenAddress  = $addr
+            ListenPort     = $port
+            ConnectAddress = $connectAddress
+            ConnectPort    = $port
+        }
     }
 }
 
@@ -201,7 +205,7 @@ if ($existingEntries.Count -ne $desiredEntries.Count) {
     }
 }
 
-Write-Host "ListenAddress : $listenAddress"
+Write-Host "ListenAddress : $($listenAddresses -join ', ')"
 Write-Host "ConnectAddress: $connectAddress"
 Write-Host "Ports         : $BasePort-$LastPartyPort"
 
@@ -215,7 +219,9 @@ if ($currentOk) {
         Write-Host "No habia reglas previas para $BasePort-$LastPartyPort. Se crearan."
     }
 
-    Add-PortProxyRange -ListenAddress $listenAddress -ConnectAddress $connectAddress -StartPort $BasePort -EndPort $LastPartyPort
+    foreach ($addr in $listenAddresses) {
+        Add-PortProxyRange -ListenAddress $addr -ConnectAddress $connectAddress -StartPort $BasePort -EndPort $LastPartyPort
+    }
 }
 
 Ensure-FirewallRule -RuleName $FirewallRuleName -StartPort $BasePort -EndPort $LastPartyPort

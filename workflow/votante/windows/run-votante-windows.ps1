@@ -89,7 +89,7 @@ if (-not (Test-PortAvailable -BindHostValue $BindHost -PortNumber $Port)) {
     throw "La combinacion $BindHost`:$Port ya esta ocupada. Si el votante Windows ya esta corriendo, usa esa instancia. Si no, libera el puerto o arranca con -Port <otro_puerto>."
 }
 
-Write-Host "[votante-windows] Iniciando servidor en http://$BindHost:$Port"
+Write-Host "[votante-windows] Iniciando servidor en http://${BindHost}:$Port"
 if ($ServiceBaseUrl) {
     Write-Host "[votante-windows] Semilla de descubrimiento configurada: $ServiceBaseUrl"
 }

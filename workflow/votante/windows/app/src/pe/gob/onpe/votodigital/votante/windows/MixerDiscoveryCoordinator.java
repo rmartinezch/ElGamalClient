@@ -34,6 +34,7 @@ final class MixerDiscoveryCoordinator {
             Pattern.compile("\"([^\"]+)\"\\s*:\\s*(true|false)");
     private static final int DEFAULT_PORT = 7040;
     private static final Duration DISCOVERY_TIMEOUT = Duration.ofMillis(250);
+    private static final Duration CONFIGURED_DISCOVERY_TIMEOUT = Duration.ofSeconds(3);
     private static final Duration HANDSHAKE_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration LEASE_RENEW_MARGIN = Duration.ofSeconds(15);
     private static final Duration DISCOVERY_CACHE_TTL = Duration.ofMinutes(5);
@@ -110,7 +111,7 @@ final class MixerDiscoveryCoordinator {
         String requestedAuxsid = sanitizeRequestedAuxsid(preferredAuxsid);
         LeaseContext lease = currentLease;
         if (lease != null) {
-            DiscoveryInfo currentDiscovery = tryDiscovery(httpClient, lease.baseUrl(), lease.sessionId());
+            DiscoveryInfo currentDiscovery = tryDiscovery(httpClient, lease.baseUrl(), lease.sessionId(), CONFIGURED_DISCOVERY_TIMEOUT);
             if (currentDiscovery != null && currentDiscovery.acceptingVotes()) {
                 if (!forceRenew && !lease.isExpiringSoon()) {
                     currentLease = lease.withDiscovery(currentDiscovery);
@@ -130,7 +131,7 @@ final class MixerDiscoveryCoordinator {
 
         String expectedSessionId = lease == null ? "" : lease.sessionId();
         for (String candidate : prioritizedCandidates()) {
-            DiscoveryInfo discovery = tryDiscovery(httpClient, candidate, expectedSessionId);
+            DiscoveryInfo discovery = tryDiscovery(httpClient, candidate, expectedSessionId, CONFIGURED_DISCOVERY_TIMEOUT);
             if (discovery == null) {
                 continue;
             }
@@ -163,7 +164,7 @@ final class MixerDiscoveryCoordinator {
     private DiscoveryInfo findBestDiscovery(HttpClient httpClient, String expectedSessionId) {
         DiscoveryInfo busyCandidate = null;
         for (String candidate : prioritizedCandidates()) {
-            DiscoveryInfo discovery = tryDiscovery(httpClient, candidate, expectedSessionId);
+            DiscoveryInfo discovery = tryDiscovery(httpClient, candidate, expectedSessionId, CONFIGURED_DISCOVERY_TIMEOUT);
             if (discovery == null) {
                 continue;
             }
@@ -241,13 +242,17 @@ final class MixerDiscoveryCoordinator {
     }
 
     private DiscoveryInfo tryDiscovery(HttpClient httpClient, String baseUrl, String expectedSessionId) {
+        return tryDiscovery(httpClient, baseUrl, expectedSessionId, DISCOVERY_TIMEOUT);
+    }
+
+    private DiscoveryInfo tryDiscovery(HttpClient httpClient, String baseUrl, String expectedSessionId, Duration timeout) {
         if (baseUrl == null || baseUrl.isBlank()) {
             return null;
         }
         try {
             String discoveryUrl = trimTrailingSlash(baseUrl) + "/api/discovery";
             HttpRequest request = HttpRequest.newBuilder(URI.create(discoveryUrl))
-                    .timeout(DISCOVERY_TIMEOUT)
+                    .timeout(timeout)
                     .GET()
                     .build();
             HttpResponse<String> response = httpClient.send(request,
@@ -337,7 +342,7 @@ final class MixerDiscoveryCoordinator {
                 url += "?auxsid=" + requestedAuxsid;
             }
             HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                    .timeout(DISCOVERY_TIMEOUT)
+                    .timeout(CONFIGURED_DISCOVERY_TIMEOUT)
                     .GET()
                     .build();
             HttpResponse<String> response = httpClient.send(request,

@@ -15,17 +15,29 @@ El repositorio contiene tanto el cifrador como libreria reusable como estaciones
 3. [Estado Actual](#estado-actual)
 4. [Estructura Del Repositorio](#estructura-del-repositorio)
 5. [Requisitos](#requisitos)
-6. [Ruta Minima En Windows 10 Y 11](#ruta-minima-en-windows-10-y-11)
-7. [Ruta Minima En Ubuntu](#ruta-minima-en-ubuntu)
-8. [Ruta Minima En Android](#ruta-minima-en-android)
-9. [Integracion Externa Como Libreria](#integracion-externa-como-libreria)
-10. [RNG Y Soporte De Hardware](#rng-y-soporte-de-hardware)
-11. [Layout Nativo Y Carga De JNI](#layout-nativo-y-carga-de-jni)
-12. [Empaquetado Y Distribucion](#empaquetado-y-distribucion)
-13. [Guia Rapida: Levantar Estaciones Y Mezcladora](#guia-rapida-levantar-estaciones-y-mezcladora)
-14. [Resumen De Rendimiento](#resumen-de-rendimiento)
-15. [Historial Breve](#historial-breve)
-16. [Anexo: Bootstrap (solo si se necesita recompilar desde fuentes)](#anexo-bootstrap-solo-si-se-necesita-recompilar-desde-fuentes)
+6. [Integracion Externa Como Libreria](#integracion-externa-como-libreria)
+7. [Layout Nativo Y Carga De JNI](#layout-nativo-y-carga-de-jni)
+8. [Windows](#windows)
+   - [Guia Rapida Para Compilacion Del Cifrador](#guia-rapida-para-compilacion-del-cifrador)
+   - [Guia Rapida: Levantar Estaciones Y Mezcladora](#guia-rapida-levantar-estaciones-y-mezcladora)
+   - [Integracion Externa En Windows](#integracion-externa-en-windows)
+   - [RNG Y Soporte De Hardware En Windows](#rng-y-soporte-de-hardware-en-windows)
+   - [Empaquetado Y Distribucion En Windows](#empaquetado-y-distribucion-en-windows)
+   - [Anexo: Bootstrap En Windows](#anexo-bootstrap-en-windows)
+9. [Ubuntu](#ubuntu)
+   - [Guia Rapida Para Compilacion Del Cifrador En Ubuntu](#guia-rapida-para-compilacion-del-cifrador-en-ubuntu)
+   - [Integracion Externa En Ubuntu](#integracion-externa-en-ubuntu)
+   - [RNG Y Soporte De Hardware En Ubuntu](#rng-y-soporte-de-hardware-en-ubuntu)
+   - [Empaquetado Y Distribucion En Ubuntu](#empaquetado-y-distribucion-en-ubuntu)
+   - [Anexo: Bootstrap En Ubuntu](#anexo-bootstrap-en-ubuntu)
+10. [Android](#android)
+    - [Guia Rapida Para Compilacion Del Cifrador En Android](#guia-rapida-para-compilacion-del-cifrador-en-android)
+    - [Integracion Externa En Android](#integracion-externa-en-android)
+    - [RNG Y Soporte De Hardware En Android](#rng-y-soporte-de-hardware-en-android)
+    - [Empaquetado Y Distribucion En Android](#empaquetado-y-distribucion-en-android)
+    - [Anexo: Bootstrap En Android](#anexo-bootstrap-en-android)
+11. [Resumen De Rendimiento](#resumen-de-rendimiento)
+12. [Historial Breve](#historial-breve)
 
 ## Resumen
 
@@ -128,7 +140,107 @@ Requisitos adicionales por plataforma:
 - `Android`
   - Android SDK / Gradle para compilar el `AAR` o el consumidor Android
 
-## Ruta Minima En Windows 10 Y 11
+## Integracion Externa Como Libreria
+
+### Filosofia General
+
+- `Windows` y `Ubuntu` consumen `jar + JNI`
+- `Android` consume `AAR`
+- el cifrador es la libreria
+- las interfaces de votacion son consumidores separados
+
+### Modos De Integracion Segun Plataforma
+
+En `Windows` y `Ubuntu` existen dos formas validas de integracion:
+
+- como API Java embebida dentro de una aplicacion propia
+- como proceso externo lanzando `java` contra el `jar`
+
+Ambas opciones usan el mismo cifrador y ambas siguen requiriendo las bibliotecas JNI nativas de la plataforma.
+
+En `Android` el modelo canonico es distinto:
+
+- la integracion se hace consumiendo el `AAR` como libreria dentro de la app Android
+- no se considera un uso externo por CLI ni lanzando un proceso `java` separado
+- la API publica Android vive dentro del propio `AAR`
+
+### API Java Comun Para Windows Y Ubuntu
+
+Esta API aplica a consumidores Java externos en `Windows` y `Ubuntu`.
+
+No aplica directamente a `Android`, porque en Android el punto de integracion canonico es el `AAR`.
+
+Clases principales:
+
+- `pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService`
+- `pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest`
+- `pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode`
+- `pe.gob.onpe.votodigital.elgamalcipher.LogConfig`
+
+Ejemplo minimo para una aplicacion Java que luego se ejecuta en `Windows` o `Ubuntu` con las librerias JNI correctas:
+
+```java
+import java.nio.file.Path;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest;
+import pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode;
+import pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService;
+import pe.gob.onpe.votodigital.elgamalcipher.LogConfig;
+
+public final class DemoCifrado {
+    public static void main(String[] args) {
+        Logger logger = LogConfig.getLogger(
+            "./logs/demo-cifrador.log",
+            Level.INFO,
+            true,
+            true,
+            true,
+            true,
+            true
+        );
+
+        CifradorRequest request = new CifradorRequest(
+            Path.of("recursos/publicKey"),
+            Path.of("recursos/shuffled_votes.txt"),
+            Path.of("salida/ciphertexts_ext"),
+            CifradorRngMode.SOFTWARE,
+            false
+        );
+
+        boolean ok = new ElGamalCipherService(logger).encrypt(request);
+        if (!ok) {
+            throw new IllegalStateException("El cifrado no produjo salida.");
+        }
+    }
+}
+```
+
+Resumen por plataforma:
+
+- `Windows`: usa la API Java comun mas `jar + DLL`
+- `Ubuntu`: usa la API Java comun mas `jar + .so`
+- `Android`: usa el `AAR` y su API Android publica
+
+## Layout Nativo Y Carga De JNI
+
+La aplicacion busca bibliotecas nativas en este orden:
+
+1. `prebuilt/<os-arch>`
+2. `prebuilt`
+3. `libs/<os-arch>`
+4. `libs`
+
+Ejemplos:
+
+- `prebuilt/linux-x64/libvecj-2.2.0.so`
+- `prebuilt/windows-x64/vecj-2.2.0.dll`
+
+Si el `jar` se ejecuta sin `java.library.path` y encuentra un layout local valido, puede relanzarse con la ruta correcta.
+
+## Windows
+
+### Guia Rapida Para Compilacion Del Cifrador
 
 Ruta unica recomendada para instalar, probar y desplegar en `Windows 10 y 11`:
 
@@ -310,7 +422,352 @@ Fuentes incluidos en `native/verificatum-src/`:
 | `verificatum-gmpmee` | 2.1.0 | Dependencia nativa de VCR |
 | `verificatum-vec` | 2.5.0 | Dependencia nativa de VECJ |
 
-## Ruta Minima En Ubuntu
+### Guia Rapida: Levantar Estaciones Y Mezcladora
+
+Esta es la ruta minima para:
+
+1. generar la estacion Windows portable
+2. descomprimirla en `C:\`
+3. levantar la mezcladora en `WSL`
+4. abrir la estacion Windows contra la mezcladora local
+
+Supuestos de esta ruta:
+
+- el repo ya existe en `C:\cifradorM`
+- la mezcladora correra en la misma PC Windows dentro de `WSL`
+- la estacion Windows se ejecutara desde `C:\VotanteWindowsPortable`
+
+#### 1. Verificar Java 21 para empaquetar la estacion
+
+En `PowerShell`:
+
+```powershell
+javac -version
+```
+
+Si `javac` no existe o muestra una version menor a `21`, instale `Java 21`:
+
+```powershell
+winget install --id Microsoft.OpenJDK.21 -e --accept-package-agreements --accept-source-agreements
+```
+
+#### 2. Generar el portable Windows
+
+```powershell
+cd C:\cifradorM
+powershell -ExecutionPolicy Bypass -File .\workflow\votante\windows\package-votante-windows-portable.ps1
+Test-Path .\dist\windows\VotanteWindowsPortable.zip
+```
+
+Resultado esperado:
+
+- el ultimo comando devuelve `True`
+- existe `C:\cifradorM\dist\windows\VotanteWindowsPortable.zip`
+
+#### 3. Descomprimir la estacion Windows en `C:\`
+
+En `PowerShell`:
+
+```powershell
+Remove-Item -Recurse -Force C:\VotanteWindowsPortable -ErrorAction SilentlyContinue
+Expand-Archive -LiteralPath C:\cifradorM\dist\windows\VotanteWindowsPortable.zip -DestinationPath C:\VotanteWindowsPortable -Force
+```
+
+Comprobacion minima:
+
+```powershell
+Test-Path C:\VotanteWindowsPortable\run-votante-windows.cmd
+Test-Path C:\VotanteWindowsPortable\runtime\java\bin\java.exe
+```
+
+Resultado esperado:
+
+- ambos comandos devuelven `True`
+
+#### 4. Verificar WSL y Ubuntu
+
+En `PowerShell`:
+
+```powershell
+wsl --status
+```
+
+Si `WSL` o `Ubuntu` no estan instalados, en `PowerShell` como administrador:
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+Despues reinicie Windows si el sistema lo solicita y abra una nueva consola.
+
+Si despues del reinicio `wsl --status` muestra mensajes como estos:
+
+- `WSL2 no es compatible con la configuracion actual de la maquina`
+- `Se debe habilitar el componente opcional "Plataforma de maquina virtual"`
+- `Habilita el componente opcional "Subsistema de Windows para Linux"`
+
+habilite manualmente las features requeridas en `PowerShell` como administrador:
+
+```powershell
+dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+bcdedit /set hypervisorlaunchtype auto
+shutdown /r /t 0
+```
+
+Despues del reinicio, vuelva a comprobar:
+
+```powershell
+wsl --status
+wsl --set-default-version 2
+```
+
+Comprobacion opcional de las features:
+
+```powershell
+Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux
+Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
+```
+
+Resultado esperado:
+
+- ambas features quedan en estado `Enabled`
+- `wsl --status` ya no muestra errores de compatibilidad para `WSL2`
+
+Si al intentar entrar a Ubuntu aparece:
+
+- `No hay ninguna distribucion con el nombre proporcionado`
+- `WSL_E_DISTRO_NOT_FOUND`
+
+liste las distribuciones instaladas:
+
+```powershell
+wsl -l -v
+```
+
+Si `Ubuntu` no aparece en la lista, instale la distribucion:
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+Si la instalacion ya existe pero quedo a medio configurar, puede abrirla asi:
+
+```powershell
+wsl -d Ubuntu
+```
+
+Si `wsl -d Ubuntu` sigue fallando, reinicie Windows y vuelva a ejecutar:
+
+```powershell
+wsl --install -d Ubuntu
+```
+
+#### 5. Verificar dependencias minimas de la mezcladora en WSL
+
+En `PowerShell`:
+
+```powershell
+wsl -d Ubuntu -- bash -lc "python3 --version && command -v vmn vmni vmnc vmnd vog"
+```
+
+Si falta `python3`, instale paquetes base:
+
+```powershell
+wsl -d Ubuntu -- bash -lc "sudo apt update && sudo apt install -y python3 python3-venv python3-pip"
+```
+
+Si faltan `vmn`, `vmni`, `vmnc`, `vmnd` o `vog`, instale Verificatum:
+
+```powershell
+wsl -d Ubuntu -- bash -lc "sudo apt-get update && sudo apt-get install --yes m4 cpp gcc make libtool automake autoconf libgmp-dev openjdk-21-jdk wget"
+wsl -d Ubuntu -- bash -lc "cd ~ && wget https://github.com/rmartinezch/mixnet/raw/main/installer/verificatum-vmn-3.1.0-full.tar.gz && mkdir -p verificatum-vmn-3.1.0-full && tar xvfz verificatum-vmn-3.1.0-full.tar.gz -C verificatum-vmn-3.1.0-full && cd verificatum-vmn-3.1.0-full && sudo make install"
+```
+
+Comprobacion minima despues de instalar Verificatum:
+
+```powershell
+wsl -d Ubuntu -- bash -lc "vmn -version && command -v vmn vmni vmnc vmnd vog"
+wsl -d Ubuntu -- bash -lc "vog -rndinit RandomDevice /dev/urandom"
+```
+
+Resultado esperado:
+
+- `vmn -version` responde sin error
+- `command -v vmn vmni vmnc vmnd vog` devuelve rutas validas
+- `vog -rndinit RandomDevice /dev/urandom` responde sin error
+
+Si esa comprobacion falla, no continue con `start_gui.sh` hasta corregir la instalacion de Verificatum.
+
+Vuelva a comprobar:
+
+```powershell
+wsl -d Ubuntu -- bash -lc "python3 --version && command -v vmn vmni vmnc vmnd vog"
+```
+
+#### 6. Levantar y publicar la mezcladora en WSL
+
+En `PowerShell`:
+
+```powershell
+wsl -d Ubuntu -- bash -lc "cd /mnt/c/cifradorM/workflow/votante/mezcladora && ./start_gui.sh"
+cd C:\cifradorM
+powershell -ExecutionPolicy Bypass -File .\workflow\votante\mezcladora\scripts\configure_windows_portproxy.ps1
+```
+
+Si aparece este error:
+
+- `/usr/bin/env: 'bash\r': No such file or directory`
+
+convierta el script a finales de linea Linux y vuelva a ejecutar:
+
+```powershell
+wsl -d Ubuntu -- bash -lc "sed -i 's/\r$//' /mnt/c/cifradorM/workflow/votante/mezcladora/start_gui.sh"
+wsl -d Ubuntu -- bash -lc "cd /mnt/c/cifradorM/workflow/votante/mezcladora && ./start_gui.sh"
+```
+
+Resultado esperado:
+
+- la GUI queda publicada en `http://127.0.0.1:7040`
+- las parties usan `7041` a `7049`
+- Windows publica `7040-7049` hacia la IP actual de `WSL`
+
+#### 7. Levantar la estacion Windows
+
+En otra consola `PowerShell`:
+
+```powershell
+cd C:\VotanteWindowsPortable
+powershell -ExecutionPolicy Bypass -File .\run-votante-windows.ps1 -ServiceBaseUrl http://127.0.0.1:7040
+```
+
+Resultado esperado:
+
+- la cabina queda disponible en `http://127.0.0.1:8788`
+- la estacion intenta descubrir la mezcladora desde `http://127.0.0.1:7040`
+
+#### 8. Verificacion final
+
+Abra:
+
+- `http://127.0.0.1:7040`
+- `http://127.0.0.1:8788`
+
+La ruta minima queda operativa cuando:
+
+- la mezcladora responde en `7040`
+- la estacion responde en `8788`
+- la estacion muestra conexion correcta a la mezcladora
+
+### Integracion Externa En Windows
+
+Una aplicacion externa en Windows debe consumir:
+
+- `ElGamalCipher-1.1.0.jar`
+- `vecj-2.2.0.dll`
+- `vmgj-1.3.0.dll`
+
+Ejemplo:
+
+```powershell
+$PROJECT_ROOT = 'C:\cifradorM'
+$APP_JAR = 'C:\cifradorM\mi-app.jar'
+
+java `
+  "-Djava.library.path=$PROJECT_ROOT\prebuilt\windows-x64" `
+  -cp "$PROJECT_ROOT\prebuilt\java\ElGamalCipher-1.1.0.jar;$APP_JAR" `
+  com.ejemplo.Main
+```
+
+Importante:
+
+- el artefacto canonico Windows es libreria, no `.exe`
+- no copies solo el `jar`; copia tambien las DLL JNI
+
+### RNG Y Soporte De Hardware En Windows
+
+- `-sw` usa `SecureRandom`
+- `-hw` usa TrueRNG por:
+  - autodeteccion `VID:PID 04D8:F5FE`
+  - propiedad JVM `-Delgamal.rng.device=COMx`
+  - variable `ELGAMAL_RNG_DEVICE=COMx`
+
+### Empaquetado Y Distribucion En Windows
+
+Build del bundle de libreria:
+
+```powershell
+cd C:\cifradorM
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\build-cifrador-portable.ps1
+```
+
+Salida:
+
+- `dist/windows/library/Cifrador/app/ElGamalCipher-1.1.0.jar`
+- `dist/windows/library/Cifrador/libs/windows-x64/vecj-2.2.0.dll`
+- `dist/windows/library/Cifrador/libs/windows-x64/vmgj-1.3.0.dll`
+
+ZIP del bundle:
+
+```powershell
+cd C:\cifradorM
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\package-cifrador-portable.ps1
+```
+
+Salida:
+
+- `dist/windows/Cifrador-1.1.0-windows-x64-library.zip`
+
+### Anexo: Bootstrap En Windows
+
+El bootstrap solo es necesario si se quiere recompilar los JARs de Verificatum desde codigo
+fuente (por ejemplo, para aplicar parches o actualizar versiones). En uso normal,
+los JARs de `native/verificatum-jars/` son suficientes.
+
+#### Ruta usada para bootstrap en Windows
+
+Para la ruta minima documentada en este README, use una sola raiz:
+
+- `C:\cifradorM`
+
+Si alguna vez necesita recompilar Verificatum desde fuentes en Windows, el bootstrap debe
+resolver los paquetes dentro del propio repo:
+
+```
+C:\cifradorM\native\verificatum-src\verificatum-vcr-3.1.0
+C:\cifradorM\native\verificatum-src\verificatum-vecj-2.2.0
+C:\cifradorM\native\verificatum-jars\com\verificatum\verificatum-vmgj\1.3.0\verificatum-vmgj-1.3.0.jar
+```
+
+Si el error dice `No se pudo ubicar verificatum-vcr-3.1.0. Rutas probadas: ...` significa
+que los fuentes no estan en ninguna de esas ubicaciones. Con la version actual del proyecto,
+los fuentes ya estan incluidos en `native\verificatum-src\` y los JARs precompilados en
+`native\verificatum-jars\`, por lo que este error no deberia ocurrir despues de un `git pull`
+si el repo esta en `C:\cifradorM`.
+
+#### Dependencias esperadas para Windows
+
+Para que `scripts/windows/compilacion/bootstrap-verificatum.ps1` funcione dentro de la ruta
+minima de Windows, basta con que existan estas rutas dentro del repo:
+
+- `C:\cifradorM\native\verificatum-src\verificatum-vcr-3.1.0`
+- `C:\cifradorM\native\verificatum-src\verificatum-vecj-2.2.0`
+- `C:\cifradorM\native\verificatum-jars\com\verificatum\verificatum-vmgj\1.3.0\verificatum-vmgj-1.3.0.jar`
+
+Importante:
+
+- para la ruta minima de prueba en Windows, use una sola raiz: `C:\cifradorM`
+- el bootstrap es opcional; no hace falta para compilar ni para probar el cifrador normal
+- solo considere `MIXNET_ROOT` o rutas externas si esta saliendo del flujo minimo de este README
+
+```powershell
+cd C:\cifradorM
+powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1
+```
+
+## Ubuntu
+
+### Guia Rapida Para Compilacion Del Cifrador En Ubuntu
 
 Ruta unica recomendada para instalar, probar y desplegar en `Ubuntu 22.04+`:
 
@@ -409,7 +866,65 @@ java -jar ~/cifradorM/prebuilt/java/ElGamalCipher-1.1.0.jar \
 Si el uso final es desde otra aplicacion Java en Ubuntu, despliegue siempre el `jar`
 junto con ambas `.so` del directorio `prebuilt/linux-x64`.
 
-## Ruta Minima En Android
+### Integracion Externa En Ubuntu
+
+Una aplicacion externa en Ubuntu debe enlazar el `jar` y exponer `libvecj` y `libvmgj`.
+
+Ejemplo:
+
+```bash
+java \
+  -Djava.library.path=/ruta/al/proyecto/prebuilt/linux-x64 \
+  -cp /ruta/al/proyecto/prebuilt/java/ElGamalCipher-1.1.0.jar:mi-app.jar \
+  com.ejemplo.Main
+```
+
+### RNG Y Soporte De Hardware En Ubuntu
+
+- `-sw` usa `RandomDevice()` con `/dev/urandom`
+- `-hw` usa TrueRNG por:
+  - propiedad JVM `-Delgamal.rng.device=<ruta>`
+  - variable `ELGAMAL_RNG_DEVICE`
+  - valor por defecto `/dev/TrueRNG0`
+
+### Empaquetado Y Distribucion En Ubuntu
+
+Imagen portable:
+
+```bash
+./scripts/ubuntu/empaquetado/build-cifrador-portable.sh
+```
+
+Salida:
+
+- `dist/linux/image/Cifrador/Cifrador`
+- `dist/linux/image/Cifrador/runtime`
+- `dist/linux/image/Cifrador/app`
+- `dist/linux/image/Cifrador/libs/linux-x64`
+
+Paquete comprimido:
+
+```bash
+./scripts/ubuntu/empaquetado/package-cifrador-portable.sh
+```
+
+Salida:
+
+- `dist/linux/Cifrador-1.1.0-linux-x64-portable.tar.gz`
+
+### Anexo: Bootstrap En Ubuntu
+
+El bootstrap solo es necesario si se quiere recompilar los JARs de Verificatum desde codigo
+fuente (por ejemplo, para aplicar parches o actualizar versiones). En uso normal,
+los JARs de `native/verificatum-jars/` son suficientes.
+
+```bash
+./scripts/ubuntu/entorno/bootstrap-verificatum.sh
+```
+
+## Android
+
+### Guia Rapida Para Compilacion Del Cifrador En Android
 
 Ruta unica recomendada para compilar y probar en `Android`:
 
@@ -489,120 +1004,6 @@ Artefactos compilados para despliegue:
 Para consumir el AAR desde una app Android externa, agregue el `.aar` como dependencia
 en el `build.gradle` de su proyecto. No necesita las `.so` sueltas; ya estan dentro del AAR.
 
-## Integracion Externa Como Libreria
-
-### Filosofia General
-
-- `Windows` y `Ubuntu` consumen `jar + JNI`
-- `Android` consume `AAR`
-- el cifrador es la libreria
-- las interfaces de votacion son consumidores separados
-
-### Modos De Integracion Segun Plataforma
-
-En `Windows` y `Ubuntu` existen dos formas validas de integracion:
-
-- como API Java embebida dentro de una aplicacion propia
-- como proceso externo lanzando `java` contra el `jar`
-
-Ambas opciones usan el mismo cifrador y ambas siguen requiriendo las bibliotecas JNI nativas de la plataforma.
-
-En `Android` el modelo canonico es distinto:
-
-- la integracion se hace consumiendo el `AAR` como libreria dentro de la app Android
-- no se considera un uso externo por CLI ni lanzando un proceso `java` separado
-- la API publica Android vive dentro del propio `AAR`
-
-### API Java Comun Para Windows Y Ubuntu
-
-Esta API aplica a consumidores Java externos en `Windows` y `Ubuntu`.
-
-No aplica directamente a `Android`, porque en Android el punto de integracion canonico es el `AAR`.
-
-Clases principales:
-
-- `pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService`
-- `pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest`
-- `pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode`
-- `pe.gob.onpe.votodigital.elgamalcipher.LogConfig`
-
-Ejemplo minimo para una aplicacion Java que luego se ejecuta en `Windows` o `Ubuntu` con las librerias JNI correctas:
-
-```java
-import java.nio.file.Path;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest;
-import pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode;
-import pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService;
-import pe.gob.onpe.votodigital.elgamalcipher.LogConfig;
-
-public final class DemoCifrado {
-    public static void main(String[] args) {
-        Logger logger = LogConfig.getLogger(
-            "./logs/demo-cifrador.log",
-            Level.INFO,
-            true,
-            true,
-            true,
-            true,
-            true
-        );
-
-        CifradorRequest request = new CifradorRequest(
-            Path.of("recursos/publicKey"),
-            Path.of("recursos/shuffled_votes.txt"),
-            Path.of("salida/ciphertexts_ext"),
-            CifradorRngMode.SOFTWARE,
-            false
-        );
-
-        boolean ok = new ElGamalCipherService(logger).encrypt(request);
-        if (!ok) {
-            throw new IllegalStateException("El cifrado no produjo salida.");
-        }
-    }
-}
-```
-
-### Integracion Externa En Windows
-
-Una aplicacion externa en Windows debe consumir:
-
-- `ElGamalCipher-1.1.0.jar`
-- `vecj-2.2.0.dll`
-- `vmgj-1.3.0.dll`
-
-Ejemplo:
-
-```powershell
-$PROJECT_ROOT = 'C:\cifradorM'
-$APP_JAR = 'C:\cifradorM\mi-app.jar'
-
-java `
-  "-Djava.library.path=$PROJECT_ROOT\prebuilt\windows-x64" `
-  -cp "$PROJECT_ROOT\prebuilt\java\ElGamalCipher-1.1.0.jar;$APP_JAR" `
-  com.ejemplo.Main
-```
-
-Importante:
-
-- el artefacto canonico Windows es libreria, no `.exe`
-- no copies solo el `jar`; copia tambien las DLL JNI
-
-### Integracion Externa En Ubuntu
-
-Una aplicacion externa en Ubuntu debe enlazar el `jar` y exponer `libvecj` y `libvmgj`.
-
-Ejemplo:
-
-```bash
-java \
-  -Djava.library.path=/ruta/al/proyecto/prebuilt/linux-x64 \
-  -cp /ruta/al/proyecto/prebuilt/java/ElGamalCipher-1.1.0.jar:mi-app.jar \
-  com.ejemplo.Main
-```
-
 ### Integracion Externa En Android
 
 En `Android` no se usa el cifrador como proceso externo ni como CLI independiente.
@@ -628,31 +1029,7 @@ El `AAR` ya empaqueta:
 - `jniLibs` para `x86_64`
 - soporte TrueRNG USB para Android
 
-Resumen por plataforma:
-
-- `Windows`: usa la API Java comun mas `jar + DLL`
-- `Ubuntu`: usa la API Java comun mas `jar + .so`
-- `Android`: usa el `AAR` y su API Android publica
-
-## RNG Y Soporte De Hardware
-
-### Ubuntu
-
-- `-sw` usa `RandomDevice()` con `/dev/urandom`
-- `-hw` usa TrueRNG por:
-  - propiedad JVM `-Delgamal.rng.device=<ruta>`
-  - variable `ELGAMAL_RNG_DEVICE`
-  - valor por defecto `/dev/TrueRNG0`
-
-### Windows
-
-- `-sw` usa `SecureRandom`
-- `-hw` usa TrueRNG por:
-  - autodeteccion `VID:PID 04D8:F5FE`
-  - propiedad JVM `-Delgamal.rng.device=COMx`
-  - variable `ELGAMAL_RNG_DEVICE=COMx`
-
-### Android
+### RNG Y Soporte De Hardware En Android
 
 - `-sw` usa `SecureRandom`
 - `-hw` usa TrueRNG USB cuando el dispositivo esta conectado por OTG, Android detecta un driver serial compatible y la app ya tiene permiso USB
@@ -660,80 +1037,9 @@ Resumen por plataforma:
 - si no hay dispositivo, driver o permiso USB, la ejecucion en modo hardware falla de forma explicita; no se degrada silenciosamente a `SecureRandom`
 - la app consumidora si debe manejar permisos USB, diagnostico del dispositivo y ciclo de vida Android alrededor del uso del TrueRNG
 
-### Otros Sistemas
+En otros sistemas no listados, `-sw` y `-hw` usan `SecureRandom`.
 
-- `-sw` y `-hw` usan `SecureRandom`
-
-## Layout Nativo Y Carga De JNI
-
-La aplicacion busca bibliotecas nativas en este orden:
-
-1. `prebuilt/<os-arch>`
-2. `prebuilt`
-3. `libs/<os-arch>`
-4. `libs`
-
-Ejemplos:
-
-- `prebuilt/linux-x64/libvecj-2.2.0.so`
-- `prebuilt/windows-x64/vecj-2.2.0.dll`
-
-Si el `jar` se ejecuta sin `java.library.path` y encuentra un layout local valido, puede relanzarse con la ruta correcta.
-
-## Empaquetado Y Distribucion
-
-### Windows
-
-Build del bundle de libreria:
-
-```powershell
-cd C:\cifradorM
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\build-cifrador-portable.ps1
-```
-
-Salida:
-
-- `dist/windows/library/Cifrador/app/ElGamalCipher-1.1.0.jar`
-- `dist/windows/library/Cifrador/libs/windows-x64/vecj-2.2.0.dll`
-- `dist/windows/library/Cifrador/libs/windows-x64/vmgj-1.3.0.dll`
-
-ZIP del bundle:
-
-```powershell
-cd C:\cifradorM
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\empaquetado\package-cifrador-portable.ps1
-```
-
-Salida:
-
-- `dist/windows/Cifrador-1.1.0-windows-x64-library.zip`
-
-### Ubuntu
-
-Imagen portable:
-
-```bash
-./scripts/ubuntu/empaquetado/build-cifrador-portable.sh
-```
-
-Salida:
-
-- `dist/linux/image/Cifrador/Cifrador`
-- `dist/linux/image/Cifrador/runtime`
-- `dist/linux/image/Cifrador/app`
-- `dist/linux/image/Cifrador/libs/linux-x64`
-
-Paquete comprimido:
-
-```bash
-./scripts/ubuntu/empaquetado/package-cifrador-portable.sh
-```
-
-Salida:
-
-- `dist/linux/Cifrador-1.1.0-linux-x64-portable.tar.gz`
-
-### Android
+### Empaquetado Y Distribucion En Android
 
 Imagen portable:
 
@@ -758,242 +1064,17 @@ Salida:
 
 - `dist/android/Cifrador-1.1.0-android-portable.zip`
 
-## Guia Rapida: Levantar Estaciones Y Mezcladora
+### Anexo: Bootstrap En Android
 
-Esta es la ruta minima para:
+- reutiliza el mismo repositorio `native/verificatum-jars/` del proyecto
+- no requiere un bootstrap Verificatum separado para consumir el `AAR`
+- la compilacion Android resuelve dependencias directamente de `native/verificatum-jars/`
 
-1. generar la estacion Windows portable
-2. descomprimirla en `C:\`
-3. levantar la mezcladora en `WSL`
-4. abrir la estacion Windows contra la mezcladora local
+Los tres artefactos Verificatum resueltos automaticamente son:
 
-Supuestos de esta ruta:
-
-- el repo ya existe en `C:\cifradorM`
-- la mezcladora correra en la misma PC Windows dentro de `WSL`
-- la estacion Windows se ejecutara desde `C:\VotanteWindowsPortable`
-
-### 1. Verificar Java 21 para empaquetar la estacion
-
-En `PowerShell`:
-
-```powershell
-javac -version
-```
-
-Si `javac` no existe o muestra una version menor a `21`, instale `Java 21`:
-
-```powershell
-winget install --id Microsoft.OpenJDK.21 -e --accept-package-agreements --accept-source-agreements
-```
-
-### 2. Generar el portable Windows
-
-```powershell
-cd C:\cifradorM
-powershell -ExecutionPolicy Bypass -File .\workflow\votante\windows\package-votante-windows-portable.ps1
-Test-Path .\dist\windows\VotanteWindowsPortable.zip
-```
-
-Resultado esperado:
-
-- el ultimo comando devuelve `True`
-- existe `C:\cifradorM\dist\windows\VotanteWindowsPortable.zip`
-
-### 3. Descomprimir la estacion Windows en `C:\`
-
-En `PowerShell`:
-
-```powershell
-Remove-Item -Recurse -Force C:\VotanteWindowsPortable -ErrorAction SilentlyContinue
-Expand-Archive -LiteralPath C:\cifradorM\dist\windows\VotanteWindowsPortable.zip -DestinationPath C:\VotanteWindowsPortable -Force
-```
-
-Comprobacion minima:
-
-```powershell
-Test-Path C:\VotanteWindowsPortable\run-votante-windows.cmd
-Test-Path C:\VotanteWindowsPortable\runtime\java\bin\java.exe
-```
-
-Resultado esperado:
-
-- ambos comandos devuelven `True`
-
-### 4. Verificar WSL y Ubuntu
-
-En `PowerShell`:
-
-```powershell
-wsl --status
-```
-
-Si `WSL` o `Ubuntu` no estan instalados, en `PowerShell` como administrador:
-
-```powershell
-wsl --install -d Ubuntu
-```
-
-Despues reinicie Windows si el sistema lo solicita y abra una nueva consola.
-
-Si despues del reinicio `wsl --status` muestra mensajes como estos:
-
-- `WSL2 no es compatible con la configuracion actual de la maquina`
-- `Se debe habilitar el componente opcional "Plataforma de maquina virtual"`
-- `Habilita el componente opcional "Subsistema de Windows para Linux"`
-
-habilite manualmente las features requeridas en `PowerShell` como administrador:
-
-```powershell
-dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
-dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
-bcdedit /set hypervisorlaunchtype auto
-shutdown /r /t 0
-```
-
-Despues del reinicio, vuelva a comprobar:
-
-```powershell
-wsl --status
-wsl --set-default-version 2
-```
-
-Comprobacion opcional de las features:
-
-```powershell
-Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux
-Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
-```
-
-Resultado esperado:
-
-- ambas features quedan en estado `Enabled`
-- `wsl --status` ya no muestra errores de compatibilidad para `WSL2`
-
-Si al intentar entrar a Ubuntu aparece:
-
-- `No hay ninguna distribucion con el nombre proporcionado`
-- `WSL_E_DISTRO_NOT_FOUND`
-
-liste las distribuciones instaladas:
-
-```powershell
-wsl -l -v
-```
-
-Si `Ubuntu` no aparece en la lista, instale la distribucion:
-
-```powershell
-wsl --install -d Ubuntu
-```
-
-Si la instalacion ya existe pero quedo a medio configurar, puede abrirla asi:
-
-```powershell
-wsl -d Ubuntu
-```
-
-Si `wsl -d Ubuntu` sigue fallando, reinicie Windows y vuelva a ejecutar:
-
-```powershell
-wsl --install -d Ubuntu
-```
-
-### 5. Verificar dependencias minimas de la mezcladora en WSL
-
-En `PowerShell`:
-
-```powershell
-wsl -d Ubuntu -- bash -lc "python3 --version && command -v vmn vmni vmnc vmnd vog"
-```
-
-Si falta `python3`, instale paquetes base:
-
-```powershell
-wsl -d Ubuntu -- bash -lc "sudo apt update && sudo apt install -y python3 python3-venv python3-pip"
-```
-
-Si faltan `vmn`, `vmni`, `vmnc`, `vmnd` o `vog`, instale Verificatum:
-
-```powershell
-wsl -d Ubuntu -- bash -lc "sudo apt-get update && sudo apt-get install --yes m4 cpp gcc make libtool automake autoconf libgmp-dev openjdk-21-jdk wget"
-wsl -d Ubuntu -- bash -lc "cd ~ && wget https://github.com/rmartinezch/mixnet/raw/main/installer/verificatum-vmn-3.1.0-full.tar.gz && mkdir -p verificatum-vmn-3.1.0-full && tar xvfz verificatum-vmn-3.1.0-full.tar.gz -C verificatum-vmn-3.1.0-full && cd verificatum-vmn-3.1.0-full && sudo make install"
-```
-
-Comprobacion minima despues de instalar Verificatum:
-
-```powershell
-wsl -d Ubuntu -- bash -lc "vmn -version && command -v vmn vmni vmnc vmnd vog"
-wsl -d Ubuntu -- bash -lc "vog -rndinit RandomDevice /dev/urandom"
-```
-
-Resultado esperado:
-
-- `vmn -version` responde sin error
-- `command -v vmn vmni vmnc vmnd vog` devuelve rutas validas
-- `vog -rndinit RandomDevice /dev/urandom` responde sin error
-
-Si esa comprobacion falla, no continue con `start_gui.sh` hasta corregir la instalacion de Verificatum.
-
-Vuelva a comprobar:
-
-```powershell
-wsl -d Ubuntu -- bash -lc "python3 --version && command -v vmn vmni vmnc vmnd vog"
-```
-
-### 6. Levantar y publicar la mezcladora en WSL
-
-En `PowerShell`:
-
-```powershell
-wsl -d Ubuntu -- bash -lc "cd /mnt/c/cifradorM/workflow/votante/mezcladora && ./start_gui.sh"
-cd C:\cifradorM
-powershell -ExecutionPolicy Bypass -File .\workflow\votante\mezcladora\scripts\configure_windows_portproxy.ps1
-```
-
-Si aparece este error:
-
-- `/usr/bin/env: 'bash\r': No such file or directory`
-
-convierta el script a finales de linea Linux y vuelva a ejecutar:
-
-```powershell
-wsl -d Ubuntu -- bash -lc "sed -i 's/\r$//' /mnt/c/cifradorM/workflow/votante/mezcladora/start_gui.sh"
-wsl -d Ubuntu -- bash -lc "cd /mnt/c/cifradorM/workflow/votante/mezcladora && ./start_gui.sh"
-```
-
-Resultado esperado:
-
-- la GUI queda publicada en `http://127.0.0.1:7040`
-- las parties usan `7041` a `7049`
-- Windows publica `7040-7049` hacia la IP actual de `WSL`
-
-### 7. Levantar la estacion Windows
-
-En otra consola `PowerShell`:
-
-```powershell
-cd C:\VotanteWindowsPortable
-powershell -ExecutionPolicy Bypass -File .\run-votante-windows.ps1 -ServiceBaseUrl http://127.0.0.1:7040
-```
-
-Resultado esperado:
-
-- la cabina queda disponible en `http://127.0.0.1:8788`
-- la estacion intenta descubrir la mezcladora desde `http://127.0.0.1:7040`
-
-### 8. Verificacion final
-
-Abra:
-
-- `http://127.0.0.1:7040`
-- `http://127.0.0.1:8788`
-
-La ruta minima queda operativa cuando:
-
-- la mezcladora responde en `7040`
-- la estacion responde en `8788`
-- la estacion muestra conexion correcta a la mezcladora
+- `com.verificatum:verificatum-vmgj:1.3.0`
+- `com.verificatum:verificatum-vecj:2.2.0`
+- `com.verificatum:verificatum-vcr-vmgj-vecj:3.1.0`
 
 ## Resumen De Rendimiento
 
@@ -1033,70 +1114,3 @@ Mejoras clave:
 - Maven Wrapper incluido (`mvnw` / `mvnw.cmd`)
 - fuentes VCR 3.1.0 incluidos en `native/verificatum-src/`
 - verificado en Ubuntu, Windows 11 y Android (emulador API 34)
-
-## Anexo: Bootstrap (solo si se necesita recompilar desde fuentes)
-
-El bootstrap solo es necesario si se quiere recompilar los JARs de Verificatum desde codigo
-fuente (por ejemplo, para aplicar parches o actualizar versiones). En uso normal,
-los JARs de `native/verificatum-jars/` son suficientes.
-
-### Ruta usada para bootstrap en Windows
-
-Para la ruta minima documentada en este README, use una sola raiz:
-
-- `C:\cifradorM`
-
-Si alguna vez necesita recompilar Verificatum desde fuentes en Windows, el bootstrap debe
-resolver los paquetes dentro del propio repo:
-
-```
-C:\cifradorM\native\verificatum-src\verificatum-vcr-3.1.0
-C:\cifradorM\native\verificatum-src\verificatum-vecj-2.2.0
-C:\cifradorM\native\verificatum-jars\com\verificatum\verificatum-vmgj\1.3.0\verificatum-vmgj-1.3.0.jar
-```
-
-Si el error dice `No se pudo ubicar verificatum-vcr-3.1.0. Rutas probadas: ...` significa
-que los fuentes no estan en ninguna de esas ubicaciones. Con la version actual del proyecto,
-los fuentes ya estan incluidos en `native\verificatum-src\` y los JARs precompilados en
-`native\verificatum-jars\`, por lo que este error no deberia ocurrir despues de un `git pull`
-si el repo esta en `C:\cifradorM`.
-
-### Dependencias esperadas para Windows
-
-Para que `scripts/windows/compilacion/bootstrap-verificatum.ps1` funcione dentro de la ruta
-minima de Windows, basta con que existan estas rutas dentro del repo:
-
-- `C:\cifradorM\native\verificatum-src\verificatum-vcr-3.1.0`
-- `C:\cifradorM\native\verificatum-src\verificatum-vecj-2.2.0`
-- `C:\cifradorM\native\verificatum-jars\com\verificatum\verificatum-vmgj\1.3.0\verificatum-vmgj-1.3.0.jar`
-
-Importante:
-
-- para la ruta minima de prueba en Windows, use una sola raiz: `C:\cifradorM`
-- el bootstrap es opcional; no hace falta para compilar ni para probar el cifrador normal
-- solo considere `MIXNET_ROOT` o rutas externas si esta saliendo del flujo minimo de este README
-
-Windows:
-
-```powershell
-cd C:\cifradorM
-powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\bootstrap-verificatum.ps1
-```
-
-Ubuntu:
-
-```bash
-./scripts/ubuntu/entorno/bootstrap-verificatum.sh
-```
-
-Android:
-
-- reutiliza el mismo repositorio `native/verificatum-jars/` del proyecto
-- no requiere un bootstrap Verificatum separado para consumir el `AAR`
-- la compilacion Android resuelve dependencias directamente de `native/verificatum-jars/`
-
-Los tres artefactos Verificatum resueltos automaticamente son:
-
-- `com.verificatum:verificatum-vmgj:1.3.0`
-- `com.verificatum:verificatum-vecj:2.2.0`
-- `com.verificatum:verificatum-vcr-vmgj-vecj:3.1.0`
