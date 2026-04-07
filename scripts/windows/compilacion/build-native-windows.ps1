@@ -15,6 +15,35 @@ $GmpmeeVersion = "2.1.0"
 $VecjVersion = "2.2.0"
 $VmgjVersion = "1.3.0"
 
+function Normalize-OptionalPath {
+    param([string]$Value)
+
+    if (-not $Value) {
+        return $null
+    }
+
+    $normalized = $Value.Trim()
+    if (-not $normalized) {
+        return $null
+    }
+
+    if ($normalized.Length -ge 2 -and $normalized.StartsWith('"') -and $normalized.EndsWith('"')) {
+        $normalized = $normalized.Substring(1, $normalized.Length - 2).Trim()
+    }
+
+    if (-not $normalized) {
+        return $null
+    }
+
+    foreach ($invalidChar in [System.IO.Path]::GetInvalidPathChars()) {
+        if ($normalized.Contains([string]$invalidChar)) {
+            return $null
+        }
+    }
+
+    return $normalized
+}
+
 function Resolve-PreferredPath {
     param(
         [string]$ExplicitPath,
@@ -23,15 +52,20 @@ function Resolve-PreferredPath {
     )
 
     if ($ExplicitPath) {
-        if (-not (Test-Path $ExplicitPath)) {
+        $explicitLiteralPath = Normalize-OptionalPath $ExplicitPath
+        if (-not $explicitLiteralPath) {
+            throw "La ruta indicada para $Label no es valida: $ExplicitPath"
+        }
+        if (-not (Test-Path -LiteralPath $explicitLiteralPath)) {
             throw "No se encontro $Label en la ruta indicada: $ExplicitPath"
         }
-        return (Resolve-Path $ExplicitPath).Path
+        return (Resolve-Path -LiteralPath $explicitLiteralPath).Path
     }
 
     foreach ($candidate in $Candidates) {
-        if ($candidate -and (Test-Path $candidate)) {
-            return (Resolve-Path $candidate).Path
+        $literalCandidate = Normalize-OptionalPath $candidate
+        if ($literalCandidate -and (Test-Path -LiteralPath $literalCandidate)) {
+            return (Resolve-Path -LiteralPath $literalCandidate).Path
         }
     }
 
@@ -43,9 +77,10 @@ function Resolve-JavaHome {
     param([string]$PreferredJavaHome)
 
     $javacCandidates = @()
+    $normalizedPreferredJavaHome = Normalize-OptionalPath $PreferredJavaHome
 
-    if ($PreferredJavaHome) {
-        $javacCandidates += (Join-Path $PreferredJavaHome "bin\javac.exe")
+    if ($normalizedPreferredJavaHome) {
+        $javacCandidates += (Join-Path $normalizedPreferredJavaHome "bin\javac.exe")
     }
 
     $javacCommand = Get-Command javac.exe -ErrorAction SilentlyContinue
@@ -54,8 +89,13 @@ function Resolve-JavaHome {
     }
 
     foreach ($javacPath in $javacCandidates | Select-Object -Unique) {
-        if (Test-Path $javacPath) {
-            return Split-Path (Split-Path $javacPath -Parent) -Parent
+        $literalJavacPath = Normalize-OptionalPath $javacPath
+        if (-not $literalJavacPath) {
+            continue
+        }
+
+        if (Test-Path -LiteralPath $literalJavacPath -PathType Leaf) {
+            return Split-Path (Split-Path $literalJavacPath -Parent) -Parent
         }
     }
 
@@ -69,7 +109,7 @@ function Ensure-Msys2 {
     )
 
     $bashPath = Join-Path $MsysRootPath "usr\bin\bash.exe"
-    if (Test-Path $bashPath) {
+    if (Test-Path -LiteralPath $bashPath -PathType Leaf) {
         return
     }
 
@@ -83,7 +123,7 @@ function Ensure-Msys2 {
 
     & $installerPath "-y" "-oC:\"
 
-    if (-not (Test-Path $bashPath)) {
+    if (-not (Test-Path -LiteralPath $bashPath -PathType Leaf)) {
         throw "No se pudo instalar MSYS2 en $MsysRootPath"
     }
 }
