@@ -9,19 +9,53 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Normalize-OptionalPath {
+    param([string]$Value)
+
+    if (-not $Value) {
+        return $null
+    }
+
+    $normalized = $Value.Trim()
+    if (-not $normalized) {
+        return $null
+    }
+
+    if ($normalized.Length -ge 2 -and $normalized.StartsWith('"') -and $normalized.EndsWith('"')) {
+        $normalized = $normalized.Substring(1, $normalized.Length - 2).Trim()
+    }
+
+    if (-not $normalized) {
+        return $null
+    }
+
+    foreach ($invalidChar in [System.IO.Path]::GetInvalidPathChars()) {
+        if ($normalized.Contains([string]$invalidChar)) {
+            return $null
+        }
+    }
+
+    return $normalized
+}
+
 function Resolve-JavaHome {
     param([string]$PreferredJavaHome)
 
     $knownHomes = @(
-        $PreferredJavaHome,
+        (Normalize-OptionalPath $PreferredJavaHome),
         "C:\Users\soett\.antigravity\extensions\redhat.java-1.51.0-win32-x64\jre\21.0.9-win32-x86_64",
-        $env:JAVA_HOME
+        (Normalize-OptionalPath $env:JAVA_HOME)
     ) | Where-Object { $_ }
 
     foreach ($candidate in $knownHomes | Select-Object -Unique) {
-        $javacPath = Join-Path $candidate "bin\javac.exe"
-        if (Test-Path $javacPath) {
-            return (Resolve-Path $candidate).Path
+        try {
+            $javacPath = Join-Path $candidate "bin\javac.exe"
+            if (Test-Path -LiteralPath $javacPath) {
+                return (Resolve-Path -LiteralPath $candidate).Path
+            }
+        }
+        catch {
+            continue
         }
     }
 
@@ -41,14 +75,19 @@ function Resolve-MavenExecutable {
     } | Where-Object { $_ } | Select-Object -ExpandProperty Source
 
     $candidates = @(
-        $PreferredMavenCmd,
+        (Normalize-OptionalPath $PreferredMavenCmd),
         $commandsFromPath,
         "C:\Program Files\JetBrains\IntelliJ IDEA Community Edition 2024.2.3\plugins\maven\lib\maven3\bin\mvn.cmd"
     ) | Where-Object { $_ }
 
     foreach ($candidate in $candidates | Select-Object -Unique) {
-        if ($candidate -and (Test-Path $candidate)) {
-            return (Resolve-Path $candidate).Path
+        try {
+            if ($candidate -and (Test-Path -LiteralPath $candidate)) {
+                return (Resolve-Path -LiteralPath $candidate).Path
+            }
+        }
+        catch {
+            continue
         }
     }
 
@@ -73,8 +112,8 @@ function Resolve-UcrtGcc {
     )
 
     foreach ($candidate in $candidates) {
-        if (Test-Path $candidate) {
-            return (Resolve-Path $candidate).Path
+        if (Test-Path -LiteralPath $candidate) {
+            return (Resolve-Path -LiteralPath $candidate).Path
         }
     }
 

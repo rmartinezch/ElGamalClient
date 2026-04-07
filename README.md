@@ -185,6 +185,8 @@ Una vez que `winget` responda correctamente, instale dependencias base y descarg
 winget install --id Git.Git -e --accept-package-agreements --accept-source-agreements
 winget install --id Microsoft.OpenJDK.21 -e --accept-package-agreements --accept-source-agreements
 
+# Cierre esta consola y abra otra ventana de PowerShell antes de continuar.
+
 git clone -b cifradorM https://github.com/rmartinezch/ElGamalClient.git C:\cifradorM
 cd C:\cifradorM
 ```

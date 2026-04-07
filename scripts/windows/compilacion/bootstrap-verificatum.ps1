@@ -11,18 +11,53 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Normalize-OptionalPath {
+    param([string]$Value)
+
+    if (-not $Value) {
+        return $null
+    }
+
+    $normalized = $Value.Trim()
+    if (-not $normalized) {
+        return $null
+    }
+
+    if ($normalized.Length -ge 2 -and $normalized.StartsWith('"') -and $normalized.EndsWith('"')) {
+        $normalized = $normalized.Substring(1, $normalized.Length - 2).Trim()
+    }
+
+    if (-not $normalized) {
+        return $null
+    }
+
+    foreach ($invalidChar in [System.IO.Path]::GetInvalidPathChars()) {
+        if ($normalized.Contains([string]$invalidChar)) {
+            return $null
+        }
+    }
+
+    return $normalized
+}
+
 function Resolve-JavaHome {
     param([string]$Candidate)
 
     $knownHomes = @(
-        $Candidate,
+        (Normalize-OptionalPath $Candidate),
         "C:\Users\soett\.antigravity\extensions\redhat.java-1.51.0-win32-x64\jre\21.0.9-win32-x86_64",
-        $env:JAVA_HOME
-    ) | Where-Object { $_ }
+        (Normalize-OptionalPath $env:JAVA_HOME)
+    ) | Where-Object { $_ } | Select-Object -Unique
 
     foreach ($javaHomeCandidate in $knownHomes) {
-        if (Test-Path (Join-Path $javaHomeCandidate "bin\javac.exe")) {
-            return (Resolve-Path $javaHomeCandidate).Path
+        try {
+            $javacPath = Join-Path $javaHomeCandidate "bin\javac.exe"
+            if (Test-Path -LiteralPath $javacPath) {
+                return (Resolve-Path -LiteralPath $javaHomeCandidate).Path
+            }
+        }
+        catch {
+            continue
         }
     }
 
@@ -34,14 +69,19 @@ function Resolve-MavenCmd {
 
     $mvnFromPath = Get-Command mvn.cmd -ErrorAction SilentlyContinue
     $knownCommands = @(
-        $Candidate,
+        (Normalize-OptionalPath $Candidate),
         $(if ($mvnFromPath) { $mvnFromPath.Source }),
         "C:\Program Files\JetBrains\IntelliJ IDEA Community Edition 2024.2.3\plugins\maven\lib\maven3\bin\mvn.cmd"
-    ) | Where-Object { $_ }
+    ) | Where-Object { $_ } | Select-Object -Unique
 
     foreach ($command in $knownCommands) {
-        if (Test-Path $command) {
-            return (Resolve-Path $command).Path
+        try {
+            if (Test-Path -LiteralPath $command) {
+                return (Resolve-Path -LiteralPath $command).Path
+            }
+        }
+        catch {
+            continue
         }
     }
 
@@ -56,15 +96,20 @@ function Resolve-PreferredPath {
     )
 
     if ($ExplicitPath) {
-        if (-not (Test-Path $ExplicitPath)) {
+        $explicitLiteralPath = Normalize-OptionalPath $ExplicitPath
+        if (-not $explicitLiteralPath) {
+            throw "La ruta indicada para $Label no es valida: $ExplicitPath"
+        }
+        if (-not (Test-Path -LiteralPath $explicitLiteralPath)) {
             throw "No se encontro $Label en la ruta indicada: $ExplicitPath"
         }
-        return (Resolve-Path $ExplicitPath).Path
+        return (Resolve-Path -LiteralPath $explicitLiteralPath).Path
     }
 
     foreach ($candidate in $Candidates) {
-        if ($candidate -and (Test-Path $candidate)) {
-            return (Resolve-Path $candidate).Path
+        $literalCandidate = Normalize-OptionalPath $candidate
+        if ($literalCandidate -and (Test-Path -LiteralPath $literalCandidate)) {
+            return (Resolve-Path -LiteralPath $literalCandidate).Path
         }
     }
 
