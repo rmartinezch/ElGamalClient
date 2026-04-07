@@ -67,10 +67,13 @@ function Resolve-JavaHome {
 function Resolve-MavenCmd {
     param([string]$Candidate)
 
-    $mvnFromPath = Get-Command mvn.cmd -ErrorAction SilentlyContinue
+    $mvnCmdFromPath = Get-Command mvn.cmd -ErrorAction SilentlyContinue
+    $mvnwCmdFromPath = Get-Command mvnw.cmd -ErrorAction SilentlyContinue
     $knownCommands = @(
         (Normalize-OptionalPath $Candidate),
-        $(if ($mvnFromPath) { $mvnFromPath.Source }),
+        $(if ($mvnCmdFromPath) { $mvnCmdFromPath.Source }),
+        $(if ($mvnwCmdFromPath) { $mvnwCmdFromPath.Source }),
+        (Join-Path $ProjectRoot "mvnw.cmd"),
         "C:\Program Files\JetBrains\IntelliJ IDEA Community Edition 2024.2.3\plugins\maven\lib\maven3\bin\mvn.cmd"
     ) | Where-Object { $_ } | Select-Object -Unique
 
@@ -85,7 +88,7 @@ function Resolve-MavenCmd {
         }
     }
 
-    throw "No se encontro mvn.cmd. Configure Maven o pase -MavenCmd."
+    throw "No se encontro Maven ni Maven Wrapper. Configure Maven o pase -MavenCmd."
 }
 
 function Resolve-PreferredPath {

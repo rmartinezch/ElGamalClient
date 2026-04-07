@@ -70,12 +70,13 @@ function Resolve-JavaHome {
 function Resolve-MavenExecutable {
     param([string]$PreferredMavenCmd)
 
-    $commandsFromPath = @("mvn.cmd", "mvn") | ForEach-Object {
+    $commandsFromPath = @("mvnw.cmd", "mvn.cmd", "mvnw", "mvn") | ForEach-Object {
         Get-Command $_ -ErrorAction SilentlyContinue
     } | Where-Object { $_ } | Select-Object -ExpandProperty Source
 
     $candidates = @(
         (Normalize-OptionalPath $PreferredMavenCmd),
+        (Join-Path $ProjectRoot "mvnw.cmd"),
         $commandsFromPath,
         "C:\Program Files\JetBrains\IntelliJ IDEA Community Edition 2024.2.3\plugins\maven\lib\maven3\bin\mvn.cmd"
     ) | Where-Object { $_ }
