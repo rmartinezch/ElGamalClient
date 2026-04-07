@@ -79,8 +79,14 @@ function Resolve-MavenCmd {
 
     foreach ($command in $knownCommands) {
         try {
-            if (Test-Path -LiteralPath $command) {
-                return (Resolve-Path -LiteralPath $command).Path
+            $resolvedCommand = $command
+            if (-not [System.IO.Path]::IsPathRooted($resolvedCommand)) {
+                $resolvedCommand = Join-Path $ProjectRoot $resolvedCommand
+            }
+            $resolvedCommand = [System.IO.Path]::GetFullPath($resolvedCommand)
+
+            if ([System.IO.File]::Exists($resolvedCommand)) {
+                return $resolvedCommand
             }
         }
         catch {

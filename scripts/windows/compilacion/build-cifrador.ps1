@@ -83,8 +83,18 @@ function Resolve-MavenExecutable {
 
     foreach ($candidate in $candidates | Select-Object -Unique) {
         try {
-            if ($candidate -and (Test-Path -LiteralPath $candidate)) {
-                return (Resolve-Path -LiteralPath $candidate).Path
+            if (-not $candidate) {
+                continue
+            }
+
+            $resolvedCandidate = $candidate
+            if (-not [System.IO.Path]::IsPathRooted($resolvedCandidate)) {
+                $resolvedCandidate = Join-Path $ProjectRoot $resolvedCandidate
+            }
+            $resolvedCandidate = [System.IO.Path]::GetFullPath($resolvedCandidate)
+
+            if ([System.IO.File]::Exists($resolvedCandidate)) {
+                return $resolvedCandidate
             }
         }
         catch {
