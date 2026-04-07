@@ -158,6 +158,7 @@ $missingMavenArtifacts = @(@(
 })
 
 if ($missingMavenArtifacts.Count -gt 0) {
+    $env:VERIFICATUM_MAVEN_CMD = $MavenExecutable
     & powershell -NoProfile -ExecutionPolicy Bypass -File $BootstrapScript -ProjectRoot $ProjectRoot -JavaHome $JavaHome -MavenCmd $MavenExecutable
     if ($LASTEXITCODE -ne 0) {
         throw "Fallo bootstrap-verificatum.ps1."

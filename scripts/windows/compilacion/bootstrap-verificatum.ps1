@@ -67,10 +67,37 @@ function Resolve-JavaHome {
 function Resolve-MavenCmd {
     param([string]$Candidate)
 
+    $explicitCandidates = @(
+        $Candidate,
+        $env:VERIFICATUM_MAVEN_CMD
+    ) | Where-Object { $_ } | Select-Object -Unique
+
+    foreach ($explicitCandidate in $explicitCandidates) {
+        try {
+            $trimmedCandidate = $explicitCandidate.Trim().Trim('"')
+            if (-not $trimmedCandidate) {
+                continue
+            }
+
+            if (Test-Path -LiteralPath $trimmedCandidate -PathType Leaf) {
+                return (Resolve-Path -LiteralPath $trimmedCandidate).Path
+            }
+
+            $projectRelativeCandidate = Join-Path $ProjectRoot $trimmedCandidate
+            if (Test-Path -LiteralPath $projectRelativeCandidate -PathType Leaf) {
+                return (Resolve-Path -LiteralPath $projectRelativeCandidate).Path
+            }
+        }
+        catch {
+            continue
+        }
+    }
+
     $mvnCmdFromPath = Get-Command mvn.cmd -ErrorAction SilentlyContinue
     $mvnwCmdFromPath = Get-Command mvnw.cmd -ErrorAction SilentlyContinue
     $knownCommands = @(
         (Normalize-OptionalPath $Candidate),
+        (Normalize-OptionalPath $env:VERIFICATUM_MAVEN_CMD),
         $(if ($mvnCmdFromPath) { $mvnCmdFromPath.Source }),
         $(if ($mvnwCmdFromPath) { $mvnwCmdFromPath.Source }),
         (Join-Path $ProjectRoot "mvnw.cmd"),
