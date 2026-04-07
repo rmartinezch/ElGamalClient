@@ -246,7 +246,7 @@ Recompilacion minima de todos los artefactos Windows (`jar + DLL JNI`):
 ```powershell
 cd C:\cifradorM
 powershell -ExecutionPolicy Bypass -File .\scripts\windows\compilacion\build-cifrador.ps1 `
-  -MavenCmd .\mvnw.cmd `
+  -MavenCmd C:\cifradorM\mvnw.cmd `
   -ForceNativeBuild
 ```
 
