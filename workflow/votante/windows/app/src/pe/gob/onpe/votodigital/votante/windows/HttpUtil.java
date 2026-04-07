@@ -2,9 +2,11 @@ package pe.gob.onpe.votodigital.votante.windows;
 
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.channels.ClosedChannelException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -57,13 +59,37 @@ final class HttpUtil {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
+    static boolean isClientAbort(IOException ex) {
+        if (ex instanceof java.net.SocketException
+                || ex instanceof EOFException
+                || ex instanceof ClosedChannelException) {
+            return true;
+        }
+        String message = ex.getMessage();
+        if (message == null) {
+            return false;
+        }
+        String normalized = message.toLowerCase();
+        return normalized.contains("broken pipe")
+                || normalized.contains("forcibly closed")
+                || normalized.contains("connection reset")
+                || normalized.contains("ha anulado una conexión")
+                || normalized.contains("ha anulado una conexion");
+    }
+
     static void sendJson(HttpExchange exchange, int status, Object payload) throws IOException {
         byte[] bytes = JsonUtil.toJson(payload).getBytes(StandardCharsets.UTF_8);
         Headers headers = exchange.getResponseHeaders();
         headers.set("Content-Type", "application/json; charset=utf-8");
-        exchange.sendResponseHeaders(status, bytes.length);
-        try (OutputStream out = exchange.getResponseBody()) {
-            out.write(bytes);
+        try {
+            exchange.sendResponseHeaders(status, bytes.length);
+            try (OutputStream out = exchange.getResponseBody()) {
+                out.write(bytes);
+            }
+        } catch (IOException ex) {
+            if (!isClientAbort(ex)) {
+                throw ex;
+            }
         }
     }
 
@@ -71,13 +97,22 @@ final class HttpUtil {
             throws IOException {
         Headers headers = exchange.getResponseHeaders();
         headers.set("Content-Type", contentType);
-        exchange.sendResponseHeaders(status, payload.length);
-        try (OutputStream out = exchange.getResponseBody()) {
-            out.write(payload);
+        try {
+            exchange.sendResponseHeaders(status, payload.length);
+            try (OutputStream out = exchange.getResponseBody()) {
+                out.write(payload);
+            }
+        } catch (IOException ex) {
+            if (!isClientAbort(ex)) {
+                throw ex;
+            }
         }
     }
 
     static void sendError(HttpExchange exchange, int status, Exception ex) throws IOException {
+        if (ex instanceof IOException ioEx && isClientAbort(ioEx)) {
+            return;
+        }
         if (status >= 500 && !(ex instanceof java.net.ConnectException)) {
             ex.printStackTrace(System.err);
         }
@@ -85,6 +120,12 @@ final class HttpUtil {
         payload.put("status", status);
         payload.put("error", ex.getClass().getSimpleName());
         payload.put("message", ex.getMessage());
-        sendJson(exchange, status, payload);
+        try {
+            sendJson(exchange, status, payload);
+        } catch (IOException ioEx) {
+            if (!isClientAbort(ioEx)) {
+                throw ioEx;
+            }
+        }
     }
 }

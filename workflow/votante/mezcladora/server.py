@@ -1862,6 +1862,10 @@ def upload_ciphertexts(payload: dict) -> dict:
 class GUIHandler(BaseHTTPRequestHandler):
     server_version = "VerificatumGUI/2.0"
 
+    @staticmethod
+    def _client_disconnected(exc: OSError) -> bool:
+        return isinstance(exc, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError))
+
     def _cors_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -1876,7 +1880,11 @@ class GUIHandler(BaseHTTPRequestHandler):
         self.send_header("Pragma", "no-cache")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
-        self.wfile.write(raw)
+        try:
+            self.wfile.write(raw)
+        except OSError as exc:
+            if not self._client_disconnected(exc):
+                raise
 
     def _send_file(self, path: Path, content_type: str, download_name: str | None = None) -> None:
         if not path.exists():
@@ -1892,7 +1900,11 @@ class GUIHandler(BaseHTTPRequestHandler):
         self.send_header("Pragma", "no-cache")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.wfile.write(data)
+        except OSError as exc:
+            if not self._client_disconnected(exc):
+                raise
 
     def do_OPTIONS(self) -> None:
         self.send_response(HTTPStatus.NO_CONTENT)
