@@ -15,29 +15,19 @@ El repositorio contiene tanto el cifrador como libreria reusable como estaciones
 3. [Estado Actual](#estado-actual)
 4. [Estructura Del Repositorio](#estructura-del-repositorio)
 5. [Requisitos](#requisitos)
-6. [Integracion Externa Como Libreria](#integracion-externa-como-libreria)
-7. [Layout Nativo Y Carga De JNI](#layout-nativo-y-carga-de-jni)
-8. [Windows](#windows)
+6. [Windows](#windows)
    - [Guia Rapida Para Compilacion Del Cifrador](#guia-rapida-para-compilacion-del-cifrador)
    - [Guia Rapida: Levantar Estaciones Y Mezcladora](#guia-rapida-levantar-estaciones-y-mezcladora)
-   - [Integracion Externa En Windows](#integracion-externa-en-windows)
-   - [RNG Y Soporte De Hardware En Windows](#rng-y-soporte-de-hardware-en-windows)
-   - [Empaquetado Y Distribucion En Windows](#empaquetado-y-distribucion-en-windows)
-   - [Anexo: Bootstrap En Windows](#anexo-bootstrap-en-windows)
-9. [Ubuntu](#ubuntu)
+     - [Flujo Completo De Operacion](#9-flujo-completo-de-operacion)
+   - [Anexo Windows](#anexo-windows)
+7. [Ubuntu](#ubuntu)
    - [Guia Rapida Para Compilacion Del Cifrador En Ubuntu](#guia-rapida-para-compilacion-del-cifrador-en-ubuntu)
-   - [Integracion Externa En Ubuntu](#integracion-externa-en-ubuntu)
-   - [RNG Y Soporte De Hardware En Ubuntu](#rng-y-soporte-de-hardware-en-ubuntu)
-   - [Empaquetado Y Distribucion En Ubuntu](#empaquetado-y-distribucion-en-ubuntu)
-   - [Anexo: Bootstrap En Ubuntu](#anexo-bootstrap-en-ubuntu)
-10. [Android](#android)
-    - [Guia Rapida Para Compilacion Del Cifrador En Android](#guia-rapida-para-compilacion-del-cifrador-en-android)
-    - [Integracion Externa En Android](#integracion-externa-en-android)
-    - [RNG Y Soporte De Hardware En Android](#rng-y-soporte-de-hardware-en-android)
-    - [Empaquetado Y Distribucion En Android](#empaquetado-y-distribucion-en-android)
-    - [Anexo: Bootstrap En Android](#anexo-bootstrap-en-android)
-11. [Resumen De Rendimiento](#resumen-de-rendimiento)
-12. [Historial Breve](#historial-breve)
+   - [Anexo Ubuntu](#anexo-ubuntu)
+8. [Android](#android)
+   - [Guia Rapida Para Compilacion Del Cifrador En Android](#guia-rapida-para-compilacion-del-cifrador-en-android)
+   - [Anexo Android](#anexo-android)
+9. [Resumen De Rendimiento](#resumen-de-rendimiento)
+10. [Historial Breve](#historial-breve)
 
 ## Resumen
 
@@ -139,104 +129,6 @@ Requisitos adicionales por plataforma:
   - toolchain nativo para JNI Linux
 - `Android`
   - Android SDK / Gradle para compilar el `AAR` o el consumidor Android
-
-## Integracion Externa Como Libreria
-
-### Filosofia General
-
-- `Windows` y `Ubuntu` consumen `jar + JNI`
-- `Android` consume `AAR`
-- el cifrador es la libreria
-- las interfaces de votacion son consumidores separados
-
-### Modos De Integracion Segun Plataforma
-
-En `Windows` y `Ubuntu` existen dos formas validas de integracion:
-
-- como API Java embebida dentro de una aplicacion propia
-- como proceso externo lanzando `java` contra el `jar`
-
-Ambas opciones usan el mismo cifrador y ambas siguen requiriendo las bibliotecas JNI nativas de la plataforma.
-
-En `Android` el modelo canonico es distinto:
-
-- la integracion se hace consumiendo el `AAR` como libreria dentro de la app Android
-- no se considera un uso externo por CLI ni lanzando un proceso `java` separado
-- la API publica Android vive dentro del propio `AAR`
-
-### API Java Comun Para Windows Y Ubuntu
-
-Esta API aplica a consumidores Java externos en `Windows` y `Ubuntu`.
-
-No aplica directamente a `Android`, porque en Android el punto de integracion canonico es el `AAR`.
-
-Clases principales:
-
-- `pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService`
-- `pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest`
-- `pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode`
-- `pe.gob.onpe.votodigital.elgamalcipher.LogConfig`
-
-Ejemplo minimo para una aplicacion Java que luego se ejecuta en `Windows` o `Ubuntu` con las librerias JNI correctas:
-
-```java
-import java.nio.file.Path;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest;
-import pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode;
-import pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService;
-import pe.gob.onpe.votodigital.elgamalcipher.LogConfig;
-
-public final class DemoCifrado {
-    public static void main(String[] args) {
-        Logger logger = LogConfig.getLogger(
-            "./logs/demo-cifrador.log",
-            Level.INFO,
-            true,
-            true,
-            true,
-            true,
-            true
-        );
-
-        CifradorRequest request = new CifradorRequest(
-            Path.of("recursos/publicKey"),
-            Path.of("recursos/shuffled_votes.txt"),
-            Path.of("salida/ciphertexts_ext"),
-            CifradorRngMode.SOFTWARE,
-            false
-        );
-
-        boolean ok = new ElGamalCipherService(logger).encrypt(request);
-        if (!ok) {
-            throw new IllegalStateException("El cifrado no produjo salida.");
-        }
-    }
-}
-```
-
-Resumen por plataforma:
-
-- `Windows`: usa la API Java comun mas `jar + DLL`
-- `Ubuntu`: usa la API Java comun mas `jar + .so`
-- `Android`: usa el `AAR` y su API Android publica
-
-## Layout Nativo Y Carga De JNI
-
-La aplicacion busca bibliotecas nativas en este orden:
-
-1. `prebuilt/<os-arch>`
-2. `prebuilt`
-3. `libs/<os-arch>`
-4. `libs`
-
-Ejemplos:
-
-- `prebuilt/linux-x64/libvecj-2.2.0.so`
-- `prebuilt/windows-x64/vecj-2.2.0.dll`
-
-Si el `jar` se ejecuta sin `java.library.path` y encuentra un layout local valido, puede relanzarse con la ruta correcta.
 
 ## Windows
 
@@ -659,7 +551,160 @@ La ruta minima queda operativa cuando:
 - la estacion responde en `8788`
 - la estacion muestra conexion correcta a la mezcladora
 
-### Integracion Externa En Windows
+#### 9. Flujo completo de operacion
+
+Una vez que la mezcladora y la estacion estan levantadas, el flujo de operacion
+es el siguiente:
+
+```mermaid
+flowchart TD
+    classDef mezcladora fill:#1a73e8,stroke:#0d47a1,color:#fff,font-weight:bold
+    classDef estacion fill:#34a853,stroke:#1b5e20,color:#fff,font-weight:bold
+    classDef party fill:#f9ab00,stroke:#e65100,color:#000,font-weight:bold
+    classDef espera fill:#e8eaed,stroke:#9aa0a6,color:#333
+    classDef resultado fill:#ea4335,stroke:#b71c1c,color:#fff,font-weight:bold
+
+    subgraph FASE1["FASE 1 — Creacion de Sesion y Llave"]
+        M1["Mezcladora<br/>http://127.0.0.1:7040"]:::mezcladora
+        M2["Click en Nueva Sesion"]:::mezcladora
+        M3["Generando llave criptografica<br/>(keygen entre 3 parties)"]:::espera
+        M4["Llave creada<br/>Estado: Esperando votos"]:::mezcladora
+        M1 --> M2 --> M3 --> M4
+    end
+
+    subgraph FASE2["FASE 2 — Emision de Voto"]
+        E1["Estacion de Voto<br/>http://127.0.0.1:8788"]:::estacion
+        E2["Handshake automatico<br/>+ descarga de llave publica"]:::estacion
+        E3["Click en Emitir Voto<br/>El voto se cifra y envia"]:::estacion
+        E1 --> E2 --> E3
+    end
+
+    subgraph FASE3["FASE 3 — Mezcla de Votos"]
+        MR["Mezcladora<br/>Voto recibido"]:::mezcladora
+        P1M["Party 1 - Click en Mezclar"]:::party
+        P2M["Party 2 - Click en Mezclar"]:::party
+        P3M["Party 3 - Click en Mezclar"]:::party
+        MW["Mezclando votos..."]:::espera
+        MD["Mezcla completada<br/>Listo para descifrado"]:::mezcladora
+        MR --> P1M --> P2M --> P3M --> MW --> MD
+    end
+
+    subgraph FASE4["FASE 4 — Descifrado de Votos"]
+        P1D["Party 1 - Click en Descifrar"]:::party
+        P2D["Party 2 - Click en Descifrar"]:::party
+        P3D["Party 3 - Click en Descifrar"]:::party
+        DW["Descifrando votos..."]:::espera
+        DD["Descifrado completado"]:::mezcladora
+        MD --> P1D --> P2D --> P3D --> DW --> DD
+    end
+
+    subgraph FASE5["FASE 5 — Descarga y Validacion"]
+        DL["Cualquier Party<br/>Descargar votos descifrados"]:::party
+        VL["Validar que el cifrador cifro<br/>correctamente desde el inicio<br/>y la mezcladora lo demostro"]:::resultado
+        DD --> DL --> VL
+    end
+
+    M4 --> E1
+    E3 --> MR
+```
+
+##### Fase 1 — Creacion de sesion y llave (mezcladora)
+
+Abra `http://127.0.0.1:7040` y haga click en **Nueva sesion y ejecutar keygen**.
+El formulario permite configurar la etiqueta, nombre de eleccion, SID, host,
+numero de parties y umbral minimo.
+
+![Panel de la mezcladora con el boton de nueva sesion](docs/img/paso1-nueva-sesion.png)
+
+La mezcladora ejecuta el keygen distribuido entre las 3 parties. Cuando termine,
+aparece la **Sesion activa** con el ID de sesion, rutas de llaves publicas y
+las ventanas de cada party con estado `ok`.
+
+![Sesion activa con llave creada y parties ok](docs/img/paso2-llave-creada_1.png)
+
+En la parte inferior se muestra el **Monitor general** con los logs de keygen
+completado en todas las parties.
+
+![Monitor general con keygen completado](docs/img/paso2-llave-creada_2.png)
+
+##### Fase 2 — Emision de voto (estacion)
+
+Abra `http://127.0.0.1:8788`. La estacion realiza el handshake automatico
+y descarga la llave publica de la mezcladora. El panel **Estado Operativo**
+muestra Mezcladora: `Activa`, Llave: `Disponible`.
+
+![Cabina de emision de voto con handshake completado](docs/img/paso3-handshake-estacion.png)
+
+En la **Cedula de votacion** seleccione las opciones para cada eleccion
+(Formula presidencial, Senadores, Diputados, Parlamento Andino) y haga click
+en **Emitir voto cifrado**.
+
+![Cedula de votacion antes de emitir](docs/img/paso4-emision-voto_antes_de_votar.png)
+
+Despues de emitir, aparece la **Constancia de recepcion** con el Run ID,
+estado `Confirmada` y el detalle de la operacion. El monitor de eventos
+muestra todo el proceso de cifrado y envio.
+
+![Constancia de recepcion despues de votar](docs/img/paso4-emision-voto_despues_de_votar.png)
+
+##### Fase 3 — Mezcla de votos (mezcladora)
+
+Una vez recibido el voto, el monitor de la mezcladora muestra el handshake
+aceptado y los ciphertexts validados y cargados via API.
+
+![Monitor de la mezcladora con voto recibido](docs/img/paso5-voto-recibido.png)
+
+Abra la ventana de cada party (links **Abrir ventana 7041/7042/7043**) y
+en cada una haga click en **Mezclar**:
+
+1. **Party 1** → click en **Mezclar**
+2. **Party 2** → click en **Mezclar**
+3. **Party 3** → click en **Mezclar**
+
+![Party 1 con boton Mezclar disponible](docs/img/paso6-party-mezclar.png)
+
+Despues de que todas las parties completen el shuffle, el estado cambia a
+`shuffle (ok)` y el boton **Descifrar** se habilita.
+
+![Party 1 despues del shuffle completado](docs/img/paso7-mezcla-completada_1.png)
+
+El **Estado secuencial por fase** muestra Mezclado: `completada` y
+Descifrado: `mi turno`.
+
+![Estado secuencial por fase con mezclado completado](docs/img/paso7-mezcla-completada_2.png)
+
+El **Monitor de eventos** muestra el detalle del proceso `vmn -shuffle`
+ejecutado por Verificatum.
+
+![Monitor de eventos del proceso de shuffle](docs/img/paso7-mezcla-completada_3.png)
+
+##### Fase 4 — Descifrado de votos (mezcladora)
+
+En cada party, haga click en **Descifrar**:
+
+1. **Party 1** → click en **Descifrar**
+2. **Party 2** → click en **Descifrar**
+3. **Party 3** → click en **Descifrar**
+
+![Party 1 con boton Descifrar habilitado](docs/img/paso8-party-descifrar.png)
+
+Espere a que termine el descifrado. El estado cambia a `Ultima fase = decrypt`
+y aparece el boton **Descargar votos descifrados**.
+
+![Party 3 con descifrado completado](docs/img/paso9-descifrado-completado.png)
+
+##### Fase 5 — Descarga y validacion
+
+Desde cualquier party, haga click en **Descargar votos descifrados**. El archivo
+contiene los votos en texto plano. Estos permiten validar que el cifrador cifro
+correctamente desde el inicio y que la mezcladora lo demostro mediante la prueba
+criptografica de mezcla.
+
+![Descarga de votos descifrados y archivo plaintext](docs/img/paso10-descarga-votos_descargando_votos_y%20mostrando.png)
+
+### Anexo Windows
+
+#### Integracion externa
 
 Una aplicacion externa en Windows debe consumir:
 
@@ -667,7 +712,7 @@ Una aplicacion externa en Windows debe consumir:
 - `vecj-2.2.0.dll`
 - `vmgj-1.3.0.dll`
 
-Ejemplo:
+Ejemplo por CLI:
 
 ```powershell
 $PROJECT_ROOT = 'C:\cifradorM'
@@ -679,12 +724,65 @@ java `
   com.ejemplo.Main
 ```
 
+Ejemplo por API Java embebida:
+
+```java
+import java.nio.file.Path;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest;
+import pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode;
+import pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService;
+import pe.gob.onpe.votodigital.elgamalcipher.LogConfig;
+
+public final class DemoCifrado {
+    public static void main(String[] args) {
+        Logger logger = LogConfig.getLogger(
+            "./logs/demo-cifrador.log",
+            Level.INFO, true, true, true, true, true
+        );
+
+        CifradorRequest request = new CifradorRequest(
+            Path.of("recursos/publicKey"),
+            Path.of("recursos/shuffled_votes.txt"),
+            Path.of("salida/ciphertexts_ext"),
+            CifradorRngMode.SOFTWARE,
+            false
+        );
+
+        boolean ok = new ElGamalCipherService(logger).encrypt(request);
+        if (!ok) {
+            throw new IllegalStateException("El cifrado no produjo salida.");
+        }
+    }
+}
+```
+
+Clases principales de la API:
+
+- `pe.gob.onpe.votodigital.elgamalcipher.ElGamalCipherService`
+- `pe.gob.onpe.votodigital.elgamalcipher.CifradorRequest`
+- `pe.gob.onpe.votodigital.elgamalcipher.CifradorRngMode`
+- `pe.gob.onpe.votodigital.elgamalcipher.LogConfig`
+
 Importante:
 
 - el artefacto canonico Windows es libreria, no `.exe`
 - no copies solo el `jar`; copia tambien las DLL JNI
 
-### RNG Y Soporte De Hardware En Windows
+#### Layout nativo y carga de JNI
+
+La aplicacion busca bibliotecas nativas en este orden:
+
+1. `prebuilt/<os-arch>` (ej. `prebuilt/windows-x64/vecj-2.2.0.dll`)
+2. `prebuilt`
+3. `libs/<os-arch>`
+4. `libs`
+
+Si el `jar` se ejecuta sin `java.library.path` y encuentra un layout local valido,
+puede relanzarse con la ruta correcta.
+
+#### RNG y soporte de hardware
 
 - `-sw` usa `SecureRandom`
 - `-hw` usa TrueRNG por:
@@ -692,7 +790,7 @@ Importante:
   - propiedad JVM `-Delgamal.rng.device=COMx`
   - variable `ELGAMAL_RNG_DEVICE=COMx`
 
-### Empaquetado Y Distribucion En Windows
+#### Empaquetado del cifrador como libreria
 
 Build del bundle de libreria:
 
@@ -718,13 +816,13 @@ Salida:
 
 - `dist/windows/Cifrador-1.1.0-windows-x64-library.zip`
 
-### Anexo: Bootstrap En Windows
+#### Bootstrap de Verificatum
 
 El bootstrap solo es necesario si se quiere recompilar los JARs de Verificatum desde codigo
 fuente (por ejemplo, para aplicar parches o actualizar versiones). En uso normal,
 los JARs de `native/verificatum-jars/` son suficientes.
 
-#### Ruta usada para bootstrap en Windows
+##### Ruta usada para bootstrap en Windows
 
 Para la ruta minima documentada en este README, use una sola raiz:
 
@@ -745,7 +843,7 @@ los fuentes ya estan incluidos en `native\verificatum-src\` y los JARs precompil
 `native\verificatum-jars\`, por lo que este error no deberia ocurrir despues de un `git pull`
 si el repo esta en `C:\cifradorM`.
 
-#### Dependencias esperadas para Windows
+##### Dependencias esperadas para Windows
 
 Para que `scripts/windows/compilacion/bootstrap-verificatum.ps1` funcione dentro de la ruta
 minima de Windows, basta con que existan estas rutas dentro del repo:
@@ -866,11 +964,13 @@ java -jar ~/cifradorM/prebuilt/java/ElGamalCipher-1.1.0.jar \
 Si el uso final es desde otra aplicacion Java en Ubuntu, despliegue siempre el `jar`
 junto con ambas `.so` del directorio `prebuilt/linux-x64`.
 
-### Integracion Externa En Ubuntu
+### Anexo Ubuntu
+
+#### Integracion externa
 
 Una aplicacion externa en Ubuntu debe enlazar el `jar` y exponer `libvecj` y `libvmgj`.
 
-Ejemplo:
+Ejemplo por CLI:
 
 ```bash
 java \
@@ -879,7 +979,23 @@ java \
   com.ejemplo.Main
 ```
 
-### RNG Y Soporte De Hardware En Ubuntu
+La API Java embebida es la misma que en Windows (`ElGamalCipherService`,
+`CifradorRequest`, `CifradorRngMode`, `LogConfig`). Vea el ejemplo de codigo
+en el [Anexo Windows](#anexo-windows).
+
+#### Layout nativo y carga de JNI
+
+La aplicacion busca bibliotecas nativas en este orden:
+
+1. `prebuilt/<os-arch>` (ej. `prebuilt/linux-x64/libvecj-2.2.0.so`)
+2. `prebuilt`
+3. `libs/<os-arch>`
+4. `libs`
+
+Si el `jar` se ejecuta sin `java.library.path` y encuentra un layout local valido,
+puede relanzarse con la ruta correcta.
+
+#### RNG y soporte de hardware
 
 - `-sw` usa `RandomDevice()` con `/dev/urandom`
 - `-hw` usa TrueRNG por:
@@ -887,7 +1003,7 @@ java \
   - variable `ELGAMAL_RNG_DEVICE`
   - valor por defecto `/dev/TrueRNG0`
 
-### Empaquetado Y Distribucion En Ubuntu
+#### Empaquetado del cifrador como libreria
 
 Imagen portable:
 
@@ -912,7 +1028,7 @@ Salida:
 
 - `dist/linux/Cifrador-1.1.0-linux-x64-portable.tar.gz`
 
-### Anexo: Bootstrap En Ubuntu
+#### Bootstrap de Verificatum
 
 El bootstrap solo es necesario si se quiere recompilar los JARs de Verificatum desde codigo
 fuente (por ejemplo, para aplicar parches o actualizar versiones). En uso normal,
@@ -1004,7 +1120,9 @@ Artefactos compilados para despliegue:
 Para consumir el AAR desde una app Android externa, agregue el `.aar` como dependencia
 en el `build.gradle` de su proyecto. No necesita las `.so` sueltas; ya estan dentro del AAR.
 
-### Integracion Externa En Android
+### Anexo Android
+
+#### Integracion externa
 
 En `Android` no se usa el cifrador como proceso externo ni como CLI independiente.
 
@@ -1029,7 +1147,7 @@ El `AAR` ya empaqueta:
 - `jniLibs` para `x86_64`
 - soporte TrueRNG USB para Android
 
-### RNG Y Soporte De Hardware En Android
+#### RNG y soporte de hardware
 
 - `-sw` usa `SecureRandom`
 - `-hw` usa TrueRNG USB cuando el dispositivo esta conectado por OTG, Android detecta un driver serial compatible y la app ya tiene permiso USB
@@ -1039,7 +1157,7 @@ El `AAR` ya empaqueta:
 
 En otros sistemas no listados, `-sw` y `-hw` usan `SecureRandom`.
 
-### Empaquetado Y Distribucion En Android
+#### Empaquetado del cifrador como libreria
 
 Imagen portable:
 
@@ -1064,7 +1182,7 @@ Salida:
 
 - `dist/android/Cifrador-1.1.0-android-portable.zip`
 
-### Anexo: Bootstrap En Android
+#### Bootstrap de Verificatum
 
 - reutiliza el mismo repositorio `native/verificatum-jars/` del proyecto
 - no requiere un bootstrap Verificatum separado para consumir el `AAR`
