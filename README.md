@@ -1391,16 +1391,18 @@ en el `build.gradle` de su proyecto. No necesita las `.so` sueltas; ya estan den
 
 Esta es la ruta minima para:
 
-1. preparar una VM mezcladora con Verificatum y la GUI
+1. levantar la mezcladora con Verificatum en un servidor Ubuntu
 2. compilar e instalar la estacion votante en un telefono Android por ADB
 3. ejecutar una prueba operativa completa (crear sesion, votar, mezclar, descifrar)
 
 Supuestos de esta ruta:
 
-- el repo ya existe en `~/cifradorM` en la maquina host Ubuntu
+- el repo ya existe en `~/cifradorM` en la maquina host
 - el host tiene Android SDK y NDK instalados
 - hay un telefono Android conectado por USB con depuracion USB habilitada
-- se tiene `multipass` instalado en el host
+- la mezcladora corre en una maquina Ubuntu con Verificatum y Python 3 instalados
+  (puede ser la misma maquina, otra PC en red, WSL o una VM)
+- el telefono y la maquina de la mezcladora estan en la misma red
 
 ```mermaid
 flowchart TD
@@ -1411,14 +1413,14 @@ flowchart TD
     classDef resultado fill:#ea4335,stroke:#b71c1c,color:#fff,font-weight:bold
 
     subgraph PREP["PREPARACION"]
-        VM["Crear VM mezcladora<br/>multipass + Verificatum"]:::mezcladora
+        SRV["Servidor Ubuntu<br/>Verificatum + mezcladora"]:::mezcladora
         BUILD["Compilar cifrador Android<br/>AAR + JNI"]:::estacion
         INSTALL["Instalar estacion votante<br/>en telefono via ADB"]:::estacion
-        VM --> BUILD --> INSTALL
+        SRV --> BUILD --> INSTALL
     end
 
     subgraph FASE1["FASE 1 — Sesion y Llave"]
-        M1["Mezcladora GUI<br/>http://IP_VM:7040"]:::mezcladora
+        M1["Mezcladora GUI<br/>http://IP_SERVIDOR:7040"]:::mezcladora
         M2["Click en Nueva Sesion"]:::mezcladora
         M3["Keygen distribuido<br/>(3 parties)"]:::espera
         M4["Llave creada<br/>Esperando votos"]:::mezcladora
@@ -1461,27 +1463,36 @@ flowchart TD
     DW --> DL
 ```
 
-#### 1. Preparar la VM de la mezcladora
+#### 1. Preparar el servidor de la mezcladora
 
-El script crea una VM multipass Ubuntu 24.04, instala Verificatum VMN 3.1.0,
-Python 3 y monta el repositorio:
+La mezcladora necesita una maquina Ubuntu con Verificatum VMN y Python 3.
+Puede ser la misma maquina de desarrollo, otra PC en la red, WSL en Windows
+o una maquina virtual.
+
+Instalar dependencias en el servidor:
 
 ```bash
-cd ~/cifradorM
-./scripts/android/entorno/setup-mezcladora-vm.sh
+sudo apt-get update
+sudo apt-get install -y python3 m4 cpp gcc make libtool automake autoconf \
+  libgmp-dev openjdk-21-jdk wget psmisc
 ```
 
-El script:
+Si Verificatum VMN no esta instalado:
 
-- crea la VM `mezcladora` con 4 CPU, 4 GB RAM, 20 GB disco
-- instala dependencias base (Python 3, GCC, GMP, Java 21)
-- instala Verificatum VMN 3.1.0
-- monta `~/cifradorM` del host en la VM
+```bash
+cd ~
+wget https://github.com/rmartinezch/mixnet/raw/main/installer/verificatum-vmn-3.1.0-full.tar.gz
+mkdir -p verificatum-vmn-3.1.0-full
+tar xfz verificatum-vmn-3.1.0-full.tar.gz -C verificatum-vmn-3.1.0-full
+cd verificatum-vmn-3.1.0-full
+sudo make install
+```
 
 Comprobacion minima:
 
 ```bash
-multipass exec mezcladora -- bash -lc "vmn -version && python3 --version"
+vmn -version
+python3 --version
 ```
 
 Resultado esperado:
@@ -1489,31 +1500,31 @@ Resultado esperado:
 - `vmn -version` responde `3.1.0`
 - `python3 --version` responde `3.x`
 
-Obtener la IP de la VM (se usara en pasos posteriores):
+El repositorio debe estar disponible en el servidor. Si no lo esta:
 
 ```bash
-VM_IP=$(multipass info mezcladora --format csv | tail -1 | cut -d, -f3)
-echo "IP mezcladora: $VM_IP"
+git clone -b cifradorM https://github.com/rmartinezch/ElGamalClient.git ~/cifradorM
 ```
 
-#### 2. Levantar la mezcladora en la VM
+#### 2. Levantar la mezcladora
 
-En una terminal dedicada (quedara bloqueada sirviendo):
+En el servidor, en una terminal dedicada (quedara bloqueada sirviendo):
 
 ```bash
-multipass exec mezcladora -- bash -lc \
-  "cd ~/cifradorM/workflow/votante/mezcladora && ./start_gui.sh"
+cd ~/cifradorM/workflow/votante/mezcladora
+./start_gui.sh
 ```
 
 Resultado esperado:
 
-- la GUI queda publicada en `http://$VM_IP:7040`
+- la GUI queda publicada en `http://IP_SERVIDOR:7040`
 - las parties usan puertos `7041` a `7049`
+- `IP_SERVIDOR` es la IP del servidor en la red local
 
-Comprobacion desde el host:
+Comprobacion desde otra maquina:
 
 ```bash
-curl -s http://$VM_IP:7040/api/health
+curl -s http://IP_SERVIDOR:7040/api/health
 ```
 
 Resultado esperado:
@@ -1522,7 +1533,7 @@ Resultado esperado:
 
 #### 3. Compilar el cifrador Android y la estacion votante
 
-En otra terminal en el host:
+En la maquina de desarrollo (host con Android SDK):
 
 ```bash
 cd ~/cifradorM
@@ -1545,7 +1556,7 @@ Compilar la estacion votante APK apuntando a la mezcladora:
 
 ```bash
 cd ~/cifradorM
-VOTANTE_ANDROID_SERVICE_BASE_URL="http://$VM_IP:7040" \
+VOTANTE_ANDROID_SERVICE_BASE_URL="http://IP_SERVIDOR:7040" \
   ./workflow/votante/android/build-votante-portable-apk.sh
 ```
 
@@ -1594,7 +1605,7 @@ Resultado esperado:
 
 ##### 5a. Crear sesion y llave (mezcladora)
 
-Abra `http://$VM_IP:7040` en un navegador y haga click en **Nueva sesion y ejecutar keygen**.
+Abra `http://IP_SERVIDOR:7040` en un navegador y haga click en **Nueva sesion y ejecutar keygen**.
 
 La mezcladora ejecuta el keygen distribuido entre las 3 parties. Cuando termine,
 aparece la **Sesion activa** con el ID y las ventanas de parties con estado `ok`.
@@ -1615,7 +1626,7 @@ Resultado esperado:
 
 ##### 5c. Mezcla de votos (mezcladora)
 
-En la GUI de la mezcladora (`http://$VM_IP:7040`), abra la ventana de cada
+En la GUI de la mezcladora (`http://IP_SERVIDOR:7040`), abra la ventana de cada
 party (links **Abrir ventana 7041/7042/7043**) y en cada una haga click
 en **Mezclar**:
 
@@ -1645,10 +1656,10 @@ cifro correctamente y que la mezcladora lo verifico mediante la prueba criptogra
 
 | Componente | Puerto | Host | Proposito |
 | :--- | :---: | :--- | :--- |
-| Mezcladora GUI | 7040 | IP de la VM | Panel de control web |
-| Party 1 | 7041 | IP de la VM | Comunicacion party 1 |
-| Party 2 | 7042 | IP de la VM | Comunicacion party 2 |
-| Party 3 | 7043 | IP de la VM | Comunicacion party 3 |
+| Mezcladora GUI | 7040 | Servidor | Panel de control web |
+| Party 1 | 7041 | Servidor | Comunicacion party 1 |
+| Party 2 | 7042 | Servidor | Comunicacion party 2 |
+| Party 3 | 7043 | Servidor | Comunicacion party 3 |
 | Estacion Android | app nativa | Telefono | Cabina de votacion |
 
 ### Anexo Android
