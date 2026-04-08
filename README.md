@@ -1318,16 +1318,54 @@ Instalacion minima de dependencias en el host:
 
 ```bash
 sudo apt update
-sudo apt install -y git openjdk-21-jdk build-essential autoconf automake libtool libgmp-dev
+sudo apt install -y git openjdk-21-jdk build-essential autoconf automake libtool libgmp-dev unzip wget
 ```
 
-Si aun no tiene Android SDK, instale Android Studio o el SDK command-line tools
-y configure las variables de entorno:
+#### Instalacion del Android SDK
+
+Si aun no tiene Android SDK instalado, descargue las command-line tools:
+
+```bash
+mkdir -p ~/Android/Sdk/cmdline-tools
+cd /tmp
+wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+unzip -q commandlinetools-linux-11076708_latest.zip
+mv cmdline-tools ~/Android/Sdk/cmdline-tools/latest
+```
+
+Configure las variables de entorno (agregue al final de `~/.bashrc`):
 
 ```bash
 export ANDROID_SDK_ROOT="$HOME/Android/Sdk"
-export PATH="$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
 ```
+
+Aplique los cambios:
+
+```bash
+source ~/.bashrc
+```
+
+Instale las plataformas, build-tools y NDK requeridos:
+
+```bash
+sdkmanager --licenses <<< "$(yes)"
+sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;27.2.12479018"
+```
+
+Comprobacion minima:
+
+```bash
+sdkmanager --version
+adb --version
+test -d "$ANDROID_SDK_ROOT/ndk/27.2.12479018" && echo "NDK OK"
+```
+
+Resultado esperado:
+
+- `sdkmanager` responde con la version
+- `adb` responde con la version
+- el NDK existe en `$ANDROID_SDK_ROOT/ndk/27.2.12479018`
 
 Descarga del repositorio (si aun no lo tiene):
 
