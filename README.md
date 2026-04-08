@@ -27,6 +27,8 @@ El repositorio contiene tanto el cifrador como libreria reusable como estaciones
    - [Anexo Ubuntu](#anexo-ubuntu)
 8. [Android](#android)
    - [Guia Rapida Para Compilacion Del Cifrador En Android](#guia-rapida-para-compilacion-del-cifrador-en-android)
+   - [Guia Rapida: Levantar Estacion Android Y Mezcladora](#guia-rapida-levantar-estacion-android-y-mezcladora)
+     - [Flujo Completo De Operacion (Android)](#5-prueba-operativa)
    - [Anexo Android](#anexo-android)
 9. [Resumen De Rendimiento](#resumen-de-rendimiento)
 10. [Historial Breve](#historial-breve)
@@ -1384,6 +1386,270 @@ Artefactos compilados para despliegue:
 
 Para consumir el AAR desde una app Android externa, agregue el `.aar` como dependencia
 en el `build.gradle` de su proyecto. No necesita las `.so` sueltas; ya estan dentro del AAR.
+
+### Guia Rapida: Levantar Estacion Android Y Mezcladora
+
+Esta es la ruta minima para:
+
+1. preparar una VM mezcladora con Verificatum y la GUI
+2. compilar e instalar la estacion votante en un telefono Android por ADB
+3. ejecutar una prueba operativa completa (crear sesion, votar, mezclar, descifrar)
+
+Supuestos de esta ruta:
+
+- el repo ya existe en `~/cifradorM` en la maquina host Ubuntu
+- el host tiene Android SDK y NDK instalados
+- hay un telefono Android conectado por USB con depuracion USB habilitada
+- se tiene `multipass` instalado en el host
+
+```mermaid
+flowchart TD
+    classDef mezcladora fill:#1a73e8,stroke:#0d47a1,color:#fff,font-weight:bold
+    classDef estacion fill:#34a853,stroke:#1b5e20,color:#fff,font-weight:bold
+    classDef party fill:#f9ab00,stroke:#e65100,color:#000,font-weight:bold
+    classDef espera fill:#e8eaed,stroke:#9aa0a6,color:#333
+    classDef resultado fill:#ea4335,stroke:#b71c1c,color:#fff,font-weight:bold
+
+    subgraph PREP["PREPARACION"]
+        VM["Crear VM mezcladora<br/>multipass + Verificatum"]:::mezcladora
+        BUILD["Compilar cifrador Android<br/>AAR + JNI"]:::estacion
+        INSTALL["Instalar estacion votante<br/>en telefono via ADB"]:::estacion
+        VM --> BUILD --> INSTALL
+    end
+
+    subgraph FASE1["FASE 1 — Sesion y Llave"]
+        M1["Mezcladora GUI<br/>http://IP_VM:7040"]:::mezcladora
+        M2["Click en Nueva Sesion"]:::mezcladora
+        M3["Keygen distribuido<br/>(3 parties)"]:::espera
+        M4["Llave creada<br/>Esperando votos"]:::mezcladora
+        M1 --> M2 --> M3 --> M4
+    end
+
+    subgraph FASE2["FASE 2 — Emision de Voto"]
+        E1["Estacion Android<br/>en telefono"]:::estacion
+        E2["Handshake + descarga<br/>llave publica"]:::estacion
+        E3["Emitir voto cifrado"]:::estacion
+        E1 --> E2 --> E3
+    end
+
+    subgraph FASE3["FASE 3 — Mezcla"]
+        P1M["Party 1 - Mezclar"]:::party
+        P2M["Party 2 - Mezclar"]:::party
+        P3M["Party 3 - Mezclar"]:::party
+        MW["Mezclando votos..."]:::espera
+        P1M --> P2M --> P3M --> MW
+    end
+
+    subgraph FASE4["FASE 4 — Descifrado"]
+        P1D["Party 1 - Descifrar"]:::party
+        P2D["Party 2 - Descifrar"]:::party
+        P3D["Party 3 - Descifrar"]:::party
+        DW["Descifrando votos..."]:::espera
+        P1D --> P2D --> P3D --> DW
+    end
+
+    subgraph FASE5["FASE 5 — Validacion"]
+        DL["Descargar votos descifrados"]:::party
+        VL["Validar que el voto<br/>fue correctamente cifrado"]:::resultado
+        DL --> VL
+    end
+
+    INSTALL --> M1
+    M4 --> E1
+    E3 --> P1M
+    MW --> P1D
+    DW --> DL
+```
+
+#### 1. Preparar la VM de la mezcladora
+
+El script crea una VM multipass Ubuntu 24.04, instala Verificatum VMN 3.1.0,
+Python 3 y monta el repositorio:
+
+```bash
+cd ~/cifradorM
+./scripts/android/entorno/setup-mezcladora-vm.sh
+```
+
+El script:
+
+- crea la VM `mezcladora` con 4 CPU, 4 GB RAM, 20 GB disco
+- instala dependencias base (Python 3, GCC, GMP, Java 21)
+- instala Verificatum VMN 3.1.0
+- monta `~/cifradorM` del host en la VM
+
+Comprobacion minima:
+
+```bash
+multipass exec mezcladora -- bash -lc "vmn -version && python3 --version"
+```
+
+Resultado esperado:
+
+- `vmn -version` responde `3.1.0`
+- `python3 --version` responde `3.x`
+
+Obtener la IP de la VM (se usara en pasos posteriores):
+
+```bash
+VM_IP=$(multipass info mezcladora --format csv | tail -1 | cut -d, -f3)
+echo "IP mezcladora: $VM_IP"
+```
+
+#### 2. Levantar la mezcladora en la VM
+
+En una terminal dedicada (quedara bloqueada sirviendo):
+
+```bash
+multipass exec mezcladora -- bash -lc \
+  "cd ~/cifradorM/workflow/votante/mezcladora && ./start_gui.sh"
+```
+
+Resultado esperado:
+
+- la GUI queda publicada en `http://$VM_IP:7040`
+- las parties usan puertos `7041` a `7049`
+
+Comprobacion desde el host:
+
+```bash
+curl -s http://$VM_IP:7040/api/health
+```
+
+Resultado esperado:
+
+- responde `{"ok": true}`
+
+#### 3. Compilar el cifrador Android y la estacion votante
+
+En otra terminal en el host:
+
+```bash
+cd ~/cifradorM
+./scripts/android/compilacion/build-cifrador.sh
+```
+
+Comprobacion minima:
+
+```bash
+test -f prebuilt/android/aar/ElGamalCipher-android-debug.aar && echo "AAR OK"
+ls prebuilt/android/jniLibs/arm64-v8a/
+```
+
+Resultado esperado:
+
+- el AAR existe en `prebuilt/android/aar/`
+- las librerias JNI existen para `arm64-v8a`
+
+Compilar la estacion votante APK apuntando a la mezcladora:
+
+```bash
+cd ~/cifradorM
+VOTANTE_ANDROID_SERVICE_BASE_URL="http://$VM_IP:7040" \
+  ./workflow/votante/android/build-votante-portable-apk.sh
+```
+
+Comprobacion minima:
+
+```bash
+test -f dist/android/VotanteAndroid-portable.apk && echo "APK OK"
+```
+
+#### 4. Instalar la estacion en el telefono via ADB
+
+Conecte el telefono por USB y verifique que ADB lo detecta:
+
+```bash
+adb devices
+```
+
+Resultado esperado:
+
+- aparece un dispositivo con estado `device`
+
+Si el telefono pide confirmacion de depuracion USB, acepte en la pantalla.
+
+Instalar ambos APKs y lanzar las apps:
+
+```bash
+cd ~/cifradorM
+LAUNCH_APPS=1 ./scripts/android/despliegue/build-and-install-phone.sh
+```
+
+Si los artefactos ya estan compilados del paso anterior, puede saltar la
+recompilacion:
+
+```bash
+BUILD_CIFRADOR=0 BUILD_TOOL_ANDROID=0 BUILD_VOTER_ANDROID=0 LAUNCH_APPS=1 \
+  ./scripts/android/despliegue/build-and-install-phone.sh
+```
+
+Resultado esperado:
+
+- se instala `TrueRNG-Diagnostico.apk`
+- se instala `VotanteAndroid-portable.apk`
+- ambas apps se lanzan en el telefono
+
+#### 5. Prueba operativa
+
+##### 5a. Crear sesion y llave (mezcladora)
+
+Abra `http://$VM_IP:7040` en un navegador y haga click en **Nueva sesion y ejecutar keygen**.
+
+La mezcladora ejecuta el keygen distribuido entre las 3 parties. Cuando termine,
+aparece la **Sesion activa** con el ID y las ventanas de parties con estado `ok`.
+
+##### 5b. Emision de voto (telefono Android)
+
+Abra la app **Votante Android** en el telefono. La estacion realiza el handshake
+automatico con la mezcladora y descarga la llave publica. El panel de estado
+muestra Mezcladora: `Activa`, Llave: `Disponible`.
+
+En la **Cedula de votacion** seleccione las opciones para cada eleccion y
+haga click en **Emitir voto cifrado**.
+
+Resultado esperado:
+
+- aparece la **Constancia de recepcion** con estado `Confirmada`
+- el monitor de eventos muestra el cifrado y envio exitoso
+
+##### 5c. Mezcla de votos (mezcladora)
+
+En la GUI de la mezcladora (`http://$VM_IP:7040`), abra la ventana de cada
+party (links **Abrir ventana 7041/7042/7043**) y en cada una haga click
+en **Mezclar**:
+
+1. **Party 1** → click en **Mezclar**
+2. **Party 2** → click en **Mezclar**
+3. **Party 3** → click en **Mezclar**
+
+Espere a que todas las parties completen el shuffle.
+
+##### 5d. Descifrado de votos (mezcladora)
+
+En cada party, haga click en **Descifrar**:
+
+1. **Party 1** → click en **Descifrar**
+2. **Party 2** → click en **Descifrar**
+3. **Party 3** → click en **Descifrar**
+
+Espere a que termine el descifrado.
+
+##### 5e. Descarga y validacion
+
+Desde cualquier party, haga click en **Descargar votos descifrados**. El archivo
+contiene los votos en texto plano. Estos permiten validar que el cifrador Android
+cifro correctamente y que la mezcladora lo verifico mediante la prueba criptografica.
+
+#### Resumen de puertos (Android + Mezcladora)
+
+| Componente | Puerto | Host | Proposito |
+| :--- | :---: | :--- | :--- |
+| Mezcladora GUI | 7040 | IP de la VM | Panel de control web |
+| Party 1 | 7041 | IP de la VM | Comunicacion party 1 |
+| Party 2 | 7042 | IP de la VM | Comunicacion party 2 |
+| Party 3 | 7043 | IP de la VM | Comunicacion party 3 |
+| Estacion Android | app nativa | Telefono | Cabina de votacion |
 
 ### Anexo Android
 
