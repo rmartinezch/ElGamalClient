@@ -13,10 +13,23 @@ cd "$PROJECT_ROOT"
 
 "$PROJECT_ROOT/scripts/ubuntu/entorno/bootstrap-verificatum.sh"
 
+MVN="${MVN:-}"
+if [[ -z "$MVN" ]]; then
+  if [[ -x "$PROJECT_ROOT/mvnw" ]]; then
+    MVN="$PROJECT_ROOT/mvnw"
+  elif command -v mvn >/dev/null 2>&1; then
+    MVN="mvn"
+  else
+    echo "[ubuntu-build] ERROR: no se encontró Maven ni Maven Wrapper (mvnw)." >&2
+    echo "  El proyecto incluye mvnw en la raíz. Verifique permisos: chmod +x mvnw" >&2
+    exit 1
+  fi
+fi
+
 if [[ "$SKIP_TESTS" == "1" ]]; then
-  mvn clean package -DskipTests
+  "$MVN" clean package -DskipTests
 else
-  mvn clean package
+  "$MVN" clean package
 fi
 
 if [[ ! -f "$TARGET_JAR" ]]; then

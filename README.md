@@ -22,6 +22,8 @@ El repositorio contiene tanto el cifrador como libreria reusable como estaciones
    - [Anexo Windows](#anexo-windows)
 7. [Ubuntu](#ubuntu)
    - [Guia Rapida Para Compilacion Del Cifrador En Ubuntu](#guia-rapida-para-compilacion-del-cifrador-en-ubuntu)
+   - [Guia Rapida: Mezcla Y Verificacion Del Cifrador Por CLI](#guia-rapida-mezcla-y-verificacion-del-cifrador-por-cli)
+     - [Flujo Completo De Operacion (Ubuntu)](#flujo-completo-de-operacion-ubuntu)
    - [Anexo Ubuntu](#anexo-ubuntu)
 8. [Android](#android)
    - [Guia Rapida Para Compilacion Del Cifrador En Android](#guia-rapida-para-compilacion-del-cifrador-en-android)
@@ -963,6 +965,269 @@ java -jar ~/cifradorM/prebuilt/java/ElGamalCipher-1.1.0.jar \
 
 Si el uso final es desde otra aplicacion Java en Ubuntu, despliegue siempre el `jar`
 junto con ambas `.so` del directorio `prebuilt/linux-x64`.
+
+### Guia Rapida: Mezcla Y Verificacion Del Cifrador Por CLI
+
+Esta es la ruta minima para verificar que el cifrador cifra correctamente usando
+directamente los comandos de Verificatum VMN por terminal, sin necesidad de la
+GUI de la mezcladora ni de la estacion de votacion.
+
+El flujo completo es:
+
+1. instalar Verificatum VMN en Ubuntu nativo
+2. crear sesion de 3 parties con `vmni` y generar llave con `vmn -keygen`
+3. cifrar votos con el JAR del cifrador
+4. convertir ciphertexts con `vmnc` y mezclar con `vmn -shuffle`
+5. descifrar con `vmn -decrypt`
+6. comparar votos descifrados con los originales
+
+#### 1. Instalar Verificatum VMN
+
+```bash
+sudo apt-get update
+sudo apt-get install -y m4 cpp gcc make libtool automake autoconf libgmp-dev openjdk-21-jdk wget
+cd ~
+wget https://github.com/rmartinezch/mixnet/raw/main/installer/verificatum-vmn-3.1.0-full.tar.gz
+mkdir -p verificatum-vmn-3.1.0-full
+tar xvfz verificatum-vmn-3.1.0-full.tar.gz -C verificatum-vmn-3.1.0-full
+cd verificatum-vmn-3.1.0-full
+sudo make install
+```
+
+Comprobacion minima:
+
+```bash
+vmn -version
+command -v vmn vmni vmnc vmnd vog vmnv
+vog -rndinit RandomDevice /dev/urandom
+```
+
+Resultado esperado:
+
+- `vmn -version` responde sin error
+- `command -v` devuelve rutas validas para los seis comandos
+- `vog -rndinit` responde sin error
+
+#### 2. Prueba automatizada (ruta rapida)
+
+El repositorio incluye un script que ejecuta todo el flujo de forma automatica:
+
+```bash
+cd ~/cifradorM
+./scripts/ubuntu/pruebas/test-cifrador-con-mezcladora.sh
+```
+
+El script:
+
+- compila el cifrador si no esta compilado
+- crea una sesion Verificatum de 3 parties con threshold 2
+- ejecuta keygen distribuido (`vmn -keygen`)
+- cifra los votos de `recursos/shuffled_votes.txt` con el JAR
+- convierte ciphertexts a formato Verificatum (`vmnc -ciphs`)
+- mezcla los votos (`vmn -shuffle`)
+- descifra los votos (`vmn -decrypt`)
+- convierte plaintexts a formato nativo (`vmnc -plain`)
+- compara los votos descifrados con los originales
+
+Resultado esperado:
+
+```
+  ✔ PRUEBA EXITOSA
+
+  Los votos descifrados coinciden con los originales.
+```
+
+#### 3. Prueba paso a paso (ruta manual)
+
+Si quiere ejecutar cada paso individualmente para entender el proceso:
+
+##### 3a. Crear sesion Verificatum
+
+```bash
+cd ~/cifradorM
+SESSION_DIR=target/test-mezcladora-manual
+mkdir -p $SESSION_DIR
+
+# Generar grupo eliptico P-256
+PGROUP=$(cd $SESSION_DIR && vog -gen ECqPGroup -name 'P-256')
+
+# Crear protocolo y parties
+for i in 1 2 3; do
+  P=party$(printf '%02d' $i)
+  mkdir -p $SESSION_DIR/$P
+  cd $SESSION_DIR/$P
+
+  vmni -prot -sid ONPE -name EleccionDemo -nopart 3 -thres 2 -pgroup "$PGROUP"
+
+  vog -rndinit RandomDevice /dev/urandom >/dev/null 2>&1 || true
+  RAND=$(vog -gen RandomDevice /dev/urandom)
+
+  vmni -party -e \
+    -name "$P" \
+    -hint "127.0.0.1:$((4040 + i))" \
+    -http "http://127.0.0.1:$((8040 + i))" \
+    -rand "$RAND"
+
+  cp localProtInfo.xml protInfo$(printf '%02d' $i).xml
+  cd ~/cifradorM
+done
+
+# Compartir protInfo entre parties
+for i in 1 2 3; do
+  for j in 1 2 3; do
+    [ $i -eq $j ] && continue
+    cp $SESSION_DIR/party$(printf '%02d' $i)/protInfo$(printf '%02d' $i).xml \
+       $SESSION_DIR/party$(printf '%02d' $j)/
+  done
+done
+
+# Fusionar protocolo global
+for i in 1 2 3; do
+  cd $SESSION_DIR/party$(printf '%02d' $i)
+  vmni -merge protInfo01.xml protInfo02.xml protInfo03.xml protInfo.xml
+  cd ~/cifradorM
+done
+```
+
+##### 3b. Keygen distribuido
+
+Las 3 parties ejecutan `vmn -keygen` simultaneamente (se comunican por red local):
+
+```bash
+cd ~/cifradorM
+for i in 1 2 3; do
+  (cd $SESSION_DIR/party$(printf '%02d' $i) && \
+   vmn -keygen -e publicKey && \
+   vmnc -pkey -outi native protInfo.xml publicKey publicKey_ext) &
+  sleep 1
+done
+wait
+```
+
+Comprobacion:
+
+```bash
+test -f $SESSION_DIR/party01/publicKey_ext && echo "OK: llave publica generada"
+```
+
+##### 3c. Cifrar votos
+
+```bash
+cd ~/cifradorM
+java -jar prebuilt/java/ElGamalCipher-1.1.0.jar \
+  $SESSION_DIR/party01/publicKey_ext \
+  recursos/shuffled_votes.txt \
+  $SESSION_DIR/ciphertexts_ext \
+  -sw \
+  -p
+```
+
+##### 3d. Convertir y distribuir ciphertexts
+
+```bash
+cd ~/cifradorM
+
+# Copiar a party01 y convertir de formato nativo a Verificatum
+cp $SESSION_DIR/ciphertexts_ext $SESSION_DIR/party01/
+cd $SESSION_DIR/party01
+vmnc -ciphs -sloppy -ini native -width 1 protInfo.xml ciphertexts_ext ciphertexts
+
+# Distribuir a todas las parties
+for i in 2 3; do
+  cp ciphertexts ciphertexts_ext ../party$(printf '%02d' $i)/
+done
+cd ~/cifradorM
+```
+
+##### 3e. Mezclar (shuffle distribuido)
+
+Las 3 parties ejecutan `vmn -shuffle` simultaneamente:
+
+```bash
+cd ~/cifradorM
+for i in 1 2 3; do
+  (cd $SESSION_DIR/party$(printf '%02d' $i) && \
+   vmn -shuffle privInfo.xml protInfo.xml ciphertexts ciphertextsout) &
+  sleep 1
+done
+wait
+```
+
+##### 3f. Descifrar (decrypt distribuido)
+
+Las 3 parties ejecutan `vmn -decrypt` simultaneamente:
+
+```bash
+cd ~/cifradorM
+for i in 1 2 3; do
+  (cd $SESSION_DIR/party$(printf '%02d' $i) && \
+   vmn -decrypt privInfo.xml protInfo.xml ciphertextsout plaintexts_orig && \
+   vmnc -plain -outi native protInfo.xml plaintexts_orig plaintexts) &
+  sleep 1
+done
+wait
+```
+
+##### 3g. Validar resultado
+
+```bash
+ORIG=$(sort recursos/shuffled_votes.txt)
+DESCIFRADO=$(sort $SESSION_DIR/party01/plaintexts)
+
+if [ "$ORIG" = "$DESCIFRADO" ]; then
+  echo "PRUEBA EXITOSA: los votos descifrados coinciden con los originales"
+else
+  echo "PRUEBA FALLIDA: los votos no coinciden"
+fi
+```
+
+Esto valida que:
+
+- el cifrador cifro correctamente usando la llave generada por Verificatum
+- la mezcla (`vmn -shuffle`) preservo el contenido de los ciphertexts
+- el descifrado distribuido (`vmn -decrypt`) entre las 3 parties recupero los votos originales en texto plano
+
+#### Flujo Completo De Operacion (Ubuntu)
+
+```mermaid
+flowchart TD
+    classDef vmn fill:#1a73e8,stroke:#0d47a1,color:#fff,font-weight:bold
+    classDef cifrador fill:#34a853,stroke:#1b5e20,color:#fff,font-weight:bold
+    classDef validacion fill:#ea4335,stroke:#b71c1c,color:#fff,font-weight:bold
+    classDef espera fill:#e8eaed,stroke:#9aa0a6,color:#333
+
+    subgraph FASE1["FASE 1 — Sesion y Keygen"]
+        V1["vmni -prot / vmni -party<br/>Crear 3 parties con protocolo P-256"]:::vmn
+        V2["vmni -merge<br/>Fusionar protocolo global"]:::vmn
+        V3["vmn -keygen<br/>3 parties en paralelo"]:::espera
+        V4["vmnc -pkey -outi native<br/>Exportar llave publica"]:::vmn
+        V1 --> V2 --> V3 --> V4
+    end
+
+    subgraph FASE2["FASE 2 — Cifrado"]
+        C1["java -jar ElGamalCipher-1.1.0.jar<br/>Cifrar votos con la llave publica"]:::cifrador
+        C2["vmnc -ciphs -ini native<br/>Convertir ciphertexts a formato VMN"]:::vmn
+        C3["Distribuir ciphertexts<br/>a las 3 parties"]:::espera
+        V4 --> C1 --> C2 --> C3
+    end
+
+    subgraph FASE3["FASE 3 — Mezcla"]
+        S1["vmn -shuffle<br/>3 parties en paralelo"]:::espera
+        S2["Ciphertexts mezclados"]:::vmn
+        C3 --> S1 --> S2
+    end
+
+    subgraph FASE4["FASE 4 — Descifrado"]
+        D1["vmn -decrypt<br/>3 parties en paralelo"]:::espera
+        D2["vmnc -plain -outi native<br/>Convertir a texto plano"]:::vmn
+        S2 --> D1 --> D2
+    end
+
+    subgraph FASE5["FASE 5 — Validacion"]
+        R1["sort + diff<br/>Comparar votos descifrados<br/>con originales"]:::validacion
+        D2 --> R1
+    end
+```
 
 ### Anexo Ubuntu
 
