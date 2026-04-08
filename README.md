@@ -1107,7 +1107,7 @@ wait
 Comprobacion:
 
 ```bash
-test -f $SESSION_DIR/party01/publicKey_ext && echo "OK: llave publica generada"
+test -f $SESSION_DIR/party01/publicKey && echo "OK: llave publica generada"
 ```
 
 ##### 3c. Cifrar votos
@@ -1115,7 +1115,7 @@ test -f $SESSION_DIR/party01/publicKey_ext && echo "OK: llave publica generada"
 ```bash
 cd ~/cifradorM
 java -jar prebuilt/java/ElGamalCipher-1.1.0.jar \
-  $SESSION_DIR/party01/publicKey_ext \
+  $SESSION_DIR/party01/publicKey \
   recursos/shuffled_votes.txt \
   $SESSION_DIR/ciphertexts_ext \
   -sw \

@@ -182,9 +182,9 @@ for pid in "${PIDS[@]}"; do
 done
 PIDS=()
 
-PK="$(party_dir 1)/publicKey_ext"
+PK="$(party_dir 1)/publicKey"
 if [[ ! -f "$PK" ]]; then
-  echo "[ERROR] Keygen fallo: no se genero publicKey_ext en party01" >&2
+  echo "[ERROR] Keygen fallo: no se genero publicKey en party01" >&2
   exit 1
 fi
 echo "  Llave publica generada: $PK ($(stat -c%s "$PK") bytes)"
