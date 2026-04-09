@@ -1442,65 +1442,6 @@ Supuestos de esta ruta:
   (puede ser la misma maquina, otra PC en red, WSL o una VM)
 - el telefono y la maquina de la mezcladora estan en la misma red
 
-```mermaid
-flowchart TD
-    classDef mezcladora fill:#1a73e8,stroke:#0d47a1,color:#fff,font-weight:bold
-    classDef estacion fill:#34a853,stroke:#1b5e20,color:#fff,font-weight:bold
-    classDef party fill:#f9ab00,stroke:#e65100,color:#000,font-weight:bold
-    classDef espera fill:#e8eaed,stroke:#9aa0a6,color:#333
-    classDef resultado fill:#ea4335,stroke:#b71c1c,color:#fff,font-weight:bold
-
-    subgraph PREP["PREPARACION"]
-        SRV["Servidor Ubuntu<br/>Verificatum + mezcladora"]:::mezcladora
-        BUILD["Compilar cifrador Android<br/>AAR + JNI"]:::estacion
-        INSTALL["Instalar estacion votante<br/>en telefono via ADB"]:::estacion
-        SRV --> BUILD --> INSTALL
-    end
-
-    subgraph FASE1["FASE 1 — Sesion y Llave"]
-        M1["Mezcladora GUI<br/>http://IP_SERVIDOR:7040"]:::mezcladora
-        M2["Click en Nueva Sesion"]:::mezcladora
-        M3["Keygen distribuido<br/>(3 parties)"]:::espera
-        M4["Llave creada<br/>Esperando votos"]:::mezcladora
-        M1 --> M2 --> M3 --> M4
-    end
-
-    subgraph FASE2["FASE 2 — Emision de Voto"]
-        E1["Estacion Android<br/>en telefono"]:::estacion
-        E2["Handshake + descarga<br/>llave publica"]:::estacion
-        E3["Emitir voto cifrado"]:::estacion
-        E1 --> E2 --> E3
-    end
-
-    subgraph FASE3["FASE 3 — Mezcla"]
-        P1M["Party 1 - Mezclar"]:::party
-        P2M["Party 2 - Mezclar"]:::party
-        P3M["Party 3 - Mezclar"]:::party
-        MW["Mezclando votos..."]:::espera
-        P1M --> P2M --> P3M --> MW
-    end
-
-    subgraph FASE4["FASE 4 — Descifrado"]
-        P1D["Party 1 - Descifrar"]:::party
-        P2D["Party 2 - Descifrar"]:::party
-        P3D["Party 3 - Descifrar"]:::party
-        DW["Descifrando votos..."]:::espera
-        P1D --> P2D --> P3D --> DW
-    end
-
-    subgraph FASE5["FASE 5 — Validacion"]
-        DL["Descargar votos descifrados"]:::party
-        VL["Validar que el voto<br/>fue correctamente cifrado"]:::resultado
-        DL --> VL
-    end
-
-    INSTALL --> M1
-    M4 --> E1
-    E3 --> P1M
-    MW --> P1D
-    DW --> DL
-```
-
 #### 1. Preparar el servidor de la mezcladora
 
 La mezcladora necesita una maquina Ubuntu con Verificatum VMN y Python 3.
@@ -1538,6 +1479,17 @@ Resultado esperado:
 - `vmn -version` responde `3.1.0`
 - `python3 --version` responde `3.x`
 
+Inicializar la fuente de aleatoriedad de Verificatum:
+
+```bash
+vog -rndinit RandomDevice /dev/urandom
+```
+
+Resultado esperado:
+
+- el comando responde sin error
+- se crean `~/.verificatum_random_source` y `~/.verificatum_random_seed`
+
 El repositorio debe estar disponible en el servidor. Si no lo esta:
 
 ```bash
@@ -1546,25 +1498,30 @@ git clone -b cifradorM https://github.com/rmartinezch/ElGamalClient.git ~/cifrad
 
 #### 2. Levantar la mezcladora
 
+Obtenga la IP de red local del servidor (la IP accesible desde el telefono
+y otras maquinas en la misma red) y asignela manualmente:
+
+```bash
+# Ajuste esta IP a la de su servidor en la red local
+IP_SERVIDOR=192.168.0.236
+```
+
 En el servidor, en una terminal dedicada (quedara bloqueada sirviendo):
 
 ```bash
 cd ~/cifradorM/workflow/votante/mezcladora
-./start_gui.sh
+PUBLIC_HOST=$IP_SERVIDOR ./start_gui.sh
 ```
+
+> `PUBLIC_HOST` indica a la mezcladora cual IP usar en los links de las parties.
+> Sin esta variable, la mezcladora usa la primera IP que detecta con `hostname -I`,
+> que puede ser una IP interna no accesible desde la red local.
 
 Resultado esperado:
 
-- la GUI queda publicada en `http://IP_SERVIDOR:7040`
+- la GUI queda publicada en `http://$IP_SERVIDOR:7040`
 - las parties usan puertos `7041` a `7049`
-- `IP_SERVIDOR` es la IP del servidor en la red local
-
-Obtenga la IP de red local del servidor y asignela a la variable:
-
-```bash
-IP_SERVIDOR=$(ip -4 addr show dynamic | grep -oP 'inet \K[0-9.]+')
-echo "$IP_SERVIDOR"
-```
+- los links de las ventanas de parties apuntan a `$IP_SERVIDOR`
 
 Comprobacion desde otra maquina:
 
@@ -1594,7 +1551,30 @@ test -f dist/android/VotanteAndroid-portable.apk && echo "APK OK"
 
 #### 4. Instalar la estacion en el telefono via ADB
 
-Conecte el telefono por USB y verifique que ADB lo detecta:
+> **Telefono de referencia**: HONOR JSN-L23, Android 10 (API 29).
+> Los pasos aplican a cualquier telefono Android con API >= 26, pero los menus
+> pueden variar segun marca y version.
+
+##### 4a. Habilitar opciones de desarrollador en el telefono
+
+1. Abra **Ajustes → Sistema → Acerca del telefono**.
+2. Pulse 7 veces seguidas sobre **Numero de compilacion** hasta que aparezca
+   el mensaje _"Ya eres un desarrollador"_.
+3. Regrese a **Ajustes → Sistema**; ahora aparece **Opciones de desarrollador**.
+
+##### 4b. Habilitar depuracion USB
+
+1. Abra **Ajustes → Sistema → Opciones de desarrollador**.
+2. Active **Depuracion USB**.
+3. Confirme el dialogo de advertencia.
+
+##### 4c. Conectar el telefono por cable USB
+
+1. Conecte el telefono a la maquina por cable USB.
+2. En el telefono, si aparece el dialogo _"¿Permitir depuracion USB?"_ con la
+   huella RSA de la maquina, marque **Permitir siempre desde esta computadora**
+   y pulse **Aceptar**.
+3. Verifique que ADB detecta el telefono:
 
 ```bash
 adb devices
@@ -1602,21 +1582,32 @@ adb devices
 
 Resultado esperado:
 
-- aparece un dispositivo con estado `device`
+- aparece un dispositivo con estado `device` (no `unauthorized` ni `offline`)
 
-Si el telefono pide confirmacion de depuracion USB, acepte en la pantalla.
+Si el estado es `unauthorized`, desbloquee la pantalla del telefono y acepte
+el dialogo de depuracion USB. Si no aparece el dialogo, desconecte y reconecte
+el cable.
 
-Instalar ambos APKs y lanzar las apps:
+Verificar modelo y version de Android:
+
+```bash
+adb shell getprop ro.product.model
+adb shell getprop ro.build.version.release
+```
+
+##### 4d. Instalar los APKs
+
+Desinstalar versiones anteriores para una instalacion limpia:
+
+```bash
+adb uninstall pe.gob.onpe.votodigital.truerngdiag || true
+adb uninstall pe.gob.onpe.votodigital.votante.android || true
+```
+
+Instalar los APKs compilados en el paso 3 y lanzar las apps:
 
 ```bash
 cd ~/cifradorM
-LAUNCH_APPS=1 ./scripts/android/despliegue/build-and-install-phone.sh
-```
-
-Si los artefactos ya estan compilados del paso anterior, puede saltar la
-recompilacion:
-
-```bash
 BUILD_CIFRADOR=0 BUILD_TOOL_ANDROID=0 BUILD_VOTER_ANDROID=0 LAUNCH_APPS=1 \
   ./scripts/android/despliegue/build-and-install-phone.sh
 ```
@@ -1626,43 +1617,146 @@ Resultado esperado:
 - se instala `TrueRNG-Diagnostico.apk`
 - se instala `VotanteAndroid-portable.apk`
 - ambas apps se lanzan en el telefono
+- el script muestra las versiones instaladas al final
+
+Verificar que las apps quedaron instaladas:
+
+```bash
+adb shell pm list packages | grep votodigital
+```
+
+Resultado esperado:
+
+- `package:pe.gob.onpe.votodigital.truerngdiag`
+- `package:pe.gob.onpe.votodigital.votante.android`
 
 #### 5. Prueba operativa
 
-##### 5a. Crear sesion y llave (mezcladora)
+Una vez que la mezcladora y la estacion Android estan levantadas, el flujo de
+operacion es el siguiente:
+
+```mermaid
+flowchart TD
+    classDef mezcladora fill:#1a73e8,stroke:#0d47a1,color:#fff,font-weight:bold
+    classDef estacion fill:#34a853,stroke:#1b5e20,color:#fff,font-weight:bold
+    classDef party fill:#f9ab00,stroke:#e65100,color:#000,font-weight:bold
+    classDef espera fill:#e8eaed,stroke:#9aa0a6,color:#333
+    classDef resultado fill:#ea4335,stroke:#b71c1c,color:#fff,font-weight:bold
+
+    subgraph FASE1["FASE 1 — Creacion de Sesion y Llave"]
+        M1["Mezcladora<br/>http://IP_SERVIDOR:7040"]:::mezcladora
+        M2["Click en Nueva Sesion"]:::mezcladora
+        M3["Generando llave criptografica<br/>(keygen entre 3 parties)"]:::espera
+        M4["Llave creada<br/>Estado: Esperando votos"]:::mezcladora
+        M1 --> M2 --> M3 --> M4
+    end
+
+    subgraph FASE2["FASE 2 — Emision de Voto"]
+        E1["Estacion Android<br/>app en telefono"]:::estacion
+        E2["Handshake automatico<br/>+ descarga de llave publica"]:::estacion
+        E3["Emitir Voto Cifrado<br/>El voto se cifra y envia"]:::estacion
+        E1 --> E2 --> E3
+    end
+
+    subgraph FASE3["FASE 3 — Mezcla de Votos"]
+        MR["Mezcladora<br/>Voto recibido"]:::mezcladora
+        P1M["Party 1 - Click en Mezclar"]:::party
+        P2M["Party 2 - Click en Mezclar"]:::party
+        P3M["Party 3 - Click en Mezclar"]:::party
+        MW["Mezclando votos..."]:::espera
+        MD["Mezcla completada<br/>Listo para descifrado"]:::mezcladora
+        MR --> P1M --> P2M --> P3M --> MW --> MD
+    end
+
+    subgraph FASE4["FASE 4 — Descifrado de Votos"]
+        P1D["Party 1 - Click en Descifrar"]:::party
+        P2D["Party 2 - Click en Descifrar"]:::party
+        P3D["Party 3 - Click en Descifrar"]:::party
+        DW["Descifrando votos..."]:::espera
+        DD["Descifrado completado"]:::mezcladora
+        MD --> P1D --> P2D --> P3D --> DW --> DD
+    end
+
+    subgraph FASE5["FASE 5 — Descarga y Validacion"]
+        DL["Cualquier Party<br/>Descargar votos descifrados"]:::party
+        VL["Validar que el cifrador cifro<br/>correctamente desde el inicio<br/>y la mezcladora lo demostro"]:::resultado
+        DD --> DL --> VL
+    end
+
+    M4 --> E1
+    E3 --> MR
+```
+
+##### Fase 1 — Creacion de sesion y llave (mezcladora)
 
 Abra `http://$IP_SERVIDOR:7040` en un navegador y haga click en **Nueva sesion y ejecutar keygen**.
+El formulario permite configurar la etiqueta, nombre de eleccion, SID, host,
+numero de parties y umbral minimo.
+
+![Panel de la mezcladora con el boton de nueva sesion](docs/img/paso1-nueva-sesion.png)
 
 La mezcladora ejecuta el keygen distribuido entre las 3 parties. Cuando termine,
-aparece la **Sesion activa** con el ID y las ventanas de parties con estado `ok`.
+aparece la **Sesion activa** con el ID de sesion, rutas de llaves publicas y
+las ventanas de cada party con estado `ok`.
 
-##### 5b. Emision de voto (telefono Android)
+![Sesion activa con llave creada y parties ok](docs/img/paso2-llave-creada_1.png)
 
-Abra la app **Votante Android** en el telefono. La estacion realiza el handshake
-automatico con la mezcladora y descarga la llave publica. El panel de estado
-muestra Mezcladora: `Activa`, Llave: `Disponible`.
+En la parte inferior se muestra el **Monitor general** con los logs de keygen
+completado en todas las parties.
 
-En la **Cedula de votacion** seleccione las opciones para cada eleccion y
-haga click en **Emitir voto cifrado**.
+![Monitor general con keygen completado](docs/img/paso2-llave-creada_2.png)
+
+##### Fase 2 — Emision de voto (estacion Android)
+
+Abra la app **Votante Android** en el telefono. La estacion realiza el
+handshake automatico con la mezcladora y descarga la llave publica.
+El panel **Estado Operativo** muestra Mezcladora: `Activa`, Llave: `Disponible`.
+
+En la **Cedula de votacion** seleccione las opciones para cada eleccion
+(Formula presidencial, Senadores, Diputados, Parlamento Andino) y haga click
+en **Emitir voto cifrado**.
+
+Despues de emitir, aparece la **Constancia de recepcion** con el Run ID,
+estado `Confirmada` y el detalle de la operacion. El monitor de eventos
+muestra todo el proceso de cifrado y envio.
 
 Resultado esperado:
 
 - aparece la **Constancia de recepcion** con estado `Confirmada`
 - el monitor de eventos muestra el cifrado y envio exitoso
 
-##### 5c. Mezcla de votos (mezcladora)
+##### Fase 3 — Mezcla de votos (mezcladora)
 
-En la GUI de la mezcladora (`http://$IP_SERVIDOR:7040`), abra la ventana de cada
-party (links **Abrir ventana 7041/7042/7043**) y en cada una haga click
-en **Mezclar**:
+Una vez recibido el voto, el monitor de la mezcladora muestra el handshake
+aceptado y los ciphertexts validados y cargados via API.
+
+![Monitor de la mezcladora con voto recibido](docs/img/paso5-voto-recibido.png)
+
+Abra la ventana de cada party (links **Abrir ventana 7041/7042/7043**) y
+en cada una haga click en **Mezclar**:
 
 1. **Party 1** → click en **Mezclar**
 2. **Party 2** → click en **Mezclar**
 3. **Party 3** → click en **Mezclar**
 
-Espere a que todas las parties completen el shuffle.
+![Party 1 con boton Mezclar disponible](docs/img/paso6-party-mezclar.png)
 
-##### 5d. Descifrado de votos (mezcladora)
+Despues de que todas las parties completen el shuffle, el estado cambia a
+`shuffle (ok)` y el boton **Descifrar** se habilita.
+
+![Party 1 despues del shuffle completado](docs/img/paso7-mezcla-completada_1.png)
+
+El **Estado secuencial por fase** muestra Mezclado: `completada` y
+Descifrado: `mi turno`.
+
+![Estado secuencial por fase con mezclado completado](docs/img/paso7-mezcla-completada_2.png)
+
+El **Monitor de eventos** muestra el detalle del proceso `vmn -shuffle`
+ejecutado por Verificatum.
+
+![Monitor de eventos del proceso de shuffle](docs/img/paso7-mezcla-completada_3.png)
+
+##### Fase 4 — Descifrado de votos (mezcladora)
 
 En cada party, haga click en **Descifrar**:
 
@@ -1670,13 +1764,21 @@ En cada party, haga click en **Descifrar**:
 2. **Party 2** → click en **Descifrar**
 3. **Party 3** → click en **Descifrar**
 
-Espere a que termine el descifrado.
+![Party 1 con boton Descifrar habilitado](docs/img/paso8-party-descifrar.png)
 
-##### 5e. Descarga y validacion
+Espere a que termine el descifrado. El estado cambia a `Ultima fase = decrypt`
+y aparece el boton **Descargar votos descifrados**.
+
+![Party 3 con descifrado completado](docs/img/paso9-descifrado-completado.png)
+
+##### Fase 5 — Descarga y validacion
 
 Desde cualquier party, haga click en **Descargar votos descifrados**. El archivo
 contiene los votos en texto plano. Estos permiten validar que el cifrador Android
-cifro correctamente y que la mezcladora lo verifico mediante la prueba criptografica.
+cifro correctamente desde el inicio y que la mezcladora lo demostro mediante la
+prueba criptografica de mezcla.
+
+![Descarga de votos descifrados y archivo plaintext](docs/img/paso10-descarga-votos_descargando_votos_y%20mostrando.png)
 
 #### Resumen de puertos (Android + Mezcladora)
 
