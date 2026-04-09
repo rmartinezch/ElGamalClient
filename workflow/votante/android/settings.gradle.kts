@@ -13,7 +13,7 @@ dependencyResolutionManagement {
         mavenCentral()
         maven(url = "https://jitpack.io")
         maven {
-            url = uri("../../../.mvn/local-repo")
+            url = uri("../../../native/verificatum-jars")
         }
     }
 }

@@ -1401,7 +1401,7 @@ cd ~/cifradorM
 Comprobaciones minimas del build:
 
 ```bash
-test -f prebuilt/android/aar/ElGamalCipher-android-debug.aar && echo "OK"
+ls -la prebuilt/android/aar/ElGamalCipher-android-debug.aar
 ls -la prebuilt/android/jniLibs/arm64-v8a/
 ls -la prebuilt/android/jniLibs/x86_64/
 ```
@@ -1559,42 +1559,30 @@ Resultado esperado:
 - las parties usan puertos `7041` a `7049`
 - `IP_SERVIDOR` es la IP del servidor en la red local
 
+Obtenga la IP de red local del servidor y asignela a la variable:
+
+```bash
+IP_SERVIDOR=$(ip -4 addr show dynamic | grep -oP 'inet \K[0-9.]+')
+echo "$IP_SERVIDOR"
+```
+
 Comprobacion desde otra maquina:
 
 ```bash
-curl -s http://IP_SERVIDOR:7040/api/health
+curl -s "http://$IP_SERVIDOR:7040/api/state"
 ```
 
 Resultado esperado:
 
-- responde `{"ok": true}`
+- responde un JSON con el estado del servidor
 
-#### 3. Compilar el cifrador Android y la estacion votante
-
-En la maquina de desarrollo (host con Android SDK):
-
-```bash
-cd ~/cifradorM
-./scripts/android/compilacion/build-cifrador.sh
-```
-
-Comprobacion minima:
-
-```bash
-test -f prebuilt/android/aar/ElGamalCipher-android-debug.aar && echo "AAR OK"
-ls prebuilt/android/jniLibs/arm64-v8a/
-```
-
-Resultado esperado:
-
-- el AAR existe en `prebuilt/android/aar/`
-- las librerias JNI existen para `arm64-v8a`
+#### 3. Compilar la estacion votante
 
 Compilar la estacion votante APK apuntando a la mezcladora:
 
 ```bash
 cd ~/cifradorM
-VOTANTE_ANDROID_SERVICE_BASE_URL="http://IP_SERVIDOR:7040" \
+VOTANTE_ANDROID_SERVICE_BASE_URL="http://$IP_SERVIDOR:7040" \
   ./workflow/votante/android/build-votante-portable-apk.sh
 ```
 
@@ -1643,7 +1631,7 @@ Resultado esperado:
 
 ##### 5a. Crear sesion y llave (mezcladora)
 
-Abra `http://IP_SERVIDOR:7040` en un navegador y haga click en **Nueva sesion y ejecutar keygen**.
+Abra `http://$IP_SERVIDOR:7040` en un navegador y haga click en **Nueva sesion y ejecutar keygen**.
 
 La mezcladora ejecuta el keygen distribuido entre las 3 parties. Cuando termine,
 aparece la **Sesion activa** con el ID y las ventanas de parties con estado `ok`.
@@ -1664,7 +1652,7 @@ Resultado esperado:
 
 ##### 5c. Mezcla de votos (mezcladora)
 
-En la GUI de la mezcladora (`http://IP_SERVIDOR:7040`), abra la ventana de cada
+En la GUI de la mezcladora (`http://$IP_SERVIDOR:7040`), abra la ventana de cada
 party (links **Abrir ventana 7041/7042/7043**) y en cada una haga click
 en **Mezclar**:
 
