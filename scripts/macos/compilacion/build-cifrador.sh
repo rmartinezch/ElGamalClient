@@ -29,6 +29,16 @@ fi
 
 "$PROJECT_ROOT/scripts/macos/entorno/bootstrap-verificatum.sh"
 
+# Re-evaluar herramientas locales después del bootstrap (pueden haberse instalado)
+if [[ -z "${JAVA_HOME:-}" ]] && [[ -d "$TOOLS_DIR/jdk-21/bin" ]]; then
+  export JAVA_HOME="$TOOLS_DIR/jdk-21"
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+if [[ ! -d "${JAVA_HOME:-}/bin" ]] && [[ -d "$TOOLS_DIR/jdk-21/bin" ]]; then
+  export JAVA_HOME="$TOOLS_DIR/jdk-21"
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+
 if [[ "$SKIP_TESTS" == "1" ]]; then
 	./mvnw clean package -DskipTests
 else

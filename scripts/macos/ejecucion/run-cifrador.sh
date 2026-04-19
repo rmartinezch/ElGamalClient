@@ -5,6 +5,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 APP_VERSION="${APP_VERSION:-1.1.0}"
 
+# Asegurar herramientas locales (.tools/) en el PATH
+TOOLS_DIR="$PROJECT_ROOT/.tools"
+if [[ -d "$TOOLS_DIR/jdk-21/bin" ]]; then
+  export JAVA_HOME="$TOOLS_DIR/jdk-21"
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+
 resolve_macos_classifier() {
   local arch
   arch="$(uname -m)"

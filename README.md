@@ -4,6 +4,7 @@ Implementacion del cifrado de votos electronicos usando ElGamal sobre curvas eli
 
 - `Windows x64`
 - `Ubuntu/Linux`
+- `macOS (arm64 / x64)`
 - `Android`
 
 El repositorio contiene tanto el cifrador como libreria reusable como estaciones de votacion de ejemplo que lo consumen.
@@ -25,13 +26,18 @@ El repositorio contiene tanto el cifrador como libreria reusable como estaciones
    - [Guia Rapida: Mezcla Y Verificacion Del Cifrador Por CLI](#guia-rapida-mezcla-y-verificacion-del-cifrador-por-cli)
      - [Flujo Completo De Operacion (Ubuntu)](#flujo-completo-de-operacion-ubuntu)
    - [Anexo Ubuntu](#anexo-ubuntu)
-8. [Android](#android)
+8. [macOS](#macos)
+   - [Guia Rapida Para Compilacion Del Cifrador En macOS](#guia-rapida-para-compilacion-del-cifrador-en-macos)
+   - [Guia Rapida: Levantar Estacion macOS Y Mezcladora](#guia-rapida-levantar-estacion-macos-y-mezcladora)
+     - [Flujo Completo De Operacion (macOS)](#flujo-completo-de-operacion-macos)
+   - [Anexo macOS](#anexo-macos)
+9. [Android](#android)
    - [Guia Rapida Para Compilacion Del Cifrador En Android](#guia-rapida-para-compilacion-del-cifrador-en-android)
    - [Guia Rapida: Levantar Estacion Android Y Mezcladora](#guia-rapida-levantar-estacion-android-y-mezcladora)
      - [Flujo Completo De Operacion (Android)](#5-prueba-operativa)
    - [Anexo Android](#anexo-android)
-9. [Resumen De Rendimiento](#resumen-de-rendimiento)
-10. [Historial Breve](#historial-breve)
+10. [Resumen De Rendimiento](#resumen-de-rendimiento)
+11. [Historial Breve](#historial-breve)
 
 ## Resumen
 
@@ -39,6 +45,8 @@ El cifrador se distribuye con filosofias distintas segun plataforma:
 
 - `Windows` y `Ubuntu`:
   - artefacto canonico = `jar + librerias nativas JNI`
+- `macOS`:
+  - artefacto canonico = `jar + librerias nativas JNI (.dylib)`
 - `Android`:
   - artefacto canonico = `AAR`
 
@@ -60,6 +68,7 @@ flowchart TB
 
     Core --> WinLib["Windows<br/>jar + DLL JNI"]
     Core --> UbuntuLib["Ubuntu<br/>jar + .so JNI"]
+    Core --> MacLib["macOS<br/>jar + .dylib JNI"]
     Core --> AndroidLib["Android<br/>AAR + jniLibs"]
 
     WinLib --> WinExternal["Aplicacion externa en Windows<br/>API Java o proceso java"]
@@ -68,10 +77,14 @@ flowchart TB
     UbuntuLib --> UbuntuExternal["Aplicacion externa en Ubuntu<br/>API Java o proceso java"]
     UbuntuLib --> UbuntuOps["Servicios o flujos externos<br/>mezcla / automatizacion"]
 
+    MacLib --> MacExternal["Aplicacion externa en macOS<br/>API Java o proceso java"]
+    MacLib --> MacStation["Estacion macOS de ejemplo<br/>workflow/votante/macos"]
+
     AndroidLib --> AndroidExternal["Aplicacion Android externa<br/>consume el AAR"]
     AndroidLib --> AndroidStation["Estacion Android de ejemplo<br/>workflow/votante/android"]
 
     WinStation --> Mixer["Mezcladora Verificatum<br/>descubrimiento + handshake + public-key + ciphertexts"]
+    MacStation --> Mixer
     AndroidStation --> Mixer
     Mixer -. GUI local .-> MixGUI["GUI Mezcladora<br/>workflow/votante/mezcladora"]
 ```
@@ -80,6 +93,7 @@ Lectura rapida del diagrama:
 
 - `Windows`: una app externa o la estacion de ejemplo consumen el mismo cifrador como `jar + DLL`
 - `Ubuntu`: una app o servicio externo consume el mismo cifrador como `jar + .so`
+- `macOS`: una app externa o la estacion de ejemplo consumen el mismo cifrador como `jar + .dylib`
 - `Android`: una app externa o la estacion de ejemplo consumen el mismo cifrador como `AAR`
 - la mezcladora no forma parte del cifrador; es un servicio aparte al que las estaciones de voto se conectan
 
@@ -90,8 +104,10 @@ Puntos principales del estado actual:
 - el cifrador Java se compila con `Java 21`
 - `Windows` usa `ElGamalCipher-1.1.0.jar` mas `vecj-2.2.0.dll` y `vmgj-1.3.0.dll`
 - `Ubuntu` usa el mismo `jar` mas `libvecj` y `libvmgj`
+- `macOS` usa el mismo `jar` mas `libvecj-2.2.0.dylib` y `libvmgj-1.3.0.dylib`
 - `Android` expone el cifrador como libreria reusable
 - la estacion de votacion Windows consume el cifrador Windows como libreria
+- la estacion de votacion macOS consume el cifrador macOS como libreria
 - la estacion de votacion Android consume el cifrador Android como libreria
 
 ## Estructura Del Repositorio
@@ -131,6 +147,9 @@ Requisitos adicionales por plataforma:
   - `MSYS2 UCRT64` si se van a recompilar DLL JNI
 - `Ubuntu`
   - toolchain nativo para JNI Linux
+- `macOS`
+  - Xcode Command Line Tools (`xcode-select --install`)
+  - no requiere Homebrew ni `sudo`; el bootstrap instala herramientas localmente en `.tools/`
 - `Android`
   - Android SDK / Gradle para compilar el `AAR` o el consumidor Android
 
@@ -1303,6 +1322,350 @@ los JARs de `native/verificatum-jars/` son suficientes.
 
 ```bash
 ./scripts/ubuntu/entorno/bootstrap-verificatum.sh
+```
+
+## macOS
+
+### Guia Rapida Para Compilacion Del Cifrador En macOS
+
+Ruta unica recomendada para instalar, probar y desplegar en `macOS` (Apple Silicon o Intel):
+
+- use `Terminal.app` o cualquier terminal `Bash`/`Zsh`
+- no requiere Homebrew ni `sudo`; el bootstrap instala herramientas localmente en `.tools/`
+- mantenga acceso a Internet para la primera ejecucion
+
+Prerequisito unico: Xcode Command Line Tools:
+
+```bash
+xcode-select --install
+```
+
+Si ya estan instalados, el comando indica que ya existen y no hace nada.
+
+Descarga del repositorio:
+
+```bash
+git clone -b cifradorM https://github.com/rmartinezch/ElGamalClient.git ~/cifradorM
+cd ~/cifradorM
+```
+
+Comprobaciones minimas del entorno:
+
+```bash
+git --version
+xcode-select -p
+test -d ~/cifradorM && echo "OK"
+```
+
+Resultado esperado:
+
+- `git --version` responde sin error
+- `xcode-select -p` devuelve una ruta valida (ej. `/Library/Developer/CommandLineTools`)
+- el directorio `~/cifradorM` existe
+
+Comprobaciones minimas del repo clonado:
+
+```bash
+cd ~/cifradorM
+git branch --show-current
+git remote get-url origin
+test -d native/verificatum-src/verificatum-vcr-3.1.0 && echo "OK"
+test -d native/verificatum-src/verificatum-vecj-2.2.0 && echo "OK"
+test -f native/verificatum-jars/com/verificatum/verificatum-vmgj/1.3.0/verificatum-vmgj-1.3.0.jar && echo "OK"
+```
+
+Resultado esperado:
+
+- `git branch --show-current` devuelve `cifradorM`
+- `git remote get-url origin` devuelve `https://github.com/rmartinezch/ElGamalClient.git`
+- los tres `test` devuelven `OK`
+
+Recompilacion minima de todos los artefactos macOS (`jar + .dylib JNI`):
+
+```bash
+cd ~/cifradorM
+./scripts/macos/compilacion/build-cifrador.sh
+```
+
+Comprobaciones minimas del build:
+
+```bash
+test -f prebuilt/java/ElGamalCipher-1.1.0.jar && echo "OK"
+ls -la prebuilt/java/ElGamalCipher-1.1.0.jar
+ls -la prebuilt/macos-arm64/
+```
+
+Resultado esperado:
+
+- el JAR existe en `prebuilt/java/`
+- las librerias nativas `.dylib` existen en `prebuilt/macos-arm64/` (o `prebuilt/macos-x64/` en Intel)
+
+Este flujo:
+
+- ejecuta `bootstrap-verificatum.sh` que instala localmente en `.tools/`: autotools, GMP 6.3.0 y JDK 21 Temurin (sin Homebrew ni `sudo`)
+- recompila el JAR principal del cifrador con Maven Wrapper
+- compila las 4 librerias nativas: `libvec.0.dylib`, `libgmpmee.0.dylib`, `libvecj-2.2.0.dylib` y `libvmgj-1.3.0.dylib`
+- aplica parches automaticos para compatibilidad con clang macOS
+
+Artefactos recompilados para despliegue:
+
+- `~/cifradorM/prebuilt/java/ElGamalCipher-1.1.0.jar`
+- `~/cifradorM/prebuilt/macos-arm64/libvecj-2.2.0.dylib`
+- `~/cifradorM/prebuilt/macos-arm64/libvmgj-1.3.0.dylib`
+- `~/cifradorM/prebuilt/macos-arm64/libvec.0.dylib`
+- `~/cifradorM/prebuilt/macos-arm64/libgmpmee.0.dylib`
+- `~/cifradorM/prebuilt/macos-arm64/libgmp.10.dylib`
+
+Prueba minima por CLI:
+
+```bash
+./scripts/macos/ejecucion/run-cifrador.sh \
+  recursos/publicKey \
+  recursos/shuffled_votes.txt \
+  recursos/ciphertexts_ext \
+  -sw \
+  -p
+```
+
+Si el uso final es desde otra aplicacion Java en macOS, despliegue siempre el `jar`
+junto con todas las `.dylib` del directorio `prebuilt/macos-arm64/`.
+
+### Guia Rapida: Levantar Estacion macOS Y Mezcladora
+
+Esta es la ruta minima para:
+
+1. compilar el cifrador macOS
+2. levantar la mezcladora localmente
+3. levantar la estacion macOS contra la mezcladora local
+
+Supuestos de esta ruta:
+
+- el repo ya existe en `~/cifradorM`
+- la mezcladora y la estacion corren en la misma maquina macOS
+- se usara el mock mixer incluido para prueba local rapida
+
+#### 1. Verificar que el cifrador esta compilado
+
+```bash
+cd ~/cifradorM
+test -f prebuilt/java/ElGamalCipher-1.1.0.jar && echo "OK" || ./scripts/macos/compilacion/build-cifrador.sh
+```
+
+#### 2. Generar la imagen portable macOS
+
+```bash
+cd ~/cifradorM
+./scripts/macos/empaquetado/build-cifrador-portable.sh
+```
+
+Comprobaciones minimas:
+
+```bash
+test -d dist/macos/image/Cifrador && echo "OK"
+test -f dist/macos/image/Cifrador/app/ElGamalCipher-1.1.0.jar && echo "OK"
+test -x dist/macos/image/Cifrador/Cifrador && echo "OK"
+```
+
+Resultado esperado:
+
+- la imagen portable existe en `dist/macos/image/Cifrador/`
+- contiene el JAR, las dylibs, un runtime JDK embebido y un launcher bash
+
+#### 3. Levantar la estacion macOS con mock mixer (prueba local)
+
+Para una prueba rapida sin instalar Verificatum, use el mock mixer incluido:
+
+```bash
+cd ~/cifradorM
+
+# Terminal 1: levantar mock mixer (simula la mezcladora en puerto 7043)
+python3 workflow/votante/macos/mock_mixer_server.py &
+MOCK_PID=$!
+
+# Terminal 2: levantar la estacion macOS
+SERVICE_BASE_URL=http://127.0.0.1:7043 \
+  ./workflow/votante/macos/run-votante-macos.sh
+```
+
+Resultado esperado:
+
+- el mock mixer queda sirviendo en `http://127.0.0.1:7043`
+- la estacion queda disponible en `http://127.0.0.1:8789`
+- la estacion realiza handshake automatico con el mock mixer
+
+#### 4. Autoprueba integral (alternativa automatizada)
+
+El repositorio incluye un script de autoprueba que ejecuta todo el flujo:
+
+```bash
+cd ~/cifradorM
+./scripts/macos/pruebas/autoprueba-votante-macos.sh
+```
+
+El script:
+
+- ejecuta el smoke test backend (cifrado + mock mixer)
+- levanta la estacion real con mock mixer
+- valida endpoints: `/api/health`, `/`, `/api/emission-context`, ballot preview y submit
+- abre Safari automaticamente en la UI de la estacion
+
+#### 5. Levantar con mezcladora real (Verificatum)
+
+Para usar la mezcladora real en lugar del mock, instale Verificatum en una maquina
+Ubuntu (puede ser una VM, Docker o maquina separada en la misma red) y siga los
+pasos de la seccion [Ubuntu — Instalar Verificatum VMN](#1-instalar-verificatum-vmn).
+
+Una vez la mezcladora este corriendo en `http://$IP_SERVIDOR:7040`:
+
+```bash
+cd ~/cifradorM
+SERVICE_BASE_URL=http://$IP_SERVIDOR:7040 \
+  ./workflow/votante/macos/run-votante-macos.sh
+```
+
+Resultado esperado:
+
+- la estacion queda disponible en `http://127.0.0.1:8789`
+- la estacion se conecta a la mezcladora real y descarga la llave publica
+
+#### Flujo Completo De Operacion (macOS)
+
+```mermaid
+flowchart TD
+    classDef mezcladora fill:#1a73e8,stroke:#0d47a1,color:#fff,font-weight:bold
+    classDef estacion fill:#34a853,stroke:#1b5e20,color:#fff,font-weight:bold
+    classDef party fill:#f9ab00,stroke:#e65100,color:#000,font-weight:bold
+    classDef espera fill:#e8eaed,stroke:#9aa0a6,color:#333
+    classDef resultado fill:#ea4335,stroke:#b71c1c,color:#fff,font-weight:bold
+
+    subgraph FASE1["FASE 1 — Creacion de Sesion y Llave"]
+        M1["Mezcladora<br/>http://IP_SERVIDOR:7040"]:::mezcladora
+        M2["Click en Nueva Sesion"]:::mezcladora
+        M3["Generando llave criptografica<br/>(keygen entre 3 parties)"]:::espera
+        M4["Llave creada<br/>Estado: Esperando votos"]:::mezcladora
+        M1 --> M2 --> M3 --> M4
+    end
+
+    subgraph FASE2["FASE 2 — Emision de Voto"]
+        E1["Estacion macOS<br/>http://127.0.0.1:8789"]:::estacion
+        E2["Handshake automatico<br/>+ descarga de llave publica"]:::estacion
+        E3["Click en Emitir Voto<br/>El voto se cifra y envia"]:::estacion
+        E1 --> E2 --> E3
+    end
+
+    subgraph FASE3["FASE 3 — Mezcla de Votos"]
+        MR["Mezcladora<br/>Voto recibido"]:::mezcladora
+        P1M["Party 1 - Click en Mezclar"]:::party
+        P2M["Party 2 - Click en Mezclar"]:::party
+        P3M["Party 3 - Click en Mezclar"]:::party
+        MW["Mezclando votos..."]:::espera
+        MD["Mezcla completada<br/>Listo para descifrado"]:::mezcladora
+        MR --> P1M --> P2M --> P3M --> MW --> MD
+    end
+
+    subgraph FASE4["FASE 4 — Descifrado de Votos"]
+        P1D["Party 1 - Click en Descifrar"]:::party
+        P2D["Party 2 - Click en Descifrar"]:::party
+        P3D["Party 3 - Click en Descifrar"]:::party
+        DW["Descifrando votos..."]:::espera
+        DD["Descifrado completado"]:::mezcladora
+        MD --> P1D --> P2D --> P3D --> DW --> DD
+    end
+
+    subgraph FASE5["FASE 5 — Descarga y Validacion"]
+        DL["Cualquier Party<br/>Descargar votos descifrados"]:::party
+        VL["Validar que el cifrador cifro<br/>correctamente desde el inicio<br/>y la mezcladora lo demostro"]:::resultado
+        DD --> DL --> VL
+    end
+
+    M4 --> E1
+    E3 --> MR
+```
+
+El flujo de operacion con mezcladora real es identico al de Windows (fases 1 a 5).
+La diferencia es que la estacion macOS usa el puerto `8789` por defecto y las
+librerias nativas son `.dylib` en lugar de `.dll`.
+
+### Anexo macOS
+
+#### Integracion externa
+
+Una aplicacion externa en macOS debe enlazar el `jar` y exponer las `.dylib` nativas.
+
+Ejemplo por CLI:
+
+```bash
+NATIVE_DIR=/ruta/al/proyecto/prebuilt/macos-arm64
+java \
+  -Djava.library.path="$NATIVE_DIR" \
+  -cp /ruta/al/proyecto/prebuilt/java/ElGamalCipher-1.1.0.jar:mi-app.jar \
+  com.ejemplo.Main
+```
+
+La API Java embebida es la misma que en Windows y Ubuntu (`ElGamalCipherService`,
+`CifradorRequest`, `CifradorRngMode`, `LogConfig`). Vea el ejemplo de codigo
+en el [Anexo Windows](#anexo-windows).
+
+#### Layout nativo y carga de JNI
+
+La aplicacion busca bibliotecas nativas en este orden:
+
+1. `prebuilt/<os-arch>` (ej. `prebuilt/macos-arm64/libvecj-2.2.0.dylib`)
+2. `prebuilt`
+3. `libs/<os-arch>`
+4. `libs`
+
+Todas las dylibs usan `@loader_path/` en sus `install_name` para portabilidad.
+Si el `jar` se ejecuta sin `java.library.path` y encuentra un layout local valido,
+puede relanzarse con la ruta correcta.
+
+#### RNG y soporte de hardware
+
+- `-sw` usa `SecureRandom`
+- `-hw` usa TrueRNG por:
+  - propiedad JVM `-Delgamal.rng.device=<ruta>`
+  - variable `ELGAMAL_RNG_DEVICE`
+  - autodeteccion de dispositivo serial USB
+
+#### Empaquetado del cifrador como libreria
+
+Imagen portable:
+
+```bash
+./scripts/macos/empaquetado/build-cifrador-portable.sh
+```
+
+Salida:
+
+- `dist/macos/image/Cifrador/app/ElGamalCipher-1.1.0.jar`
+- `dist/macos/image/Cifrador/libs/macos-arm64/*.dylib`
+- `dist/macos/image/Cifrador/runtime/` (JDK embebido)
+- `dist/macos/image/Cifrador/recursos/`
+- `dist/macos/image/Cifrador/Cifrador` (launcher bash autocontenido)
+
+Paquete comprimido:
+
+```bash
+./scripts/macos/empaquetado/package-cifrador-portable.sh
+```
+
+Salida:
+
+- `dist/macos/Cifrador-macos-portable-<timestamp>.tar.gz`
+
+#### Bootstrap de Verificatum
+
+El bootstrap solo es necesario si se quiere recompilar los JARs de Verificatum desde codigo
+fuente. En uso normal, los JARs de `native/verificatum-jars/` son suficientes.
+
+El bootstrap macOS instala localmente en `.tools/` (sin Homebrew ni `sudo`):
+
+- autotools: m4, autoconf, automake, libtool
+- GMP 6.3.0
+- JDK 21 Temurin
+
+```bash
+./scripts/macos/entorno/bootstrap-verificatum.sh
 ```
 
 ## Android

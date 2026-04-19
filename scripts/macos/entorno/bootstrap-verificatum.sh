@@ -114,7 +114,11 @@ fi
 
 # ========================== JDK (independiente de Homebrew) =================
 # Usa .tools/jdk-21 local, Homebrew openjdk, o JAVA_HOME del entorno.
-if [[ -z "${JAVA_HOME:-}" ]] || ! command -v javac >/dev/null 2>&1; then
+# Nota: macOS incluye /usr/bin/javac como stub que falla en ejecucion,
+# por eso verificamos con 'javac -version' en lugar de 'command -v javac'.
+javac_works() { javac -version >/dev/null 2>&1; }
+
+if [[ -z "${JAVA_HOME:-}" ]] || ! javac_works; then
   # Intentar .tools/jdk-21 existente
   if [[ -d "$TOOLS_DIR/jdk-21/bin" ]]; then
     export JAVA_HOME="$TOOLS_DIR/jdk-21"
@@ -130,7 +134,7 @@ if [[ -z "${JAVA_HOME:-}" ]] || ! command -v javac >/dev/null 2>&1; then
 fi
 
 # Si aún no hay JDK, descargar Temurin localmente
-if ! command -v javac >/dev/null 2>&1; then
+if ! javac_works; then
   mkdir -p "$TOOLS_DIR"
   JDK_DIR="$TOOLS_DIR/jdk-21"
   if [[ ! -d "$JDK_DIR" ]]; then
@@ -156,5 +160,10 @@ if ! command -v javac >/dev/null 2>&1; then
   export PATH="$JDK_DIR/bin:$PATH"
 fi
 
-echo "[macos-bootstrap] JAVA_HOME=$JAVA_HOME"
+if [[ -z "${JAVA_HOME:-}" ]] || ! command -v javac >/dev/null 2>&1; then
+  echo "[macos-bootstrap] ERROR: no se pudo obtener JDK 21. Instale manualmente o descargue Temurin." >&2
+  exit 1
+fi
+
+echo "[macos-bootstrap] JAVA_HOME=${JAVA_HOME:-}"
 javac -version
