@@ -29,10 +29,27 @@ resolve_java_home() {
   fi
 
   java_bin="$(cd "$(dirname "$java_bin")" && pwd)/$(basename "$java_bin")"
-  dirname "$(dirname "$java_bin")"
+  local candidate
+  candidate="$(dirname "$(dirname "$java_bin")")"
+
+  # Proteger contra el shim /usr/bin/java que resuelve a /usr
+  if [[ "$candidate" == "/usr" || "$candidate" == "/" ]]; then
+    echo "ERROR: resolve_java_home resolvió a '$candidate', que no es un JDK válido." >&2
+    echo "Defina JAVA_HOME o instale un JDK en .tools/jdk-21." >&2
+    exit 1
+  fi
+
+  echo "$candidate"
 }
 
 "$PROJECT_ROOT/scripts/macos/compilacion/build-cifrador.sh"
+
+# Re-detectar .tools/jdk-21 tras el build (el subprocess no propaga JAVA_HOME)
+TOOLS_DIR="$PROJECT_ROOT/.tools"
+if [[ -d "$TOOLS_DIR/jdk-21/bin" ]]; then
+  export JAVA_HOME="$TOOLS_DIR/jdk-21"
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
 
 JAVA_HOME_RESOLVED="$(resolve_java_home)"
 NATIVE_CLASSIFIER="$(resolve_macos_classifier)"
