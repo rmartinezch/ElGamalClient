@@ -126,6 +126,56 @@ class PlatformRandomSourceTest {
         assertSame(ubuntuHardwareFallback, source);
     }
 
+    @Test
+    void macSoftwareFactoryUsesPortableRandomSource() {
+        RuntimePlatform platform = RuntimePlatform.forTesting(
+                RuntimePlatform.OperatingSystem.MACOS, "aarch64");
+        RandomSource source = RandomSourceFactory.create(
+                false,
+                Logger.getAnonymousLogger(),
+                platform,
+                logger -> Optional.empty(),
+                logger -> Optional.empty(),
+                (hardwareRequested, logger) -> new PlatformRandomSource()
+        );
+
+        assertInstanceOf(PlatformRandomSource.class, source);
+    }
+
+    @Test
+    void macHardwareFactoryUsesTrueRngProviderWhenAvailable() {
+        RuntimePlatform platform = RuntimePlatform.forTesting(
+                RuntimePlatform.OperatingSystem.MACOS, "aarch64");
+        RandomSource hardwareSource = new PlatformRandomSource();
+
+        RandomSource source = RandomSourceFactory.create(
+                true,
+                Logger.getAnonymousLogger(),
+                platform,
+                logger -> Optional.empty(),
+                logger -> Optional.of(hardwareSource),
+                (hardwareRequested, logger) -> new PlatformRandomSource()
+        );
+
+        assertSame(hardwareSource, source);
+    }
+
+    @Test
+    void macHardwareFactoryFallsBackToPortableWhenTrueRngMissing() {
+        RuntimePlatform platform = RuntimePlatform.forTesting(
+                RuntimePlatform.OperatingSystem.MACOS, "aarch64");
+        RandomSource source = RandomSourceFactory.create(
+                true,
+                Logger.getAnonymousLogger(),
+                platform,
+                logger -> Optional.empty(),
+                logger -> Optional.empty(),
+                (hardwareRequested, logger) -> new PlatformRandomSource()
+        );
+
+        assertInstanceOf(PlatformRandomSource.class, source);
+    }
+
     private boolean isAllZero(byte[] bytes) {
         for (byte value : bytes) {
             if (value != 0) {

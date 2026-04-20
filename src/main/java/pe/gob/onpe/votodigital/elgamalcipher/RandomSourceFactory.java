@@ -24,6 +24,11 @@ public final class RandomSourceFactory {
     }
 
     @FunctionalInterface
+    interface MacHardwareRandomSourceProvider {
+        Optional<RandomSource> create(Logger logger);
+    }
+
+    @FunctionalInterface
     interface UbuntuRandomSourceProvider {
         RandomSource create(boolean hardwareRequested, Logger logger);
     }
@@ -38,6 +43,7 @@ public final class RandomSourceFactory {
                 logger,
                 RuntimePlatform.current(),
                 RandomSourceFactory::tryCreateWindowsTrueRngSource,
+                RandomSourceFactory::tryCreateMacTrueRngSource,
                 RandomSourceFactory::createUbuntuRandomSource
         );
     }
@@ -50,6 +56,7 @@ public final class RandomSourceFactory {
                 logger,
                 platform,
                 RandomSourceFactory::tryCreateWindowsTrueRngSource,
+                RandomSourceFactory::tryCreateMacTrueRngSource,
                 RandomSourceFactory::createUbuntuRandomSource
         );
     }
@@ -63,6 +70,7 @@ public final class RandomSourceFactory {
                 logger,
                 platform,
                 windowsProvider,
+                RandomSourceFactory::tryCreateMacTrueRngSource,
                 RandomSourceFactory::createUbuntuRandomSource
         );
     }
@@ -72,12 +80,32 @@ public final class RandomSourceFactory {
                                RuntimePlatform platform,
                                WindowsHardwareRandomSourceProvider windowsProvider,
                                UbuntuRandomSourceProvider ubuntuProvider) {
+        return create(
+                hardwareRequested,
+                logger,
+                platform,
+                windowsProvider,
+                RandomSourceFactory::tryCreateMacTrueRngSource,
+                ubuntuProvider
+        );
+    }
+
+    static RandomSource create(boolean hardwareRequested,
+                               Logger logger,
+                               RuntimePlatform platform,
+                               WindowsHardwareRandomSourceProvider windowsProvider,
+                               MacHardwareRandomSourceProvider macProvider,
+                               UbuntuRandomSourceProvider ubuntuProvider) {
         if (platform.isUbuntu()) {
             return ubuntuProvider.create(hardwareRequested, logger);
         }
 
         if (platform.isWindows()) {
             return createWindowsRandomSource(hardwareRequested, logger, windowsProvider);
+        }
+
+        if (platform.isMac()) {
+            return createMacRandomSource(hardwareRequested, logger, macProvider);
         }
 
         logPortableRandomSource(platform, hardwareRequested, logger);
@@ -100,6 +128,56 @@ public final class RandomSourceFactory {
         logger.warning(() -> "Windows -hw: no se pudo usar el TrueRNG. "
                 + PORTABLE_RANDOM_SOURCE_MESSAGE);
         return new PlatformRandomSource();
+    }
+
+    private static RandomSource createMacRandomSource(boolean hardwareRequested,
+                                                      Logger logger,
+                                                      MacHardwareRandomSourceProvider macProvider) {
+        if (!hardwareRequested) {
+            logger.info(() -> "macOS -sw: usando SecureRandom portable.");
+            return new PlatformRandomSource();
+        }
+
+        Optional<RandomSource> hardwareSource = macProvider.create(logger);
+        if (hardwareSource.isPresent()) {
+            return hardwareSource.get();
+        }
+
+        logger.warning(() -> "macOS -hw: no se pudo usar el TrueRNG. "
+                + PORTABLE_RANDOM_SOURCE_MESSAGE);
+        return new PlatformRandomSource();
+    }
+
+    private static Optional<RandomSource> tryCreateMacTrueRngSource(Logger logger) {
+        try {
+            Class<?> providerClass = Class.forName(
+                    "pe.gob.onpe.votodigital.elgamalcipher.MacTrueRngRandomSource");
+            Object result = providerClass
+                    .getMethod("tryCreate", Logger.class)
+                    .invoke(null, logger);
+
+            if (result instanceof Optional<?> optional) {
+                if (optional.isEmpty()) {
+                    return Optional.empty();
+                }
+                Object source = optional.get();
+                if (source instanceof RandomSource randomSource) {
+                    return Optional.of(randomSource);
+                }
+            }
+
+            logger.warning(() -> "macOS -hw: el proveedor TrueRNG devolvió un tipo inesperado. "
+                    + PORTABLE_RANDOM_SOURCE_MESSAGE);
+            return Optional.empty();
+        } catch (ClassNotFoundException e) {
+            logger.warning(() -> "macOS -hw: el proveedor TrueRNG de macOS no está disponible en este runtime. "
+                    + PORTABLE_RANDOM_SOURCE_MESSAGE);
+            return Optional.empty();
+        } catch (ReflectiveOperationException e) {
+            logger.warning(() -> "macOS -hw: no se pudo inicializar el proveedor TrueRNG de macOS: "
+                    + e.getMessage());
+            return Optional.empty();
+        }
     }
 
     private static Optional<RandomSource> tryCreateWindowsTrueRngSource(Logger logger) {
@@ -178,7 +256,7 @@ public final class RandomSourceFactory {
                                                 Logger logger) {
         if (hardwareRequested) {
             logger.warning(() -> String.format("Modo -hw solicitado en %s, "
-                    + "pero TrueRNG dedicado solo está habilitado para Ubuntu y Windows. "
+                    + "pero TrueRNG dedicado solo está habilitado para Ubuntu, Windows y macOS. "
                     + "Se usará SecureRandom portable.",
                     platform.classifier()));
             return;
